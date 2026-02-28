@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - Unreleased
+
+### Changed
+
+- Hide sessions without any user message from session listings and project session counts (sessions created by launching Claude Code but never sending a message)
+- Refactor Session database indexes: replace two separate indexes with a combined `(project, type, -mtime)` index and a conditional index for visible sessions
+
 ## [1.0.2] - 2026-02-28
 
 ### Added

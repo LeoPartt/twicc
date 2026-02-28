@@ -153,12 +153,13 @@ class PeriodicActivity(models.Model):
             timestamp__lt=date_end,
         ).aggregate(total=Sum("cost"))["total"] or Decimal(0)
 
-        # session_count: only type=SESSION sessions
+        # session_count: only type=SESSION sessions with at least one user message
         session_count = Session.objects.filter(
             session_project_filter,
             type=SessionType.SESSION,
             created_at__gte=date_start,
             created_at__lt=date_end,
+            user_message_count__gt=0,
         ).count()
 
         # If all values are zero, delete the row to keep the table clean
@@ -289,8 +290,18 @@ class Session(models.Model):
     class Meta:
         ordering = ["-mtime"]
         indexes = [
-            models.Index(fields=["project", "-mtime"], name="idx_session_project_mtime"),
-            models.Index(fields=["project", "type"], name="idx_session_project_type"),
+            # Covers all "list sessions by project+type" queries (listing + count + sync)
+            models.Index(fields=["project", "type", "-mtime"], name="idx_session_project_type_mtime"),
+            # Covers API session listing and project sessions_count (most frequent queries)
+            models.Index(
+                fields=["project", "-mtime"],
+                name="idx_session_visible",
+                condition=models.Q(
+                    user_message_count__gt=0,
+                    type="session",
+                    created_at__isnull=False,
+                ),
+            ),
         ]
 
     def recalculate_costs(self) -> None:

@@ -377,11 +377,12 @@ def sync_project(
         )
         stats["sessions_stale"] += len(stale_session_ids)
 
-    # Update project metadata (count sessions with created_at, including stale ones)
+    # Update project metadata (count visible sessions: with created_at and at least one user message)
     project.sessions_count = Session.objects.filter(
         project=project,
         type=SessionType.SESSION,
         created_at__isnull=False,
+        user_message_count__gt=0,
     ).count()
     project.mtime = max_mtime
     # Project folder exists (we're syncing it), but working directory may have been removed
