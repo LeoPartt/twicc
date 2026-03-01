@@ -153,6 +153,13 @@ def spawn_pty(cwd: str) -> tuple[int, int]:
         # Set TERM for proper terminal emulation
         os.environ["TERM"] = "xterm-256color"
 
+        # Remove Claude Code env vars that may have been set by the SDK in the
+        # backend process. Without this, Claude Code launched from this terminal
+        # would think it's already inside an SDK session.
+        for key in list(os.environ):
+            if key.startswith("CLAUDE_"):
+                del os.environ[key]
+
         # Exec the shell as a login shell (prefix argv[0] with -)
         os.execvp(shell, [f"-{os.path.basename(shell)}"])
         # execvp does not return; if it fails, child exits
@@ -195,6 +202,10 @@ def spawn_tmux_pty(cwd: str, session_id: str) -> tuple[int, int]:
         os.environ["TERM"] = "xterm-256color"
         # Unset TMUX to avoid nesting issues if the server itself runs in tmux
         os.environ.pop("TMUX", None)
+        # Remove Claude Code env vars (same reason as in spawn_pty)
+        for key in list(os.environ):
+            if key.startswith("CLAUDE_"):
+                del os.environ[key]
 
         os.execvp(tmux_path, [
             "tmux",
