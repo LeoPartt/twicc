@@ -1152,6 +1152,8 @@ wa-split-panel::part(divider) {
     /* we allow options to be larger than the width of the select */
     &::part(listbox) {
         overflow: visible;
+        overflow-y: auto;
+        max-height: 50vh;
         width: max-content;
     }
     wa-option {
@@ -1274,10 +1276,10 @@ wa-split-panel::part(divider) {
         border-left: 1px solid rgba(255, 255, 255, 0.3);
     }
 
-    /* Limit dropdown panel height for scrolling */
-    & wa-dropdown::part(panel) {
-        max-height: 300px;
-        overflow-y: auto;
+    /* Limit dropdown menu height: set the variable directly on #menu (via ::part)
+       so it overrides the value inherited from wa-popup's inline style */
+    & wa-dropdown::part(menu) {
+        --auto-size-available-height: 50vh;
     }
 }
 
@@ -1292,17 +1294,17 @@ wa-split-panel::part(divider) {
     /* Only take the width needed by the trigger button */
     width: fit-content;
 
+    /* Limit dropdown menu height: set the variable directly on #menu (via ::part)
+       so it overrides the value inherited from wa-popup's inline style */
+    &::part(menu) {
+        --auto-size-available-height: 50vh;
+    }
+
     /* Style the trigger button label */
     & > wa-button::part(label) {
         display: flex;
         align-items: center;
         gap: var(--wa-space-xs);
-    }
-
-    /* Limit dropdown panel height for scrolling */
-    &::part(panel) {
-        max-height: 300px;
-        overflow-y: auto;
     }
 }
 

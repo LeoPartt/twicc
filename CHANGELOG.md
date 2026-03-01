@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Fix stale detection for projects whose Claude folder (`~/.claude/projects/`) was removed but working directory still exists (e.g. after session sublimation)
 - Strip inherited `CLAUDE_*` environment variables at startup, in devctl, and in PTY terminals to prevent Claude Code from detecting a false nested SDK session
+- Limit project selector and new-session dropdown heights to 50vh with scrolling when too many projects exist
 
 ## [1.0.2] - 2026-02-28
 
