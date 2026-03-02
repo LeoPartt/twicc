@@ -31,6 +31,7 @@ const SETTINGS_SCHEMA = {
     editorWordWrap: true,
     compactSessionList: false,
     showArchivedSessions: false,
+    showArchivedProjects: false,
     defaultPermissionMode: DEFAULT_PERMISSION_MODE,
     alwaysApplyDefaultPermissionMode: false,
     defaultModel: DEFAULT_MODEL,
@@ -69,6 +70,7 @@ const SETTINGS_VALIDATORS = {
     editorWordWrap: (v) => typeof v === 'boolean',
     compactSessionList: (v) => typeof v === 'boolean',
     showArchivedSessions: (v) => typeof v === 'boolean',
+    showArchivedProjects: (v) => typeof v === 'boolean',
     defaultPermissionMode: (v) => Object.values(PERMISSION_MODE).includes(v),
     alwaysApplyDefaultPermissionMode: (v) => typeof v === 'boolean',
     defaultModel: (v) => Object.values(MODEL).includes(v),
@@ -158,6 +160,7 @@ export const useSettingsStore = defineStore('settings', {
         isEditorWordWrap: (state) => state.editorWordWrap,
         isCompactSessionList: (state) => state.compactSessionList,
         isShowArchivedSessions: (state) => state.showArchivedSessions,
+        isShowArchivedProjects: (state) => state.showArchivedProjects,
         getDefaultPermissionMode: (state) => state.defaultPermissionMode,
         isAlwaysApplyDefaultPermissionMode: (state) => state.alwaysApplyDefaultPermissionMode,
         getDefaultModel: (state) => state.defaultModel,
@@ -341,6 +344,18 @@ export const useSettingsStore = defineStore('settings', {
         },
 
         /**
+         * Set show archived projects mode.
+         * This setting is not exposed in the settings panel — it is only
+         * toggled from the home page project list.
+         * @param {boolean} enabled
+         */
+        setShowArchivedProjects(enabled) {
+            if (SETTINGS_VALIDATORS.showArchivedProjects(enabled)) {
+                this.showArchivedProjects = enabled
+            }
+        },
+
+        /**
          * Set the default permission mode for new sessions.
          * @param {string} mode - One of PERMISSION_MODE values
          */
@@ -497,6 +512,7 @@ export function initSettings() {
             editorWordWrap: store.editorWordWrap,
             compactSessionList: store.compactSessionList,
             showArchivedSessions: store.showArchivedSessions,
+            showArchivedProjects: store.showArchivedProjects,
             defaultPermissionMode: store.defaultPermissionMode,
             alwaysApplyDefaultPermissionMode: store.alwaysApplyDefaultPermissionMode,
             defaultModel: store.defaultModel,

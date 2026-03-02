@@ -25,6 +25,7 @@ def serialize_project(project):
         "stale": project.stale,
         "name": project.name,
         "color": project.color,
+        "archived": project.archived,
         "total_cost": float(project.total_cost) if project.total_cost else None,
     }
 

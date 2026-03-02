@@ -154,7 +154,7 @@ def _create_project(request):
 
 
 def project_detail(request, project_id):
-    """GET/PUT /api/projects/<id>/ - Detail of a project or update it."""
+    """GET/PUT/PATCH /api/projects/<id>/ - Detail of a project, update name/color, or archive."""
     try:
         project = Project.objects.get(id=project_id)
     except Project.DoesNotExist:
@@ -183,6 +183,34 @@ def project_detail(request, project_id):
             project.color = data["color"]
 
         project.save(update_fields=["name", "color"])
+
+    elif request.method == "PATCH":
+        try:
+            data = orjson.loads(request.body)
+        except orjson.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        if "archived" in data:
+            archived = data["archived"]
+            if not isinstance(archived, bool):
+                return JsonResponse({"error": "archived must be a boolean"}, status=400)
+            project.archived = archived
+            project.save(update_fields=["archived"])
+
+            # Broadcast project_updated via WebSocket
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                "updates",
+                {
+                    "type": "broadcast",
+                    "data": {
+                        "type": "project_updated",
+                        "project": serialize_project(project),
+                    },
+                },
+            )
 
     return JsonResponse(serialize_project(project))
 

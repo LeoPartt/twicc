@@ -59,6 +59,7 @@ class Project(models.Model):
     stale = models.BooleanField(default=False)  # True if folder/file no longer exists on disk
     name = models.CharField(max_length=25, null=True, blank=True, unique=True)  # User-defined display name
     color = models.CharField(max_length=50, null=True, blank=True)  # CSS color value (hex, hsl, etc.)
+    archived = models.BooleanField(default=False)  # User can archive projects to hide from default list
     total_cost = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)  # Sum of all sessions total_cost in USD
 
     class Meta:

@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Display unnamed projects as a compressed directory tree (radix trie) on the home page, in the sidebar project selector, and in "new session" dropdowns
 - Persist "show archived sessions" and "compact view" sidebar toggles in localStorage across page reloads
+- Archive/unarchive projects via ellipsis dropdown menu on project cards, with toggle to show archived projects on home page; archived projects hidden by default from home, selectors, and session lists
 
 ### Changed
 

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useDataStore } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
 import { formatDate } from '../utils/date'
@@ -18,6 +18,9 @@ const settingsStore = useSettingsStore()
 
 // Costs setting
 const showCosts = computed(() => settingsStore.areCostsShown)
+
+// Show archived projects setting
+const showArchivedProjects = computed(() => settingsStore.isShowArchivedProjects)
 
 // Session time format setting
 const sessionTimeFormat = computed(() => settingsStore.getSessionTimeFormat)
@@ -40,16 +43,28 @@ function timestampToDate(timestamp) {
 
 // Named projects (have a user-assigned name), sorted by mtime desc (from store)
 const namedProjects = computed(() =>
-    store.getProjects.filter(p => p.name !== null)
+    store.getProjects.filter(p => p.name !== null && (showArchivedProjects.value || !p.archived))
 )
 
 // Unnamed projects organized as a directory tree
 const treeRoots = computed(() => {
-    const unnamed = store.getProjects.filter(p => p.name === null)
+    const unnamed = store.getProjects.filter(p => p.name === null && (showArchivedProjects.value || !p.archived))
     return buildProjectTree(unnamed)
 })
 
 const emit = defineEmits(['select'])
+
+// Ref for the show-archived switch (Web Components need manual .checked sync)
+const showArchivedSwitch = ref(null)
+
+// Sync switch checked state with store value
+watch(showArchivedProjects, () => {
+    nextTick(() => {
+        if (showArchivedSwitch.value && showArchivedSwitch.value.checked !== showArchivedProjects.value) {
+            showArchivedSwitch.value.checked = showArchivedProjects.value
+        }
+    })
+}, { immediate: true })
 
 // Ref for the edit dialog component
 const editDialogRef = ref(null)
@@ -60,21 +75,40 @@ function handleSelect(project) {
     emit('select', project)
 }
 
-function handleEditClick(event, project) {
-    // Prevent the card click from triggering navigation
-    event.stopPropagation()
-    editingProject.value = project
-    editDialogRef.value?.open()
+function handleMenuSelect(event, project) {
+    const item = event.detail?.item
+    if (!item) return
+    if (item.value === 'edit') {
+        editingProject.value = project
+        editDialogRef.value?.open()
+    } else if (item.value === 'archive') {
+        store.setProjectArchived(project.id, true)
+    } else if (item.value === 'unarchive') {
+        store.setProjectArchived(project.id, false)
+    }
 }
 
-function handleTreeEditClick(project) {
-    editingProject.value = project
-    editDialogRef.value?.open()
+function handleTreeMenuSelect(event, project) {
+    // Same logic but event comes from tree node, no stopPropagation needed
+    handleMenuSelect(event, project)
+}
+
+function handleToggleShowArchived(event) {
+    settingsStore.setShowArchivedProjects(event.target.checked)
 }
 </script>
 
 <template>
     <div class="project-list">
+        <wa-switch
+            ref="showArchivedSwitch"
+            size="small"
+            class="show-archived-toggle"
+            @change="handleToggleShowArchived"
+        >
+            Show archived projects
+        </wa-switch>
+
         <!-- Section 1: Named projects (flat, by mtime) -->
         <template v-if="namedProjects.length">
             <div class="section-header">Named projects</div>
@@ -89,18 +123,37 @@ function handleTreeEditClick(project) {
                     <div class="project-title-row">
                         <ProjectBadge :project-id="project.id" class="project-title" />
                         <ProjectProcessIndicator :project-id="project.id" size="small" />
+                        <wa-tag v-if="project.archived" variant="neutral" size="small">Archived</wa-tag>
                     </div>
-                    <wa-button
-                        :id="`edit-button-${project.id}`"
-                        variant="neutral"
-                        appearance="plain"
-                        size="small"
-                        class="edit-button"
-                        @click="(e) => handleEditClick(e, project)"
-                    >
-                        <wa-icon name="pencil"></wa-icon>
-                    </wa-button>
-                    <AppTooltip :for="`edit-button-${project.id}`">Edit project (name and color)</AppTooltip>
+                    <div class="project-menu" @click.stop>
+                        <wa-dropdown
+                            placement="bottom-end"
+                            @wa-select="(e) => handleMenuSelect(e, project)"
+                        >
+                            <wa-button
+                                :id="`project-menu-trigger-${project.id}`"
+                                slot="trigger"
+                                variant="neutral"
+                                appearance="plain"
+                                size="small"
+                            >
+                                <wa-icon name="ellipsis" label="Project menu"></wa-icon>
+                            </wa-button>
+                            <wa-dropdown-item value="edit">
+                                <wa-icon slot="icon" name="pencil"></wa-icon>
+                                Edit
+                            </wa-dropdown-item>
+                            <wa-dropdown-item v-if="!project.archived" value="archive">
+                                <wa-icon slot="icon" name="box-archive"></wa-icon>
+                                Archive
+                            </wa-dropdown-item>
+                            <wa-dropdown-item v-if="project.archived" value="unarchive">
+                                <wa-icon slot="icon" name="box-open"></wa-icon>
+                                Unarchive
+                            </wa-dropdown-item>
+                        </wa-dropdown>
+                        <AppTooltip :for="`project-menu-trigger-${project.id}`">Project actions</AppTooltip>
+                    </div>
                     <div v-if="project.directory" class="project-directory">{{ project.directory }}</div>
                     <div class="project-meta-wrapper">
                         <div class="project-meta">
@@ -137,7 +190,7 @@ function handleTreeEditClick(project) {
                 :key="root.project ? root.project.id : root.segment"
                 :node="root"
                 @select="handleSelect"
-                @edit="handleTreeEditClick"
+                @menu-select="handleTreeMenuSelect"
             />
         </template>
 
@@ -170,6 +223,7 @@ function handleTreeEditClick(project) {
 }
 
 .project-info {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: var(--wa-space-xs);
@@ -179,8 +233,6 @@ function handleTreeEditClick(project) {
     display: flex;
     align-items: center;
     gap: var(--wa-space-xl);
-    /* Leave space for the edit button */
-    padding-right: calc(var(--wa-space-s) + 1.5em);
 }
 
 .project-title {
@@ -189,10 +241,15 @@ function handleTreeEditClick(project) {
     min-width: 0;
 }
 
-.edit-button {
+.project-menu {
     position: absolute;
-    top: calc(var(--spacing) / 2);
-    right: calc(var(--spacing) / 2);
+    top: 0;
+    right: 0;
+}
+
+.show-archived-toggle {
+    align-self: flex-end;
+    font-size: var(--wa-font-size-s);
 }
 
 .project-directory {

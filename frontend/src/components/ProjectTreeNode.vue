@@ -28,7 +28,7 @@ const props = defineProps({
     },
 })
 
-const emit = defineEmits(['select', 'edit'])
+const emit = defineEmits(['select', 'menu-select'])
 
 const store = useDataStore()
 const settingsStore = useSettingsStore()
@@ -68,9 +68,8 @@ function handleSelect(proj) {
     emit('select', proj)
 }
 
-function handleEditClick(event, proj) {
-    event.stopPropagation()
-    emit('edit', proj)
+function handleMenuSelect(event, proj) {
+    emit('menu-select', event, proj)
 }
 
 // Re-emit child events
@@ -78,8 +77,8 @@ function onChildSelect(proj) {
     emit('select', proj)
 }
 
-function onChildEdit(proj) {
-    emit('edit', proj)
+function onChildMenuSelect(event, proj) {
+    emit('menu-select', event, proj)
 }
 </script>
 
@@ -111,18 +110,37 @@ function onChildEdit(proj) {
                     ></wa-icon>
                     <ProjectBadge :project-id="project.id" class="project-title" />
                     <ProjectProcessIndicator :project-id="project.id" size="small" />
+                    <wa-tag v-if="project.archived" variant="neutral" size="small">Archived</wa-tag>
                 </div>
-                <wa-button
-                    :id="`edit-button-${project.id}`"
-                    variant="neutral"
-                    appearance="plain"
-                    size="small"
-                    class="edit-button"
-                    @click="(e) => handleEditClick(e, project)"
-                >
-                    <wa-icon name="pencil"></wa-icon>
-                </wa-button>
-                <AppTooltip :for="`edit-button-${project.id}`">Edit project (name and color)</AppTooltip>
+                <div class="project-menu" @click.stop>
+                    <wa-dropdown
+                        placement="bottom-end"
+                        @wa-select="(e) => handleMenuSelect(e, project)"
+                    >
+                        <wa-button
+                            :id="`project-menu-trigger-${project.id}`"
+                            slot="trigger"
+                            variant="neutral"
+                            appearance="plain"
+                            size="small"
+                        >
+                            <wa-icon name="ellipsis" label="Project menu"></wa-icon>
+                        </wa-button>
+                        <wa-dropdown-item value="edit">
+                            <wa-icon slot="icon" name="pencil"></wa-icon>
+                            Edit
+                        </wa-dropdown-item>
+                        <wa-dropdown-item v-if="!project.archived" value="archive">
+                            <wa-icon slot="icon" name="box-archive"></wa-icon>
+                            Archive
+                        </wa-dropdown-item>
+                        <wa-dropdown-item v-if="project.archived" value="unarchive">
+                            <wa-icon slot="icon" name="box-open"></wa-icon>
+                            Unarchive
+                        </wa-dropdown-item>
+                    </wa-dropdown>
+                    <AppTooltip :for="`project-menu-trigger-${project.id}`">Project actions</AppTooltip>
+                </div>
                 <div v-if="project.directory" class="project-directory">{{ project.directory }}</div>
                 <div class="project-meta-wrapper">
                     <div class="project-meta">
@@ -157,7 +175,7 @@ function onChildEdit(proj) {
                 :key="child.project ? child.project.id : `folder-${child.segment}`"
                 :node="child"
                 @select="onChildSelect"
-                @edit="onChildEdit"
+                @menu-select="onChildMenuSelect"
             />
         </div>
     </div>
@@ -221,6 +239,7 @@ function onChildEdit(proj) {
 }
 
 .project-info {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: var(--wa-space-xs);
@@ -230,7 +249,6 @@ function onChildEdit(proj) {
     display: flex;
     align-items: center;
     gap: var(--wa-space-xl);
-    padding-right: calc(var(--wa-space-s) + 1.5em);
 }
 
 .project-title {
@@ -239,10 +257,10 @@ function onChildEdit(proj) {
     min-width: 0;
 }
 
-.edit-button {
+.project-menu {
     position: absolute;
-    top: calc(var(--spacing) / 2);
-    right: calc(var(--spacing) / 2);
+    top: 0;
+    right: 0;
 }
 
 .project-directory {

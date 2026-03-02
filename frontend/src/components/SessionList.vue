@@ -32,6 +32,10 @@ const props = defineProps({
         type: Boolean,
         default: false
     },
+    showArchivedProjects: {
+        type: Boolean,
+        default: true
+    },
     compactView: {
         type: Boolean,
         default: false
@@ -63,7 +67,8 @@ const allSessions = computed(() => {
         : store.getProjectSessions(props.projectId)
 
     return baseSessions.filter(s =>
-        props.showArchived || !s.archived || s.id === props.sessionId
+        (props.showArchived || !s.archived || s.id === props.sessionId) &&
+        (props.showArchivedProjects || !store.getProject(s.project_id)?.archived)
     )
 })
 

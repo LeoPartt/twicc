@@ -160,7 +160,9 @@ const effectiveProjectId = computed(() =>
 )
 
 // All projects for the selector (already sorted by mtime desc in store)
-const allProjects = computed(() => store.getProjects)
+const allProjects = computed(() =>
+    store.getProjects.filter(p => showArchivedProjects.value || !p.archived)
+)
 const namedProjects = computed(() =>
     allProjects.value.filter(p => p.name !== null)
 )
@@ -206,6 +208,9 @@ const searchQuery = ref('')
 
 // Show archived sessions filter (persistent setting, browser-local via settings store)
 const showArchivedSessions = computed(() => settingsStore.isShowArchivedSessions)
+
+// Show archived projects filter (persistent setting, browser-local via settings store)
+const showArchivedProjects = computed(() => settingsStore.isShowArchivedProjects)
 
 // Compact view (persistent setting, browser-local via settings store)
 const compactView = computed(() => settingsStore.isCompactSessionList)
@@ -772,6 +777,7 @@ function updateSidebarClosedClass(closed) {
                     :show-project-name="isAllProjectsMode"
                     :search-query="searchQuery"
                     :show-archived="showArchivedSessions"
+                    :show-archived-projects="showArchivedProjects"
                     :compact-view="compactView"
                     @select="handleSessionSelect"
                     @focus-search="focusSearchInput"

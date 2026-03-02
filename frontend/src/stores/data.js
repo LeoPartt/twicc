@@ -430,6 +430,47 @@ export const useDataStore = defineStore('data', {
             // Invalidate display name cache so it gets recomputed
             delete this.localState.projectDisplayNames[project.id]
         },
+        /**
+         * Set the archived state of a project.
+         * @param {string} projectId - The project ID
+         * @param {boolean} archived - Whether to archive or unarchive
+         * @throws {Error} If the update fails
+         */
+        async setProjectArchived(projectId, archived) {
+            // Optimistic update
+            const project = this.projects[projectId]
+            const oldArchived = project?.archived
+
+            if (project) {
+                project.archived = archived
+            }
+
+            try {
+                const response = await apiFetch(
+                    `/api/projects/${projectId}/`,
+                    {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ archived })
+                    }
+                )
+
+                if (!response.ok) {
+                    const data = await response.json()
+                    throw new Error(data.error || 'Failed to update project')
+                }
+
+                const updatedProject = await response.json()
+                this.$patch({ projects: { [projectId]: updatedProject } })
+
+            } catch (error) {
+                // Rollback on error
+                if (project && oldArchived !== undefined) {
+                    project.archived = oldArchived
+                }
+                throw error
+            }
+        },
 
         // Sessions
         addSession(session) {
