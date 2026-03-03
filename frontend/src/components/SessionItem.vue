@@ -4,6 +4,7 @@ import { useDataStore } from '../stores/data'
 import JsonViewer from './JsonViewer.vue'
 import Message from './items/Message.vue'
 import ApiError from './items/ApiError.vue'
+import CustomTitle from './items/CustomTitle.vue'
 import UnknownEntry from './items/UnknownEntry.vue'
 import AppTooltip from './AppTooltip.vue'
 
@@ -198,6 +199,10 @@ function toggleJsonView() {
             <ApiError
                 v-else-if="kind === 'api_error'"
                 :data="parsedContent"
+            />
+            <CustomTitle
+                v-else-if="entryType === 'custom-title'"
+                :custom-title="parsedContent.customTitle"
             />
             <UnknownEntry
                 v-else
@@ -501,8 +506,29 @@ wa-details.item-details {
     font-size: var(--wa-font-size-s);
     --spacing-top: calc(var(--content-card-not-start-item, 1) * var(--spacing));
     --spacing-bottom: calc(var(--content-card-not-end-item, 1) * var(--spacing));
+
+    &::part(header) {
+        user-select: text;
+        -webkit-user-select: text;
+    }
     padding-top: var(--spacing-top);
     padding-bottom: var(--spacing-bottom);
+
+    &[disabled]::part(header) {
+        cursor: default;
+    }
+
+    &.no-details {
+        &::part(header) {
+            cursor: default;
+        }
+        &::part(icon) {
+            display: none;
+        }
+        &::part(content) {
+            display: none;
+        }
+    }
 
     .items-details-summary {
         display: inline;
