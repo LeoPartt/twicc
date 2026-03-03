@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 
 import orjson
@@ -20,9 +21,9 @@ from twicc.compute import cache_agent_prompt, compute_item_cost_and_usage, compu
     create_agent_link_from_tool_use, create_tool_result_link_live, ensure_project_directory, ensure_project_git_root, \
     extract_item_timestamp, \
     extract_text_from_content, extract_title_from_user_message, get_cached_agent_prompt, get_message_content, \
-    get_project_git_root, is_agent_link_done, \
+    get_project_directory, get_project_git_root, is_agent_link_done, \
     is_tool_result_item, load_project_directories, \
-    load_project_git_roots, \
+    load_project_git_roots, read_head_branch, resolve_git_from_path, \
     update_project_metadata as _update_project_metadata_sync
 from twicc.core.enums import ItemDisplayLevel, ItemKind
 from twicc.core.models import Project, Session, SessionItem, SessionType
@@ -780,10 +781,55 @@ def sync_session_items(session: Session, file_path: Path) -> tuple[list[int], li
             # This handles sessions where the agent only uses Bash (no tool_use with file paths),
             # so resolve_git_for_item has nothing to work with.
             if not session.git_directory and session.cwd:
-                from twicc.compute import _resolve_git_from_path
-                cwd_git = _resolve_git_from_path(session.cwd, use_cache=False)
+                cwd_git = resolve_git_from_path(session.cwd, use_cache=False)
                 if cwd_git:
                     session.git_directory, session.git_branch = cwd_git
+
+            # Validate git state: verify git_directory still exists on disk and refresh branch.
+            # This catches Bash commands that modify git state (git checkout, worktree deletion, etc.).
+            if session.git_directory:
+                if os.path.isdir(session.git_directory):
+                    # Directory exists: refresh branch from HEAD in case of git checkout
+                    head_path = os.path.join(session.git_directory, '.git', 'HEAD')
+                    if not os.path.isfile(head_path):
+                        # Worktree: .git is a file, read gitdir path to find HEAD
+                        git_file = os.path.join(session.git_directory, '.git')
+                        if os.path.isfile(git_file):
+                            try:
+                                with open(git_file, 'r') as f:
+                                    content = f.read().strip()
+                                if content.startswith('gitdir: '):
+                                    head_path = os.path.join(content[len('gitdir: '):], 'HEAD')
+                            except OSError:
+                                head_path = None
+                        else:
+                            head_path = None
+                    if head_path:
+                        branch = read_head_branch(head_path)
+                        if branch and branch != session.git_branch:
+                            session.git_branch = branch
+                else:
+                    # git_directory no longer exists: re-resolve through fallback chain
+                    resolved = None
+                    if session.cwd and os.path.isdir(session.cwd):
+                        resolved = resolve_git_from_path(session.cwd, use_cache=False)
+                    if not resolved:
+                        project_git_root = get_project_git_root(session.project_id)
+                        if project_git_root and os.path.isdir(project_git_root):
+                            # Already a resolved git root, re-read branch from it
+                            head_path = os.path.join(project_git_root, '.git', 'HEAD')
+                            branch = read_head_branch(head_path)
+                            if branch:
+                                resolved = (project_git_root, branch)
+                    if not resolved:
+                        project_directory = get_project_directory(session.project_id)
+                        if project_directory and os.path.isdir(project_directory):
+                            resolved = resolve_git_from_path(project_directory, use_cache=False)
+                    if resolved:
+                        session.git_directory, session.git_branch = resolved
+                    else:
+                        session.git_directory = None
+                        session.git_branch = None
 
             is_new_session = session.created_at is None and first_timestamp is not None
             if is_new_session:

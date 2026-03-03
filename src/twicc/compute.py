@@ -78,6 +78,11 @@ def load_project_git_roots() -> None:
     )
 
 
+def get_project_directory(project_id: str) -> str | None:
+    """Get cached directory for a project."""
+    return _project_directories.get(project_id)
+
+
 def get_project_git_root(project_id: str) -> str | None:
     """Get cached git_root for a project."""
     return _project_git_roots.get(project_id)
@@ -140,7 +145,7 @@ def ensure_project_git_root(project_id: str, directory: str | None = None) -> No
         if not directory:
             return
 
-    result = _resolve_git_from_path(directory, use_cache=False)
+    result = resolve_git_from_path(directory, use_cache=False)
     git_root = result[0] if result else None
 
     # Check if update needed
@@ -201,7 +206,7 @@ _TOOL_PATH_FIELDS: dict[str, str] = {
 _git_resolution_cache: dict[str, tuple[str, str] | None] = {}
 
 
-def _resolve_git_from_path(dir_path: str, *, use_cache: bool = True) -> tuple[str, str] | None:
+def resolve_git_from_path(dir_path: str, *, use_cache: bool = True) -> tuple[str, str] | None:
     """
     Walk up from dir_path to find a .git entry and resolve git directory and branch.
 
@@ -231,7 +236,7 @@ def _resolve_git_from_path(dir_path: str, *, use_cache: bool = True) -> tuple[st
         try:
             if os.path.isdir(git_path):
                 # Main repo: .git is a directory
-                branch = _read_head_branch(os.path.join(git_path, 'HEAD'))
+                branch = read_head_branch(os.path.join(git_path, 'HEAD'))
                 result = (current, branch) if branch is not None else None
                 # Cache all traversed paths
                 if use_cache:
@@ -290,13 +295,13 @@ def _resolve_worktree_git(git_directory: str, git_file_path: str) -> tuple[str, 
 
     gitdir = content[len('gitdir: '):]
     head_path = os.path.join(gitdir, 'HEAD')
-    branch = _read_head_branch(head_path)
+    branch = read_head_branch(head_path)
     if branch is None:
         return None
     return (git_directory, branch)
 
 
-def _read_head_branch(head_path: str) -> str | None:
+def read_head_branch(head_path: str) -> str | None:
     """
     Read a git HEAD file and extract the branch name or commit hash.
 
@@ -372,7 +377,7 @@ def resolve_git_for_item(parsed_json: dict, *, use_cache: bool = True) -> tuple[
         parsed_json: Parsed JSON content of the item
         use_cache: Whether to use the module-level git resolution cache.
                    Set to False for live resolution where fresh results are needed.
-                   Passed through to _resolve_git_from_path.
+                   Passed through to resolve_git_from_path.
 
     Returns:
         (git_directory, git_branch) tuple, or None if no paths or no git found
@@ -385,7 +390,7 @@ def resolve_git_for_item(parsed_json: dict, *, use_cache: bool = True) -> tuple[
     for path in paths:
         # Use the directory part of the path (for files)
         dir_path = os.path.dirname(path) if not os.path.isdir(path) else path
-        result = _resolve_git_from_path(dir_path, use_cache=use_cache)
+        result = resolve_git_from_path(dir_path, use_cache=use_cache)
         if result is not None:
             resolutions.append(result)
 
@@ -1458,7 +1463,7 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
     # This handles sessions where the agent only uses Bash (no tool_use with file paths).
     # Uses use_cache=True (default) since background compute benefits from caching across sessions.
     if not last_resolved_git_directory and last_cwd:
-        cwd_git = _resolve_git_from_path(last_cwd)
+        cwd_git = resolve_git_from_path(last_cwd)
         if cwd_git:
             last_resolved_git_directory, last_resolved_git_branch = cwd_git
 
