@@ -4,38 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.3] - Unreleased
+## [1.0.3] - 2026-03-04
 
 ### Added
 
-- Display unnamed projects as a compressed directory tree (radix trie) on the home page, in the sidebar project selector, and in "new session" dropdowns
-- Persist "show archived sessions" and "compact view" sidebar toggles in localStorage across page reloads
-- Archive/unarchive projects via ellipsis dropdown menu on project cards, with toggle to show archived projects on home page; archived projects hidden by default from home, selectors, and session lists
-- Display `custom-title` session items (session title changes) with a dedicated component instead of falling through to the generic "Unhandled event" view
-- Improved tool use summaries: richer descriptions for Skill, Task, Grep, and Glob tools
-- WebSocket subscribe filter: clients can connect with `?subscribe=type1,type2` to receive only specific message types, reducing bandwidth for lightweight consumers (contributed by David Guerizec)
+- Display unnamed projects as a directory tree
+- Persist "show archived sessions" and "compact view" sidebar toggles
+- Project archiving
+- Improved session item rendering: tool use summaries and title changes
+- Filtering of WebSocket message (for twicc external tooling) (contributed by @dguerizec, closes #3)
+- Rate limiting on the login endpoint (contributed by @dguerizec)
 
 ### Changed
 
-- Hide sessions without any user message from session listings and project session counts (sessions created by launching Claude Code but never sending a message)
-- Refactor Session database indexes: replace two separate indexes with a combined `(project, type, -mtime)` index and a conditional index for visible sessions
-- Refactor git resolution: cache-free filesystem reads in the live watcher (detects branch switches and new repos immediately), CWD fallback for Bash-only sessions, session git propagation moved from item-level to session-level, post-batch validation of git state (detects branch changes and deleted repos after Bash commands)
-- Lazy-render wa-details content: tool use inputs/results, thinking blocks, and unknown entries are now only mounted when expanded (v-if on open state), saving significant CPU/memory on long conversations
-- Lazy parsed content caching for session items, eliminating redundant JSON parsing
-- Stabilize visual item references across recomputes, so Vue skips re-rendering unchanged items
-- Extract ProcessDuration component and SessionListItem sub-component to eliminate per-second global re-renders and redundant store lookups in session list
+- Hide sessions without any user message
+- More reliable git directory and branch detection (Closes #2)
+- Performance improvements on the session chat
 - Update claude-agent-sdk 0.1.44 → 0.1.45 (Claude Code CLI 2.1.59 → 2.1.63)
 
 ### Fixed
 
-- Fix stale detection for projects whose Claude folder (`~/.claude/projects/`) was removed but working directory still exists (e.g. after session sublimation)
-- Strip inherited `CLAUDE_*` environment variables at startup, in devctl, and in PTY terminals to prevent Claude Code from detecting a false nested SDK session
-- Limit project selector and new-session dropdown heights to 50vh with scrolling when too many projects exist
-- Disable diff editor compact mode so hidden unchanged regions can always be expanded (the compact widget had no interactivity)
-- Add `domReadOnly` to Monaco editors when read-only, preventing the mobile keyboard from appearing on tap
-- Ensure enough space for the virtual keyboard on draft session screens on mobile
-- Block message sending while attached images are still being processed (encoding, resizing), preventing partial uploads
-- Add per-IP rate limiting on the login endpoint (5 attempts / 5 min, 60s lockout) with real client IP resolution from proxy/tunnel headers (CF-Connecting-IP, X-Forwarded-For, etc.)
+- Fix stale project detection
+- Strip inherited `CLAUDE_*` environment variables at startup to prevent false nested SDK session detection
+- Limit project selector height
+- Disable diff editor compact mode
+- Fix virtual keyboard behavior on mobile (read-only editors, draft screens)
+- Block message sending while attached images are still being processed, preventing partial uploads
 
 ## [1.0.2] - 2026-02-28
 
