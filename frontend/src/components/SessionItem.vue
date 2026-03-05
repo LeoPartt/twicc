@@ -523,6 +523,7 @@ wa-details.item-details {
 
     .items-details-summary {
         display: inline;
+        min-width: 0; /* Allow shrinking as flex item in wa-details shadow DOM header */
     }
     .items-details-summary-name {
         color: var(--wa-color-text-normal);
@@ -533,6 +534,7 @@ wa-details.item-details {
     .items-details-summary-description {
         color: var(--wa-color-text-normal);
         font-weight: normal;
+        overflow-wrap: anywhere; /* Break long strings that have no spaces */
     }
 }
 

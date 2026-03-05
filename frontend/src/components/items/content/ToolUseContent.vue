@@ -753,6 +753,7 @@ wa-details {
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-xs);
+        max-width: 100%; /* Constrain to parent width so text can wrap */
     }
 }
 
