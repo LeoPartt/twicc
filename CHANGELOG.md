@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Handle display of TodoWrite tool
 - Syntax-highlighted code display for Read tool results
 - Show URL for WebFetch and search query for WebSearch/ToolSearch in tool use summaries
+- Include file attachments in optimistic user messages for instant display
 
 ### Changed
 

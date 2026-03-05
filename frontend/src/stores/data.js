@@ -1215,8 +1215,11 @@ export const useDataStore = defineStore('data', {
          * to confirm with a real user_message item.
          * @param {string} sessionId
          * @param {string} text - The message text
+         * @param {Object} [attachments] - Optional attachments in SDK format
+         * @param {Array} [attachments.images] - Image blocks ({ type: 'image', source: {...} })
+         * @param {Array} [attachments.documents] - Document blocks ({ type: 'document', source: {...} })
          */
-        setOptimisticMessage(sessionId, text) {
+        setOptimisticMessage(sessionId, text, attachments) {
             const { lineNum, kind: syntheticKind } = SYNTHETIC_ITEM.OPTIMISTIC_USER_MESSAGE
             // Store as sessionItem format (snake_case) since it's injected into
             // the items array before computeVisualItems processes it.
@@ -1229,12 +1232,18 @@ export const useDataStore = defineStore('data', {
                 group_head: null,
                 group_tail: null
             }
+            // Build the content blocks: images/documents first, then text
+            // (same order as the backend in process.py)
+            const contentBlocks = []
+            if (attachments?.images?.length) contentBlocks.push(...attachments.images)
+            if (attachments?.documents?.length) contentBlocks.push(...attachments.documents)
+            contentBlocks.push({ type: 'text', text })
             setParsedContent(optimisticItem, {
                 type: 'user',
                 syntheticKind,
                 message: {
                     role: 'user',
-                    content: [{ type: 'text', text }]
+                    content: contentBlocks
                 }
             })
             this.localState.optimisticMessages[sessionId] = optimisticItem

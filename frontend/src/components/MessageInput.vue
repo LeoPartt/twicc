@@ -543,7 +543,10 @@ async function handleSend() {
         // won't arrive until later)
         const state = processState.value?.state
         if (state !== 'assistant_turn') {
-            store.setOptimisticMessage(props.sessionId, text)
+            const attachments = (payload.images || payload.documents)
+                ? { images: payload.images, documents: payload.documents }
+                : undefined
+            store.setOptimisticMessage(props.sessionId, text, attachments)
         }
 
         // Clear draft message from store (and IndexedDB)
