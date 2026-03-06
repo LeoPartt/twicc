@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Classify `/clear` command items as system instead of user message
 - Upgrade Web Awesome 3.2 → 3.3.1 (and removes a lot of workarounds for problems now fixed)
+- Update claude-agent-sdk 0.1.45 → 0.1.47 (Claude Code CLI 2.1.63 → 2.1.70)
 
 ## [1.0.3] - 2026-03-04
 
