@@ -794,7 +794,7 @@ def compute_item_kind(parsed_json: dict) -> ItemKind | None:
     - USER_MESSAGE: User messages with visible content (text, document, image), not meta
     - ASSISTANT_MESSAGE: Assistant messages with visible content (text, document, image)
     - API_ERROR: System messages with subtype 'api_error', or messages with isApiErrorMessage=true
-    - SYSTEM: System messages (except api_error), queue-operation, progress, summary, file-history-snapshot
+    - SYSTEM: System messages (except api_error), queue-operation, progress, summary, file-history-snapshot, last-prompt
     - CUSTOM_TITLE: Items of type 'custom-title' (session title set by Claude)
 
     Args:
@@ -818,8 +818,8 @@ def compute_item_kind(parsed_json: dict) -> ItemKind | None:
     if entry_type == 'custom-title':
         return ItemKind.CUSTOM_TITLE
 
-    # System types: system (except api_error), queue-operation, progress
-    if entry_type in ('queue-operation', 'progress'):
+    # System types: system (except api_error), queue-operation, progress, etc.
+    if entry_type in ('queue-operation', 'progress', 'summary', 'file-history-snapshot', 'last-prompt'):
         return ItemKind.SYSTEM
 
     if entry_type == 'system':
