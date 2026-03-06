@@ -564,8 +564,19 @@ async function handleSend() {
         }
 
         // Clear the textarea on successful send.
+        // Force-clear the Web Component's value property directly: Vue may skip
+        // re-pushing "" via :value.prop if it already pushed "" on a previous send
+        // (Vue's template binding deduplicates identical prop values).
         messageText.value = ''
         if (textareaRef.value) {
+            // Force-clear both the Web Component property and its internal <textarea>.
+            // Setting wa.value alone may be ignored by the Lit setter's dedup check
+            // (if _value is already ""), and even when accepted, the Lit re-render
+            // with live() can be skipped if Vue's binding already pushed the same value.
+            // Directly clearing the inner textarea ensures the DOM is always updated.
+            textareaRef.value.value = ''
+            const inner = textareaRef.value.shadowRoot?.querySelector('textarea')
+            if (inner) inner.value = ''
             await nextTick()
             adjustTextareaHeight()
         }
@@ -598,6 +609,9 @@ async function handleReset() {
         messageText.value = ''
         store.clearDraftMessage(props.sessionId)
         if (textareaRef.value) {
+            textareaRef.value.value = ''
+            const inner = textareaRef.value.shadowRoot?.querySelector('textarea')
+            if (inner) inner.value = ''
             await nextTick()
             adjustTextareaHeight()
         }
