@@ -42,6 +42,10 @@ _SYSTEM_XML_PREFIXES = (
     '<local-command-',
 )
 
+# Prefix for task notification XML (background agent results)
+_TASK_NOTIFICATION_TAG = '<task-notification>'
+_TASK_NOTIFICATION_CLOSE_TAG = '</task-notification>'
+
 # Maximum length for extracted titles (before truncation)
 TITLE_MAX_LENGTH = 200
 
@@ -492,6 +496,108 @@ def extract_command(text: str) -> ParsedCommand | None:
         message=root.get("command-message"),
         args=root.get("command-args"),
     )
+
+
+_RESULT_OPEN_TAG = '<result>'
+_RESULT_CLOSE_TAG = '</result>'
+_RE_TASK_ID = re.compile(r'<task-id>([^<]+)</task-id>')
+_RE_TOOL_USE_ID = re.compile(r'<tool-use-id>([^<]+)</tool-use-id>')
+
+
+def _extract_task_notification_fields(xml_str: str) -> tuple[str | None, str | None, str]:
+    """
+    Manually extract task-notification fields when xmltodict fails.
+
+    Uses regex for simple single-value tags (task-id, tool-use-id) and
+    positional extraction for <result> (opening tag to last closing tag)
+    since result content may contain unescaped XML-like text.
+
+    Returns:
+        (tool_use_id, task_id, result_text)
+    """
+    m_tool_use = _RE_TOOL_USE_ID.search(xml_str)
+    tool_use_id = m_tool_use.group(1).strip() if m_tool_use else None
+
+    m_task = _RE_TASK_ID.search(xml_str)
+    task_id = m_task.group(1).strip() if m_task else None
+
+    result_text = ''
+    open_idx = xml_str.find(_RESULT_OPEN_TAG)
+    if open_idx != -1:
+        close_idx = xml_str.rfind(_RESULT_CLOSE_TAG)
+        if close_idx != -1 and close_idx > open_idx:
+            result_text = xml_str[open_idx + len(_RESULT_OPEN_TAG):close_idx]
+
+    return tool_use_id, task_id, result_text
+
+
+def transform_task_notification(parsed_json: dict) -> str | None:
+    """
+    Transform a task-notification user message into a synthetic tool_result format.
+
+    Background agents deliver their results as user messages with XML content
+    like ``<task-notification>...<tool-use-id>...</tool-use-id>...</task-notification>``
+    instead of the normal tool_result content array format.
+
+    This function detects such messages, parses the XML, and rewrites
+    ``parsed_json`` **in place** so that downstream code sees a standard
+    tool_result item (content list, toolUseResult with agentId, etc.).
+
+    Args:
+        parsed_json: The parsed JSONL line (mutated in place if transformed).
+
+    Returns:
+        The new serialised JSON string to store in DB if a transformation was
+        performed, or ``None`` if the item was not a task-notification.
+    """
+    if parsed_json.get('type') != 'user':
+        return None
+    message = parsed_json.get('message')
+    if not isinstance(message, dict):
+        return None
+    content = message.get('content')
+    if not isinstance(content, str):
+        return None
+    stripped = content.lstrip()
+    if not stripped.startswith(_TASK_NOTIFICATION_TAG):
+        return None
+
+    # Find the LAST closing tag to avoid issues if </task-notification> appears inside <result>
+    close_idx = content.rfind(_TASK_NOTIFICATION_CLOSE_TAG)
+    if close_idx == -1:
+        return None
+    xml_str = content[:close_idx + len(_TASK_NOTIFICATION_CLOSE_TAG)]
+
+    try:
+        notification = xmltodict.parse(xml_str)['task-notification']
+        tool_use_id = notification.get('tool-use-id')
+        task_id = notification.get('task-id')
+        result_text = notification.get('result', '')
+    except Exception:
+        # Fallback: xmltodict can fail when <result> contains unescaped XML-like text
+        # (e.g. "<width>x<height>"). Extract fields manually.
+        logger.info("xmltodict failed for task-notification, falling back to manual extraction")
+        tool_use_id, task_id, result_text = _extract_task_notification_fields(xml_str)
+
+    if not tool_use_id:
+        return None
+
+    # Preserve original content for debugging
+    parsed_json['twiccOriginalContent'] = content
+
+    # Rewrite message.content as a standard tool_result content array
+    message['content'] = [{
+        'type': 'tool_result',
+        'tool_use_id': tool_use_id,
+        'content': result_text,
+    }]
+
+    # Add toolUseResult with agentId so that get_tool_result_agent_info() works
+    if task_id:
+        parsed_json['toolUseResult'] = {'agentId': task_id}
+
+    # Serialise and return the new content for DB storage
+    return orjson.dumps(parsed_json).decode('utf-8')
 
 
 def extract_title_from_user_message(parsed_json: dict) -> str | None:
@@ -1246,6 +1352,7 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
     all_item_updates: list[dict] = []  # Accumulate all item updates
     all_tool_result_links: list[dict] = []  # Accumulate all tool_result links
     all_agent_links: list[dict] = []  # Accumulate all agent links
+    content_overrides: list[dict] = []  # Only items whose content was transformed
     batch_size = 50
 
     # Helper to serialize items
@@ -1320,6 +1427,12 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
         except orjson.JSONDecodeError:
             logger.warning(f"Invalid JSON in item {item.session_id}:{item.line_num}")
             parsed = {}
+
+        # Transform task-notification XML into standard tool_result format
+        new_content = transform_task_notification(parsed)
+        if new_content is not None:
+            item.content = new_content
+            content_overrides.append({'id': item.id, 'content': new_content})
 
         # Compute display_level and kind
         metadata = compute_item_metadata(parsed)
@@ -1491,6 +1604,7 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
         'project_id': session.project_id,
         'item_updates': all_item_updates,
         'item_fields': ['display_level', 'group_head', 'group_tail', 'kind', 'message_id', 'cost', 'context_usage', 'timestamp', 'git_directory', 'git_branch'],
+        'content_overrides': content_overrides,
         'tool_result_links': all_tool_result_links,
         'agent_links': all_agent_links,
         'session_fields': {
@@ -1874,7 +1988,7 @@ def create_agent_link_from_tool_use(
                 break
 
 
-def compute_item_metadata_live(session_id: str, item: SessionItem, content: str) -> set[int]:
+def compute_item_metadata_live(session_id: str, item: SessionItem, parsed_json: dict) -> set[int]:
     """
     Compute metadata for a single item during live sync.
 
@@ -1883,24 +1997,13 @@ def compute_item_metadata_live(session_id: str, item: SessionItem, content: str)
     Args:
         session_id: The session ID
         item: The SessionItem object (already has line_num and content set)
-        content: The raw JSON content string
+        parsed_json: The already-parsed JSON content (possibly transformed)
 
     Returns:
         Set of line_nums of pre-existing items whose group_tail was updated
     """
-    try:
-        parsed = orjson.loads(content)
-    except orjson.JSONDecodeError:
-        logger.warning(f"Invalid JSON in item {session_id}:{item.line_num}")
-        parsed = {}
-
-    # Compute display_level and kind
-    metadata = compute_item_metadata(parsed)
-    item.display_level = metadata['display_level']
-    item.kind = metadata['kind']
-
     # Resolve git directory/branch from tool_use paths (no cache for live resolution)
-    git_resolution = resolve_git_for_item(parsed, use_cache=False)
+    git_resolution = resolve_git_for_item(parsed_json, use_cache=False)
     if git_resolution is not None:
         item.git_directory, item.git_branch = git_resolution
 
@@ -1958,7 +2061,7 @@ def compute_item_metadata_live(session_id: str, item: SessionItem, content: str)
             item.group_tail = item.line_num
 
     elif item.display_level == ItemDisplayLevel.ALWAYS:
-        has_prefix, has_suffix = _detect_prefix_suffix(parsed, item.kind)
+        has_prefix, has_suffix = _detect_prefix_suffix(parsed_json, item.kind)
 
         # Handle prefix
         if has_prefix and open_group_head is not None:
@@ -2025,6 +2128,15 @@ def apply_session_complete(msg: dict) -> None:
             for upd in item_updates
         ]
         SessionItem.objects.bulk_update(items, item_fields, 50)
+
+    # 2b. Apply content overrides (rare: only transformed task-notification items)
+    content_overrides = msg.get('content_overrides', [])
+    if content_overrides:
+        items = [
+            SessionItem(id=ovr['id'], content=ovr['content'])
+            for ovr in content_overrides
+        ]
+        SessionItem.objects.bulk_update(items, ['content'], 50)
 
     # 3. Create links
     tool_result_links_data = msg.get('tool_result_links', [])

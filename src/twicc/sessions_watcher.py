@@ -24,6 +24,7 @@ from twicc.compute import cache_agent_prompt, compute_item_cost_and_usage, compu
     get_project_directory, get_project_git_root, is_agent_link_done, \
     is_tool_result_item, load_project_directories, \
     load_project_git_roots, read_head_branch, resolve_git_from_path, \
+    transform_task_notification, \
     update_project_metadata as _update_project_metadata_sync
 from twicc.core.enums import ItemDisplayLevel, ItemKind
 from twicc.core.models import Project, Session, SessionItem, SessionType
@@ -557,11 +558,17 @@ def sync_session_items(session: Session, file_path: Path) -> tuple[list[int], li
                     line_num=current_line_num,
                     content=line,
                 )
-                # Pre-compute display_level (no group info yet)
                 try:
                     parsed = orjson.loads(line)
                 except orjson.JSONDecodeError:
                     parsed = {}
+
+                # Transform task-notification XML into standard tool_result format
+                new_content = transform_task_notification(parsed)
+                if new_content is not None:
+                    item.content = new_content
+
+                # Pre-compute display_level (no group info yet)
                 metadata = compute_item_metadata(parsed)
                 item.display_level = metadata['display_level']
                 item.kind = metadata['kind']
@@ -649,7 +656,7 @@ def sync_session_items(session: Session, file_path: Path) -> tuple[list[int], li
 
                 # Group membership for COLLAPSIBLE and ALWAYS items
                 if item.display_level in (ItemDisplayLevel.COLLAPSIBLE, ItemDisplayLevel.ALWAYS):
-                    item_modified_lines = compute_item_metadata_live(session.id, item, item.content)
+                    item_modified_lines = compute_item_metadata_live(session.id, item, parsed)
                     modified_line_nums.update(item_modified_lines)
                     update_fields['group_head'] = item.group_head
                     update_fields['group_tail'] = item.group_tail
