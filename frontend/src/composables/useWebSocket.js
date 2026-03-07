@@ -394,6 +394,10 @@ export function useWebSocket() {
                 }
                 break
             }
+            case 'bash_tool_state':
+                // Update bash tool state for spinner display
+                store.setBashToolState(msg.session_id, msg.tool_use_id, msg.result_count, msg.completed_at)
+                break
             case 'active_processes':
                 // Initialize process states from server on connection
                 store.setActiveProcesses(msg.processes)

@@ -399,6 +399,8 @@ watch([() => props.sessionId, session], async ([newSessionId, newSession]) => {
         if (!props.parentSessionId) {
             store.fetchSubagentsState(props.projectId, newSessionId)
         }
+        // Fetch bash tool states for spinner display (for both sessions and subagents)
+        store.fetchBashToolStates(props.projectId, newSessionId)
     }
 
     // Skip DOM-manipulating scroll when inactive (KeepAlive deactivated)

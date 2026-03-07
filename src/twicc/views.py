@@ -542,6 +542,37 @@ def subagents_state(request, project_id, session_id):
     return JsonResponse(result, safe=False)
 
 
+def bash_tool_states(request, project_id, session_id):
+    """GET /api/projects/<id>/sessions/<session_id>/bash-tool-states/
+
+    Returns the completion state of each Bash tool_use in the session:
+    result_count and completed_at (max tool_result timestamp).
+
+    Response: {"tools": {"toolu_xxx": {"result_count": 2, "completed_at": "..."}, ...}}
+    """
+    try:
+        session = Session.objects.get(id=session_id, project_id=project_id)
+    except Session.DoesNotExist:
+        raise Http404("Session not found")
+
+    from django.db.models import Count, Max
+
+    qs = (
+        ToolResultLink.objects
+        .filter(session=session, tool_name="Bash")
+        .values("tool_use_id")
+        .annotate(result_count=Count("id"), completed_at=Max("tool_result_at"))
+    )
+    tools = {
+        row["tool_use_id"]: {
+            "result_count": row["result_count"],
+            "completed_at": row["completed_at"].isoformat() if row["completed_at"] else None,
+        }
+        for row in qs
+    }
+    return JsonResponse({"tools": tools})
+
+
 def directory_tree(request, project_id, session_id=None):
     """GET directory tree listing.
 

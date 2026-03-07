@@ -48,6 +48,10 @@ const props = defineProps({
     lineNum: {
         type: Number,
         required: true
+    },
+    timestamp: {
+        type: String,
+        default: null
     }
 })
 
@@ -425,6 +429,25 @@ const displayInput = computed(() => {
     return Object.keys(rest).length > 0 ? rest : null
 })
 
+// --- Bash tool spinner ---
+
+const isBash = computed(() => props.name === 'Bash')
+const isBashBackground = computed(() => isBash.value && !!props.input?.run_in_background)
+const bashToolState = computed(() => isBash.value ? dataStore.getBashToolState(props.sessionId, props.toolId) : null)
+const isBashRunning = computed(() => {
+    if (!isBash.value) return false
+    const resultCount = bashToolState.value?.resultCount || 0
+    const requiredCount = isBashBackground.value ? 2 : 1
+    return resultCount < requiredCount
+})
+// Unix timestamp (seconds) for ProcessDuration — from the JSONL item timestamp
+const bashStartedAt = computed(() => {
+    if (!isBash.value || !props.timestamp) return null
+    return new Date(props.timestamp).getTime() / 1000
+})
+// Unique ID for the bash spinner (for tooltip targeting)
+const bashSpinnerId = computed(() => `bash-spinner-${props.toolId}`)
+
 // --- View Agent button for Task tool_use ---
 
 // Is this an agent tool_use? (Task or Agent)
@@ -483,7 +506,7 @@ function navigateToSubagent() {
 </script>
 
 <template>
-    <wa-details class="item-details tool-use" :class="{'with-right-part' : isTask && !parentSessionId}" icon-placement="start" @wa-show.self="onToolUseOpen" @wa-hide.self="onToolUseClose">
+    <wa-details class="item-details tool-use" :class="{'with-right-part' : (isTask && !parentSessionId) || isBashRunning}" icon-placement="start" @wa-show.self="onToolUseOpen" @wa-hide.self="onToolUseClose">
         <span slot="summary" class="items-details-summary">
             <span class="items-details-summary-left">
                 <strong v-if="taskDisplayName" class="items-details-summary-name">{{ taskDisplayName.name }}<span v-if="taskDisplayName.namespace" class="items-details-summary-quiet"> ({{ taskDisplayName.namespace }})</span></strong>
@@ -550,20 +573,28 @@ function navigateToSubagent() {
                 <!-- Agent not yet started: spinner -->
                 <wa-spinner v-if="!agentId" class="agent-starting-spinner"></wa-spinner>
                 <!-- Agent started: View Agent button (with pulsing robot if still running) -->
-                <wa-button
-                    v-else
-                    :id="viewAgentButtonId"
-                    size="small"
-                    variant="brand"
-                    appearance="outlined"
-                    @click.stop="navigateToSubagent"
-                >
-                    <wa-icon v-if="isAgentRunning" slot="start" name="robot" class="agent-running-icon"></wa-icon>
-                    View Agent
-                </wa-button>
-                <AppTooltip v-if="isAgentRunning && agentProcessState.state_changed_at" :for="viewAgentButtonId">
-                    Agent running for <ProcessDuration :state-changed-at="agentProcessState.state_changed_at" />
+                <template v-else>
+                    <AppTooltip v-if="isAgentRunning && agentProcessState.state_changed_at" :for="viewAgentButtonId">
+                        Agent running for <ProcessDuration :state-changed-at="agentProcessState.state_changed_at" />
+                    </AppTooltip>
+                    <wa-button
+                        :id="viewAgentButtonId"
+                        size="small"
+                        variant="brand"
+                        appearance="outlined"
+                        @click.stop="navigateToSubagent"
+                    >
+                        <wa-icon v-if="isAgentRunning" slot="start" name="robot" class="agent-running-icon"></wa-icon>
+                        View Agent
+                    </wa-button>
+                </template>
+            </template>
+            <!-- Bash tool running spinner -->
+            <template v-if="isBashRunning">
+                <AppTooltip v-if="bashStartedAt" :for="bashSpinnerId">
+                    Running for <ProcessDuration :state-changed-at="bashStartedAt" />
                 </AppTooltip>
+                <wa-spinner :id="bashSpinnerId" class="bash-running-spinner"></wa-spinner>
             </template>
         </span>
         <template v-if="isOpen">
@@ -626,17 +657,19 @@ wa-details.with-right-part {
         gap: var(--wa-space-m);
         width: 100%;
 
-        wa-button, .agent-starting-spinner {
-            margin-block: -1em;
+        wa-button {
+            margin-block: -1rem;
+        }
+        .agent-starting-spinner, .bash-running-spinner {
+            font-size: 1.2em;
         }
         .agent-starting-spinner {
-            font-size: 1.2em;
-            --indicator-color: var(--wa-color-brand-600);
+            --indicator-color: var(--wa-color-warning-60);
         }
         .agent-running-icon {
             animation: pulse 1s ease-in-out infinite;
         }
-        & > :not(wa-button, .agent-starting-spinner):last-child {
+        & > :not(wa-button):last-child {
             margin-right: var(--spacing);
         }
     }

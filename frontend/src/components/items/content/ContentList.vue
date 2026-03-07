@@ -44,6 +44,10 @@ const props = defineProps({
         type: Number,
         required: true
     },
+    timestamp: {
+        type: String,
+        default: null
+    },
     // Props for external groups (connected prefix/suffix)
     groupHead: {
         type: Number,
@@ -252,6 +256,7 @@ function toggleInternalGroup(startIndex) {
                 :session-id="sessionId"
                 :parent-session-id="parentSessionId"
                 :line-num="lineNum"
+                :timestamp="timestamp"
             />
             <ThinkingContent
                 v-else-if="entry.item.type === 'thinking'"

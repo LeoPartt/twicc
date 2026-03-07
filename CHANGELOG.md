@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Include file attachments in optimistic user messages for instant display
 - Live agent status: show working indicator, duration, and action label (e.g. "is bashing") in agent tabs, with a pulsing robot icon and duration tooltip on the "View Agent" button
 - Optimistic "starting" state: show "Claude is starting..." with process indicator immediately after sending a message, without waiting for the backend round-trip
+- Bash tool execution tracking: show a live spinner with elapsed duration on running Bash commands, supporting both normal and background (`run_in_background`) modes
 
 ### Changed
 

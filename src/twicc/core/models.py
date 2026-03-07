@@ -413,12 +413,18 @@ class ToolResultLink(models.Model):
     tool_use_line_num = models.PositiveIntegerField()  # Line containing the tool_use
     tool_result_line_num = models.PositiveIntegerField()  # Line containing the tool_result
     tool_use_id = models.CharField(max_length=255)  # The tool_use ID
+    tool_name = models.CharField(max_length=255, default="")  # The tool name (e.g. "Bash", "Read")
+    tool_result_at = models.DateTimeField(null=True, blank=True)  # Timestamp of the tool_result item
 
     class Meta:
         indexes = [
             models.Index(
                 fields=["session", "tool_use_line_num", "tool_use_id"],
                 name="idx_tool_result_link_lookup",
+            ),
+            models.Index(
+                fields=["session", "tool_name"],
+                name="idx_tool_result_link_by_name",
             ),
         ]
 

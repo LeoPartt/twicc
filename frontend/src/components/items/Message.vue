@@ -88,6 +88,7 @@ const contentItems = computed(() => {
         :session-id="sessionId"
         :parent-session-id="parentSessionId"
         :line-num="lineNum"
+        :timestamp="data?.timestamp || null"
         :group-head="groupHead"
         :group-tail="groupTail"
         :prefix-expanded="prefixExpanded"

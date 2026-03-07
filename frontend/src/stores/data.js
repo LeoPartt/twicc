@@ -151,6 +151,11 @@ export const useDataStore = defineStore('data', {
             // Only caches found agents (not-found triggers polling, not caching)
             agentLinks: {},
 
+            // Bash tool states - maps tool_use_id to { resultCount, completedAt }
+            // { sessionId: { toolUseId: { resultCount, completedAt } } }
+            // Populated by fetchBashToolStates on session load and WS bash_tool_state
+            bashToolStates: {},
+
             // Project display names cache - computed from name, directory, or id
             // { projectId: displayName }
             // Updated when project data changes
@@ -365,6 +370,14 @@ export const useDataStore = defineStore('data', {
             const sessionLinks = state.localState.agentLinks[sessionId]
             if (!sessionLinks) return undefined
             return sessionLinks[toolId]
+        },
+
+        // Get bash tool state for a tool_use_id in a session
+        // Returns: { resultCount, completedAt } or null
+        getBashToolState: (state) => (sessionId, toolUseId) => {
+            const sessionStates = state.localState.bashToolStates[sessionId]
+            if (!sessionStates) return null
+            return sessionStates[toolUseId] || null
         },
 
         // Get draft message for a session
@@ -1029,6 +1042,7 @@ export const useDataStore = defineStore('data', {
             delete this.localState.visualItemCache[sessionId]
             delete this.localState.optimisticMessages[sessionId]
             delete this.localState.agentLinks[sessionId]
+            delete this.localState.bashToolStates[sessionId]
             // Remove synthetic process state if this is a subagent
             if (this.processStates[sessionId]?.synthetic) {
                 delete this.processStates[sessionId]
@@ -1576,6 +1590,49 @@ export const useDataStore = defineStore('data', {
          */
         clearAgentLinks(sessionId) {
             delete this.localState.agentLinks[sessionId]
+        },
+
+        /**
+         * Set bash tool state for a tool_use_id in a session.
+         * @param {string} sessionId - The session ID
+         * @param {string} toolUseId - The tool_use_id
+         * @param {number} resultCount - The number of tool_results received
+         * @param {string|null} completedAt - ISO timestamp of the latest tool_result
+         */
+        setBashToolState(sessionId, toolUseId, resultCount, completedAt) {
+            if (!this.localState.bashToolStates[sessionId]) {
+                this.localState.bashToolStates[sessionId] = {}
+            }
+            this.localState.bashToolStates[sessionId][toolUseId] = { resultCount, completedAt }
+        },
+
+        /**
+         * Fetch bash tool states for a session from the API.
+         * Populates the bashToolStates cache.
+         *
+         * @param {string} projectId - The project ID
+         * @param {string} sessionId - The session ID
+         */
+        async fetchBashToolStates(projectId, sessionId) {
+            try {
+                const url = `/api/projects/${projectId}/sessions/${sessionId}/bash-tool-states/`
+                const response = await apiFetch(url)
+                if (!response.ok) return
+
+                const data = await response.json()
+                if (data.tools && Object.keys(data.tools).length > 0) {
+                    const states = {}
+                    for (const [toolUseId, state] of Object.entries(data.tools)) {
+                        states[toolUseId] = {
+                            resultCount: state.result_count,
+                            completedAt: state.completed_at,
+                        }
+                    }
+                    this.localState.bashToolStates[sessionId] = states
+                }
+            } catch (error) {
+                console.error('Failed to fetch bash tool states:', error)
+            }
         },
 
         // Subagent state actions

@@ -41,6 +41,14 @@ class AgentLinkUpdate(NamedTuple):
     completed_at: datetime | None
 
 
+class BashToolUpdate(NamedTuple):
+    """Describes a Bash tool completion state change to broadcast to the frontend."""
+    session_id: str
+    tool_use_id: str
+    result_count: int
+    completed_at: datetime | None  # Timestamp of the latest tool_result
+
+
 # Tool names that spawn subagent sessions (Task is the legacy name, Agent is the new one)
 AGENT_TOOL_NAMES = frozenset({'Task', 'Agent'})
 
@@ -721,20 +729,50 @@ def get_message_content_list(parsed_json: dict, expected_type: str | None = None
     return content
 
 
+def get_tool_use_entries(parsed_json: dict) -> dict[str, str]:
+    """
+    Extract tool_use ID → name mapping from an assistant or content_items message.
+
+    Returns a dict mapping tool_use_id to tool name (e.g. {"toolu_xxx": "Bash"}).
+    """
+    content = get_message_content_list(parsed_json, "assistant")
+    if content is None:
+        return {}
+    return {
+        item['id']: item.get('name', '')
+        for item in content
+        if isinstance(item, dict) and item.get('type') == 'tool_use' and item.get('id')
+    }
+
+
+def is_bash_tool_use_background(parsed_json: dict, tool_use_id: str) -> bool:
+    """
+    Check if a Bash tool_use has run_in_background=true in its input.
+
+    Args:
+        parsed_json: The parsed JSON of the assistant message containing the tool_use.
+        tool_use_id: The ID of the tool_use to check.
+
+    Returns True if the tool_use has run_in_background=true, False otherwise.
+    """
+    content = get_message_content_list(parsed_json, "assistant")
+    if content is None:
+        return False
+    for item in content:
+        if (isinstance(item, dict) and item.get('type') == 'tool_use'
+                and item.get('id') == tool_use_id and item.get('name') == 'Bash'):
+            inputs = item.get('input', {})
+            return isinstance(inputs, dict) and bool(inputs.get('run_in_background'))
+    return False
+
+
 def get_tool_use_ids(parsed_json: dict) -> list[str]:
     """
     Extract tool_use IDs from an assistant or content_items message.
 
     Returns a list of tool_use IDs found in the message content array.
     """
-    content = get_message_content_list(parsed_json, "assistant")
-    if content is None:
-        return []
-    return [
-        item['id']
-        for item in content
-        if isinstance(item, dict) and item.get('type') == 'tool_use' and item.get('id')
-    ]
+    return list(get_tool_use_entries(parsed_json).keys())
 
 
 def get_tool_result_id(parsed_json: dict) -> str | None:
@@ -1413,8 +1451,8 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
         if links:
             all_agent_links.extend(links)
 
-    # Map tool_use_id → line_num of the item containing the tool_use
-    tool_use_map: dict[str, int] = {}
+    # Map tool_use_id → (line_num, tool_name) of the item containing the tool_use
+    tool_use_map: dict[str, tuple[int, str]] = {}
     # Map tool_use_id → (line_num, is_background, timestamp) for Task tool_uses (to link to agents)
     task_tool_use_map: dict[str, tuple[int, bool, datetime | None]] = {}
     # Map tool_use_id → latest tool_result timestamp (for agent completed_at)
@@ -1526,9 +1564,9 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
             affected_days.add(item.timestamp.date().isoformat())
 
         # Track tool_use IDs from assistant/content_items messages
-        tool_use_ids = get_tool_use_ids(parsed)
-        for tu_id in tool_use_ids:
-            tool_use_map[tu_id] = item.line_num
+        tool_use_entries = get_tool_use_entries(parsed)
+        for tu_id, tu_name in tool_use_entries.items():
+            tool_use_map[tu_id] = (item.line_num, tu_name)
 
         # Track Task tool_use IDs (for agent links)
         task_tool_use_entries = get_task_tool_uses(parsed)
@@ -1538,11 +1576,14 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
         # Check if this is a tool_result and create link
         tool_result_ref = get_tool_result_id(parsed)
         if tool_result_ref and tool_result_ref in tool_use_map:
+            tu_line_num, tu_name = tool_use_map[tool_result_ref]
             tool_result_links_to_create.append({
                 'session_id': session_id,
-                'tool_use_line_num': tool_use_map[tool_result_ref],
+                'tool_use_line_num': tu_line_num,
                 'tool_result_line_num': item.line_num,
                 'tool_use_id': tool_result_ref,
+                'tool_name': tu_name,
+                'tool_result_at': item.timestamp,
             })
             # Track the latest tool_result timestamp per tool_use_id (for agent completed_at)
             if item.timestamp:
@@ -1710,20 +1751,24 @@ def _find_open_group_head(session_id: str, before_line_num: int) -> int | None:
     return None
 
 
-def create_tool_result_link_live(session_id: str, item: SessionItem, parsed_json: dict) -> AgentLinkUpdate | None:
+def create_tool_result_link_live(
+    session_id: str, item: SessionItem, parsed_json: dict
+) -> tuple[AgentLinkUpdate | None, BashToolUpdate | None]:
     """
     Create a ToolResultLink for a tool_result item during live sync.
 
     Searches the session for the item containing the matching tool_use
     and creates the link entry.
 
-    Returns an AgentLinkUpdate if an associated AgentLink was modified, None otherwise.
+    Returns a tuple of:
+    - AgentLinkUpdate if an associated AgentLink was modified, None otherwise.
+    - BashToolUpdate if a Bash tool_use result count changed, None otherwise.
     """
     from twicc.core.models import ToolResultLink
 
     tool_use_id = get_tool_result_id(parsed_json)
     if not tool_use_id:
-        return None
+        return None, None
 
     # Find candidates by text search (LIKE), ordered most recent first.
     # The tool_use_id string could appear in text content (e.g. assistant mentioning it),
@@ -1740,16 +1785,40 @@ def create_tool_result_link_live(session_id: str, item: SessionItem, parsed_json
         except orjson.JSONDecodeError:
             continue
 
-        if tool_use_id in get_tool_use_ids(candidate_parsed):
+        tool_use_entries = get_tool_use_entries(candidate_parsed)
+        if tool_use_id in tool_use_entries:
+            tool_name = tool_use_entries[tool_use_id]
             _, created = ToolResultLink.objects.get_or_create(
                 session_id=session_id,
                 tool_use_line_num=candidate.line_num,
                 tool_result_line_num=item.line_num,
                 tool_use_id=tool_use_id,
+                defaults={'tool_name': tool_name, 'tool_result_at': item.timestamp},
             )
-            if created:
-                return _increment_agent_link_result_count(session_id, tool_use_id, item.timestamp)
-            return None
+            if not created:
+                return None, None
+
+            agent_update = _increment_agent_link_result_count(session_id, tool_use_id, item.timestamp)
+
+            # Check if this is a Bash tool_use and emit a BashToolUpdate
+            bash_update = None
+            if tool_name == 'Bash':
+                links = ToolResultLink.objects.filter(
+                    session_id=session_id,
+                    tool_use_id=tool_use_id,
+                )
+                result_count = links.count()
+                max_timestamp = links.order_by('-tool_result_at').values_list('tool_result_at', flat=True).first()
+                bash_update = BashToolUpdate(
+                    session_id=session_id,
+                    tool_use_id=tool_use_id,
+                    result_count=result_count,
+                    completed_at=max_timestamp,
+                )
+
+            return agent_update, bash_update
+
+    return None, None
 
 
 def _increment_agent_link_result_count(session_id: str, tool_use_id: str, result_timestamp: datetime | None) -> AgentLinkUpdate | None:
