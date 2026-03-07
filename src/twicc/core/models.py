@@ -279,6 +279,11 @@ class Session(models.Model):
     git_directory = models.CharField(max_length=500, null=True, blank=True)  # Resolved git root directory
     git_branch = models.CharField(max_length=255, null=True, blank=True)  # Resolved branch name (or commit hash for detached HEAD)
 
+    # Lifecycle timestamps (datetime, unlike mtime which is a raw float for the JSONL file)
+    last_started_at = models.DateTimeField(null=True, blank=True)  # Last time the session was started or resumed
+    last_updated_at = models.DateTimeField(null=True, blank=True)  # Last time meaningful content was added
+    last_stopped_at = models.DateTimeField(null=True, blank=True)  # Last time the session process stopped (our processes only)
+
     # User-controlled fields
     archived = models.BooleanField(default=False)  # User can archive sessions to hide them from default list
     pinned = models.BooleanField(default=False)  # User can pin sessions to keep them at the top of the list

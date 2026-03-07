@@ -547,6 +547,10 @@ def sync_session_items(
     # Track first timestamp in this batch (for session.created_at)
     first_timestamp: datetime | None = None
 
+    # Track lifecycle timestamps for this batch
+    last_started_at_update: datetime | None = None  # Set if a SessionStart hookEvent is found
+    last_updated_at: datetime | None = None  # Last item timestamp in this batch
+
     # Track last seen values for runtime environment fields
     first_cwd: str | None = None  # First cwd in this batch
     last_cwd: str | None = None
@@ -602,6 +606,18 @@ def sync_session_items(
         item.timestamp = extract_item_timestamp(parsed)
         if first_timestamp is None and item.timestamp is not None:
             first_timestamp = item.timestamp
+
+        # Track lifecycle timestamps
+        if item.timestamp is not None:
+            last_updated_at = item.timestamp
+        # Detect SessionStart hookEvent to update last_started_at
+        if (
+            item.timestamp is not None
+            and parsed.get('type') == 'progress'
+            and isinstance(parsed.get('data'), dict)
+            and parsed['data'].get('hookEvent') == 'SessionStart'
+        ):
+            last_started_at_update = item.timestamp
 
         # Compute cost and context usage (with deduplication)
         compute_item_cost_and_usage(item, parsed, seen_message_ids)
@@ -825,6 +841,15 @@ def sync_session_items(
     if is_new_session:
         session.created_at = first_timestamp
 
+    # Update lifecycle timestamps
+    if last_started_at_update is not None:
+        session.last_started_at = last_started_at_update
+    elif is_new_session:
+        # First sync: initialize last_started_at to created_at
+        session.last_started_at = first_timestamp
+    if last_updated_at is not None:
+        session.last_updated_at = last_updated_at
+
     # Recalculate activity counters for affected days (only items that contribute)
     affected_days = {
         item.timestamp.date()
@@ -834,7 +859,7 @@ def sync_session_items(
     if is_new_session and session.type == SessionType.SESSION and first_timestamp:
         affected_days.add(first_timestamp.date())
 
-    session.save(update_fields=["last_offset", "last_line", "mtime", "user_message_count", "context_usage", "self_cost", "subagents_cost", "total_cost", "cwd", "cwd_git_branch", "git_directory", "git_branch", "model", "created_at"])
+    session.save(update_fields=["last_offset", "last_line", "mtime", "user_message_count", "context_usage", "self_cost", "subagents_cost", "total_cost", "cwd", "cwd_git_branch", "git_directory", "git_branch", "model", "created_at", "last_started_at", "last_updated_at"])
 
     # Recalculate activities after session.save (needs created_at in DB for session_count)
     from twicc.core.models import PeriodicActivity

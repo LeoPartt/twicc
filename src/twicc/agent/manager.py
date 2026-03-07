@@ -286,6 +286,16 @@ class ProcessManager:
         process = ClaudeProcess(session_id, project_id, cwd, permission_mode, selected_model, get_last_session_slug=get_last_session_slug)
         self._processes[session_id] = process
 
+        # Update lifecycle timestamps: every process start (new or resume) is a session start
+        from django.utils import timezone as dj_timezone
+        from twicc.core.models import Session
+        now = dj_timezone.now()
+        await asyncio.to_thread(
+            lambda: Session.objects.filter(id=session_id).update(
+                last_started_at=now, last_updated_at=now
+            )
+        )
+
         # Broadcast the starting state before starting
         await self._on_state_change(process)
 
@@ -650,6 +660,20 @@ class ProcessManager:
                 await asyncio.to_thread(flush_pending_title, process.session_id)
             except Exception as e:
                 logger.error("Error flushing pending title: %s", e)
+
+        # Update last_stopped_at when process dies
+        if process.state == ProcessState.DEAD:
+            try:
+                from django.utils import timezone as dj_timezone
+                from twicc.core.models import Session
+                now = dj_timezone.now()
+                await asyncio.to_thread(
+                    lambda: Session.objects.filter(id=process.session_id).update(
+                        last_stopped_at=now, last_updated_at=now
+                    )
+                )
+            except Exception as e:
+                logger.error("Error updating last_stopped_at for session %s: %s", process.session_id, e)
 
         # Clean up dead processes. No lock needed - see docstring for concurrency model.
         if process.state == ProcessState.DEAD:

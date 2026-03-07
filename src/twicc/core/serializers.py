@@ -56,6 +56,9 @@ def serialize_session(session):
         "last_line": session.last_line,
         "mtime": session.mtime,
         "created_at": session.created_at.isoformat() if session.created_at else None,
+        "last_started_at": session.last_started_at.isoformat() if session.last_started_at else None,
+        "last_updated_at": session.last_updated_at.isoformat() if session.last_updated_at else None,
+        "last_stopped_at": session.last_stopped_at.isoformat() if session.last_stopped_at else None,
         "stale": session.stale,
         "title": title,  # Session title (from pending, first user message, or custom-title)
         "user_message_count": session.user_message_count,  # Number of user messages (message turns)

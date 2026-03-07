@@ -14,7 +14,7 @@ from decimal import Decimal
 import orjson
 import logging
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, NamedTuple
 
 import xmltodict
@@ -1481,6 +1481,10 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
     # Track first timestamp (for session.created_at)
     first_timestamp: datetime | None = None
 
+    # Track lifecycle timestamps
+    last_started_at: datetime | None = None  # Will be set to first_timestamp, then updated by SessionStart hookEvents
+    last_updated_at: datetime | None = None  # Last item timestamp seen
+
     # Track runtime environment fields (last seen values)
     first_cwd: str | None = None  # First cwd = project directory
     last_cwd: str | None = None
@@ -1513,8 +1517,21 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
         item.timestamp = extract_item_timestamp(parsed)
         if first_timestamp is None and item.timestamp is not None:
             first_timestamp = item.timestamp
+            last_started_at = first_timestamp  # Initialize to created_at
             # Track session creation day for activity recalculation
             affected_days.add(first_timestamp.date().isoformat())
+
+        # Track lifecycle timestamps
+        if item.timestamp is not None:
+            last_updated_at = item.timestamp
+        # Detect SessionStart hookEvent to update last_started_at
+        if (
+            item.timestamp is not None
+            and parsed.get('type') == 'progress'
+            and isinstance(parsed.get('data'), dict)
+            and parsed['data'].get('hookEvent') == 'SessionStart'
+        ):
+            last_started_at = item.timestamp
 
         # Compute cost and context usage
         compute_item_cost_and_usage(item, parsed, seen_message_ids)
@@ -1691,6 +1708,9 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
             'git_branch': last_resolved_git_branch,
             'model': last_model,
             'created_at': first_timestamp.isoformat() if first_timestamp else None,
+            'last_started_at': last_started_at.isoformat() if last_started_at else None,
+            'last_updated_at': datetime.fromtimestamp(session.mtime, tz=timezone.utc).isoformat() if session.mtime else (last_updated_at.isoformat() if last_updated_at else None),
+            'last_stopped_at': datetime.fromtimestamp(session.mtime, tz=timezone.utc).isoformat() if session.mtime else None,
         },
         'titles': session_titles,
         'project_directory': project_directory,
@@ -2262,8 +2282,9 @@ def apply_session_complete(msg: dict) -> None:
     session_fields = msg.get('session_fields', {})
     if session_fields:
         # Handle datetime fields
-        if 'created_at' in session_fields and session_fields['created_at'] is not None:
-            session_fields['created_at'] = datetime.fromisoformat(session_fields['created_at'])
+        for dt_field in ('created_at', 'last_started_at', 'last_updated_at', 'last_stopped_at'):
+            if dt_field in session_fields and session_fields[dt_field] is not None:
+                session_fields[dt_field] = datetime.fromisoformat(session_fields[dt_field])
         Session.objects.filter(id=session_id).update(**session_fields)
 
     # 5. Recalculate session costs from SessionItem data (idempotent, order-independent)
