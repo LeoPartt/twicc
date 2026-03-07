@@ -140,7 +140,6 @@ async function handleSubmit() {
 .login-title {
     font-size: var(--wa-font-size-xl);
     font-weight: 700;
-    color: var(--wa-color-text-loud);
     margin: 0;
     letter-spacing: 0.05em;
 }

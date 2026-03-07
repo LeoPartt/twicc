@@ -254,7 +254,7 @@ function onPopoverShow() {
                 <section class="settings-section settings-notice">
                     <p>
                         <wa-icon name="cloud" class="synced-icon"></wa-icon>
-                        Settings marked with a cloud icon are synced across all your devices.
+                        Sections and individual settings marked with a cloud icon are synced across all your devices.
                         Others are specific to this browser.
                     </p>
                 </section>
@@ -307,9 +307,9 @@ function onPopoverShow() {
 
                 <!-- Claude Settings Section -->
                 <section class="settings-section">
-                    <h3 class="settings-section-title">Claude settings</h3>
+                    <h3 class="settings-section-title">Claude settings <wa-icon name="cloud" class="synced-icon"></wa-icon></h3>
                     <div class="setting-group">
-                        <label class="setting-group-label">Default permission mode <wa-icon name="cloud" class="synced-icon"></wa-icon></label>
+                        <label class="setting-group-label">Default permission mode</label>
                         <wa-select
                             :value.prop="defaultPermissionMode"
                             @change="onDefaultPermissionModeChange"
@@ -330,18 +330,14 @@ function onPopoverShow() {
                                 </span>
                             </wa-option>
                         </wa-select>
-                    </div>
-                    <div class="setting-group">
-                        <label class="setting-group-label">Always apply default mode <wa-icon name="cloud" class="synced-icon"></wa-icon></label>
                         <wa-switch
                             :checked="alwaysApplyDefaultPermissionMode"
                             @change="onAlwaysApplyDefaultPermissionModeChange"
                             size="small"
-                        >Enabled</wa-switch>
-                        <span class="setting-group-hint">Override the per-session saved mode with the default above.</span>
+                        >Always apply *</wa-switch>
                     </div>
                     <div class="setting-group">
-                        <label class="setting-group-label">Default model <wa-icon name="cloud" class="synced-icon"></wa-icon></label>
+                        <label class="setting-group-label">Default model</label>
                         <wa-select
                             :value.prop="defaultModel"
                             @change="onDefaultModelChange"
@@ -358,15 +354,14 @@ function onPopoverShow() {
                                 </span>
                             </wa-option>
                         </wa-select>
-                    </div>
-                    <div class="setting-group">
-                        <label class="setting-group-label">Always apply default model <wa-icon name="cloud" class="synced-icon"></wa-icon></label>
                         <wa-switch
                             :checked="alwaysApplyDefaultModel"
                             @change="onAlwaysApplyDefaultModelChange"
                             size="small"
-                        >Enabled</wa-switch>
-                        <span class="setting-group-hint">Override the per-session saved odel with the default above.</span>
+                        >Always apply *</wa-switch>
+                    </div>
+                    <div>
+                        <span class="setting-group-hint">* Override the per-session saved value with the default one.</span>
                     </div>
                 </section>
 
@@ -436,15 +431,15 @@ function onPopoverShow() {
 
                 <!-- Auto Title Section -->
                 <section class="settings-section">
-                    <h3 class="settings-section-title">Auto title</h3>
+                    <h3 class="settings-section-title">Auto title <wa-icon name="cloud" class="synced-icon"></wa-icon></h3>
                     <div class="setting-group">
                         <wa-switch
                             :checked="titleGenerationEnabled"
                             @change="onTitleGenerationChange"
                             size="small"
-                        >Enabled (Haiku) <wa-icon name="cloud" class="synced-icon"></wa-icon></wa-switch>
+                        >Enabled (Haiku)</wa-switch>
                         <div v-if="titleGenerationEnabled" class="title-prompt-section">
-                            <label class="setting-group-label">System prompt <wa-icon name="cloud" class="synced-icon"></wa-icon></label>
+                            <label class="setting-group-label">System prompt</label>
                             <wa-textarea
                                 :value.prop="titleSystemPrompt"
                                 @input="onTitleSystemPromptChange"
@@ -589,9 +584,7 @@ function onPopoverShow() {
 }
 
 .synced-icon {
-    font-size: 0.75em;
     color: var(--wa-color-brand);
-    vertical-align: middle;
 }
 
 .settings-notice p {
@@ -629,22 +622,30 @@ function onPopoverShow() {
 .settings-sections .settings-section-title {
     font-size: var(--wa-font-size-s);
     font-weight: var(--wa-font-weight-bold);
-    color: var(--wa-color-text-loud);
     margin: 0;
     padding-bottom: var(--wa-space-xs);
     border-bottom: 1px solid var(--wa-color-border-subtle);
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
 }
 
 .settings-sections .setting-group {
     display: flex;
     flex-direction: column;
     gap: var(--wa-space-xs);
+    > label ~ :not(label) {
+        margin-left: var(--wa-space-s);
+    }
 }
 
 .settings-sections .setting-group-label {
     font-size: var(--wa-font-size-m);
     font-weight: var(--wa-font-weight-semibold);
-    color: var(--wa-color-text-quiet);
+    xcolor: var(--wa-color-text-quiet);
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
 }
 
 .settings-sections .setting-group-hint {
