@@ -511,6 +511,8 @@ def extract_command(text: str) -> ParsedCommand | None:
 
 _RESULT_OPEN_TAG = '<result>'
 _RESULT_CLOSE_TAG = '</result>'
+_SUMMARY_OPEN_TAG = '<summary>'
+_SUMMARY_CLOSE_TAG = '</summary>'
 _RE_TASK_ID = re.compile(r'<task-id>([^<]+)</task-id>')
 _RE_TOOL_USE_ID = re.compile(r'<tool-use-id>([^<]+)</tool-use-id>')
 
@@ -538,6 +540,14 @@ def _extract_task_notification_fields(xml_str: str) -> tuple[str | None, str | N
         close_idx = xml_str.rfind(_RESULT_CLOSE_TAG)
         if close_idx != -1 and close_idx > open_idx:
             result_text = xml_str[open_idx + len(_RESULT_OPEN_TAG):close_idx]
+
+    # Fallback to <summary> if no <result> content
+    if not result_text:
+        open_idx = xml_str.find(_SUMMARY_OPEN_TAG)
+        if open_idx != -1:
+            close_idx = xml_str.rfind(_SUMMARY_CLOSE_TAG)
+            if close_idx != -1 and close_idx > open_idx:
+                result_text = xml_str[open_idx + len(_SUMMARY_OPEN_TAG):close_idx]
 
     return tool_use_id, task_id, result_text
 
@@ -583,7 +593,7 @@ def transform_task_notification(parsed_json: dict) -> str | None:
         notification = xmltodict.parse(xml_str)['task-notification']
         tool_use_id = notification.get('tool-use-id')
         task_id = notification.get('task-id')
-        result_text = notification.get('result', '')
+        result_text = notification.get('result', '') or notification.get('summary', '')
     except Exception:
         # Fallback: xmltodict can fail when <result> contains unescaped XML-like text
         # (e.g. "<width>x<height>"). Extract fields manually.
