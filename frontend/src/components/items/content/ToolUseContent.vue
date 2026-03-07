@@ -6,6 +6,7 @@ import { apiFetch } from '../../../utils/api'
 import { getIconUrl, getFileIconId } from '../../../utils/fileIcons'
 import { getLanguageFromPath } from '../../../utils/languages'
 import { AGENT_TOOL_NAMES, isTrackedTool } from '../../../constants'
+import { getSessionCutoffMs } from '../../../utils/sessions'
 import { getTodoDescription, isValidTodos } from '../../../utils/todoList'
 import JsonHumanView from '../../JsonHumanView.vue'
 import MarkdownContent from '../../MarkdownContent.vue'
@@ -436,6 +437,14 @@ const isTracked = computed(() => isTrackedTool(props.name))
 const isBackground = computed(() => !!props.input?.run_in_background)
 const toolState = computed(() => isTracked.value ? dataStore.getToolState(props.sessionId, props.toolId) : null)
 
+// Whether this tool_use predates the session's last start/stop cycle
+// (session was restarted or stopped since — this tool can't be running)
+const isStaleToolUse = computed(() => {
+    if (!props.timestamp) return false
+    const cutoff = getSessionCutoffMs(dataStore.sessions[props.sessionId])
+    return cutoff > 0 && new Date(props.timestamp).getTime() < cutoff
+})
+
 // Unix timestamp (seconds) for ProcessDuration — from the JSONL item timestamp
 const toolStartedAt = computed(() => {
     if (!props.timestamp) return null
@@ -446,6 +455,7 @@ const toolStartedAt = computed(() => {
 
 const isToolRunning = computed(() => {
     if (!isTracked.value || isTask.value) return false
+    if (isStaleToolUse.value) return false
     const resultCount = toolState.value?.resultCount || 0
     const requiredCount = isBackground.value ? 2 : 1
     return resultCount < requiredCount
@@ -482,6 +492,7 @@ const agentId = computed(() => agentLink.value?.agentId)
 
 const isAgentRunning = computed(() => {
     if (!isTask.value || !agentId.value) return false
+    if (isStaleToolUse.value) return false
     const resultCount = toolState.value?.resultCount || 0
     const requiredCount = (agentLink.value?.isBackground) ? 2 : 1
     return resultCount < requiredCount

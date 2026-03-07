@@ -5,6 +5,7 @@ import { toRaw } from 'vue'
 import { getPrefixSuffixBoundaries } from '../utils/contentVisibility'
 import { computeVisualItems, visualItemEqual } from '../utils/visualItems'
 import { DISPLAY_LEVEL, DISPLAY_MODE, PROCESS_STATE, SYNTHETIC_ITEM } from '../constants'
+import { getSessionCutoffMs } from '../utils/sessions'
 import { useSettingsStore } from './settings'
 import {
     saveDraftMessage,
@@ -514,6 +515,13 @@ export const useDataStore = defineStore('data', {
             this.$patch({ sessions: { [session.id]: session } })
         },
         updateSession(session) {
+            // When lifecycle timestamps change, clean up stale synthetic process states
+            // for child agents that predate the new cutoff
+            const prev = this.sessions[session.id]
+            if (prev && (prev.last_started_at !== session.last_started_at ||
+                         prev.last_stopped_at !== session.last_stopped_at)) {
+                this._cleanStaleChildSynthetics(session)
+            }
             this.$patch({ sessions: { [session.id]: session } })
         },
         /**
@@ -1672,6 +1680,29 @@ export const useDataStore = defineStore('data', {
         },
 
         /**
+         * Clean up synthetic process states for child agents that predate the session's
+         * lifecycle cutoff (max of last_started_at, last_stopped_at)).
+         * Called reactively when session lifecycle timestamps change in updateSession.
+         *
+         * @param {Object} session - The session object (with last_started_at, last_stopped_at)
+         */
+        _cleanStaleChildSynthetics(session) {
+            const links = this.localState.agentLinks[session.id]
+            if (!links) return
+            const cutoff = getSessionCutoffMs(session)
+            if (!cutoff) return
+            for (const { agentId } of Object.values(links)) {
+                const ps = this.processStates[agentId]
+                if (!ps?.synthetic) continue
+                // started_at is in seconds, cutoff in ms
+                const startedMs = ps.started_at ? ps.started_at * 1000 : 0
+                if (startedMs < cutoff) {
+                    this.removeSyntheticProcessState(agentId)
+                }
+            }
+        },
+
+        /**
          * Remove a synthetic process state for a subagent.
          * Only removes if the process state is synthetic (not a real process).
          * Triggers recomputeVisualItems only if the session's items are loaded.
@@ -1704,8 +1735,15 @@ export const useDataStore = defineStore('data', {
 
                 const agents = await response.json()
 
+                // Cutoff: agents started before this are definitely not running
+                const cutoff = getSessionCutoffMs(this.sessions[sessionId])
+
                 for (const agent of agents) {
                     this.setAgentLink(sessionId, agent.tool_use_id, agent.agent_id, agent.is_background)
+
+                    // Skip synthetic process state if agent predates the session's last start/stop cycle
+                    const agentStartedMs = agent.started_at ? new Date(agent.started_at).getTime() : 0
+                    if (cutoff && agentStartedMs < cutoff) continue
 
                     // Create synthetic process state if agent is not done yet
                     const toolState = this.localState.toolStates[sessionId]?.[agent.tool_use_id]
