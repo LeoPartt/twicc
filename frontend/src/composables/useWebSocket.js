@@ -15,6 +15,9 @@ import { truncateTitle } from '../utils/truncate'
 // WebSocket close code sent by backend when authentication fails
 const WS_CLOSE_AUTH_FAILURE = 4001
 
+// localStorage key for tracking the last version the user was notified about
+const UPDATE_NOTIFIED_VERSION_KEY = 'twicc-update-notified-version'
+
 // Module-level state, preserved across HMR reloads via import.meta.hot.
 // Without this, Vite HMR resets these variables to their initial values,
 // causing "WebSocket not initialized" errors even though the connection is alive.
@@ -235,6 +238,36 @@ function notifyProcessStateChange(msg, previousState, route) {
     }
 }
 
+/**
+ * Handle update_available message from the backend.
+ * Shows a persistent toast if the user hasn't been notified for this version yet.
+ * Deduplication is done via localStorage to survive page reloads.
+ */
+function handleUpdateAvailable(msg) {
+    const { latest_version, release_url } = msg
+    if (!latest_version) return
+
+    // Check localStorage: skip if already notified for this version (or newer)
+    const lastNotified = localStorage.getItem(UPDATE_NOTIFIED_VERSION_KEY)
+    if (lastNotified && lastNotified >= latest_version) return
+
+    // Store the version so we don't notify again
+    localStorage.setItem(UPDATE_NOTIFIED_VERSION_KEY, latest_version)
+
+    // Show persistent toast with upgrade instructions
+    toast.custom({
+        type: 'info',
+        title: `TwiCC v${latest_version} is available`,
+        duration: Infinity,
+        html: `
+            <div style="display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.25rem;">
+                <span>Stop and re-run: <code style="background: var(--wa-color-neutral-100); padding: 0.1em 0.4em; border-radius: 3px; font-size: 0.9em;">uvx twicc@latest</code></span>
+                <a href="${release_url}" target="_blank" rel="noopener" style="color: var(--wa-color-primary-600); text-decoration: underline;">View release notes</a>
+            </div>
+        `,
+    })
+}
+
 export function useWebSocket() {
     const store = useDataStore()
     const route = useRoute()
@@ -451,6 +484,9 @@ export function useWebSocket() {
                 break
             case 'startup_progress':
                 store.setStartupProgress(msg.phase, msg.current, msg.total, msg.completed)
+                break
+            case 'update_available':
+                handleUpdateAvailable(msg)
                 break
         }
     }

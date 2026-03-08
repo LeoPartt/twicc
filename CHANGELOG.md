@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Auto-reload frontend when backend version changes
+- Notify users when a new version is available on PyPI
 
 ## [1.1.0] - 2026-03-08
 

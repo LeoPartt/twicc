@@ -446,6 +446,13 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
             for progress_msg in get_startup_progress():
                 await self.send_json(progress_msg)
 
+        # Send update available notification if a newer version is known
+        if self._should_send("update_available"):
+            from twicc.version_check_task import get_update_available_message
+            update_msg = get_update_available_message()
+            if update_msg:
+                await self.send_json(update_msg)
+
     async def disconnect(self, close_code):
         """Remove from the updates group on disconnect."""
         await self.channel_layer.group_discard("updates", self.channel_name)
