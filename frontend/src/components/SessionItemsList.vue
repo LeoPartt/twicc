@@ -338,12 +338,16 @@ async function loadSessionData(lastLine) {
     store.localState.sessions[sId].itemsLoading = true
 
     try {
-        // Build range for initial content: only load last N items
-        // Sessions open at the bottom, so we don't need the first items initially
+        // Build range for initial content.
+        // Parent sessions open at the bottom → load last N items.
+        // Subagent sessions open at the top → load first N items.
         const ranges = []
         if (lastLine <= INITIAL_ITEMS_COUNT) {
             // Small session: load everything
             ranges.push([1, lastLine])
+        } else if (props.parentSessionId) {
+            // Subagent: load first N items (opens at the top)
+            ranges.push([1, INITIAL_ITEMS_COUNT])
         } else {
             // Large session: load only last N items
             ranges.push([lastLine - INITIAL_ITEMS_COUNT + 1, lastLine])
@@ -414,6 +418,7 @@ watch([() => props.sessionId, session], async ([newSessionId, newSession]) => {
 
     // Only initialize and load if not already done
     const isFirstLoad = !store.areSessionItemsFetched(newSessionId)
+
     if (isFirstLoad) {
         await loadSessionData(lastLine)
 
@@ -430,6 +435,9 @@ watch([() => props.sessionId, session], async ([newSessionId, newSession]) => {
 
     // Skip DOM-manipulating scroll when inactive (KeepAlive deactivated)
     if (!sessionActive.value) return
+
+    // Subagent tabs open at the top — skip scroll-to-bottom
+    if (props.parentSessionId) return
 
     // Always scroll to end of session (with retry until stable)
     // Mark as initial scroll to hide scroller until positioned (only on first load)
@@ -472,6 +480,9 @@ async function handleRetry() {
 
     await loadSessionData(lastLine)
 
+    // Subagent tabs open at the top — skip scroll-to-bottom
+    if (props.parentSessionId) return
+
     // Scroll to bottom after successful load
     // Mark as initial scroll to hide scroller until positioned
     await nextTick()
@@ -492,6 +503,9 @@ async function onComputeCompleted() {
 
     // Skip DOM-manipulating scroll when inactive (KeepAlive deactivated)
     if (!sessionActive.value) return
+
+    // Subagent tabs open at the top — skip scroll-to-bottom
+    if (props.parentSessionId) return
 
     // Mark as initial scroll to hide scroller until positioned
     await nextTick()
@@ -922,6 +936,7 @@ defineExpose({
             :min-item-height="MIN_ITEM_SIZE"
             :buffer="1000"
             :unload-buffer="1500"
+            :prevent-auto-scroll-to-bottom="!!parentSessionId"
             class="session-items"
             :class="{ 'initial-scrolling': isInitialScrolling }"
             @update="onScrollerUpdate"

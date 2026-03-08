@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Git root selector in the Git tab (in sync with the one in the Files tab)
 
+### Changed
+
+- Agent tabs now open scrolled to the top instead of the bottom
+
 ### Fixed
 
 - Bash tool results no longer incorrectly rendered as Markdown

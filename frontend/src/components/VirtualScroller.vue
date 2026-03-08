@@ -78,6 +78,18 @@ const props = defineProps({
     unloadBuffer: {
         type: Number,
         default: 1000
+    },
+    /**
+     * When true, disables the implicit "stay at bottom on resize" behavior.
+     * Used for subagent sessions that should open at the top: prevents the
+     * scroller from auto-scrolling to bottom as items expand from estimated
+     * to real heights.
+     *
+     * NOTE: Captured at mount time. Changes after mount are not observed.
+     */
+    preventAutoScrollToBottom: {
+        type: Boolean,
+        default: false
     }
 })
 
@@ -263,6 +275,7 @@ const {
     invalidateZeroHeights,
     enableStickToBottom: composableEnableStickToBottom,
     disableStickToBottom: composableDisableStickToBottom,
+    preventAutoScrollToBottom: composablePreventAutoScrollToBottom,
     suspended: composableSuspended,
     suspend: composableSuspend,
     resume: composableResume,
@@ -275,6 +288,7 @@ const {
     buffer: props.buffer,
     unloadBuffer: props.unloadBuffer,
     containerRef,
+    preventAutoScrollToBottom: props.preventAutoScrollToBottom,
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -555,6 +569,8 @@ defineExpose({
     // Stick to bottom mode control
     enableStickToBottom,
     disableStickToBottom,
+    // Prevent implicit "stay at bottom" on resize (writable ref)
+    preventAutoScrollToBottom: composablePreventAutoScrollToBottom,
     // KeepAlive support (also called automatically via onActivated/onDeactivated)
     suspended: composableSuspended,
     suspend,

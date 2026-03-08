@@ -88,6 +88,18 @@ export function useVirtualScroll(options) {
     let stickToBottom = false
 
     /**
+     * When true, the implicit "stay at bottom on resize" behavior in
+     * batchUpdateItemHeights is disabled. This is used for subagent sessions
+     * that should open at the top: without this flag, items initially fit in
+     * the viewport (estimated height < viewportHeight), so isAtBottom() returns
+     * true, and every subsequent resize scrolls to bottom automatically.
+     *
+     * Initialized from the `preventAutoScrollToBottom` option so that the flag
+     * is set before any items render or resize events fire.
+     */
+    const preventAutoScrollToBottom = ref(options.preventAutoScrollToBottom ?? false)
+
+    /**
      * Suspended state for KeepAlive support.
      * When the scroller's container is detached from the DOM (e.g., by Vue's KeepAlive),
      * the browser resets scrollTop to 0. We save the scroll anchor (visible item + offset)
@@ -481,7 +493,8 @@ export function useVirtualScroll(options) {
         const newPosArray = positions.value
 
         // Special case: if we were at bottom, stay at bottom
-        if (wasAtBottom) {
+        // (unless preventAutoScrollToBottom is set, e.g., for subagent tabs)
+        if (wasAtBottom && !preventAutoScrollToBottom.value) {
             const maxScrollTop = Math.max(0, totalHeight.value - viewportHeight.value)
             if (Number.isFinite(maxScrollTop) && maxScrollTop >= 0) {
                 container.scrollTop = maxScrollTop
@@ -1077,6 +1090,9 @@ export function useVirtualScroll(options) {
         // Stick to bottom mode (for initial scroll operations)
         enableStickToBottom,
         disableStickToBottom,
+
+        // Prevent implicit "stay at bottom" on resize
+        preventAutoScrollToBottom,
 
         // Viewport management
         updateViewportHeight,
