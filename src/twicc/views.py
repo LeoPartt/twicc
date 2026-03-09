@@ -321,7 +321,14 @@ def session_detail(request, project_id, session_id, parent_session_id=None):
             session.title = title
             session.save(update_fields=["title"])
 
-            # 2. Write to JSONL (immediate or deferred)
+            # 2. Re-index for full-text search (title is a searchable document)
+            if search.is_initialized():
+                try:
+                    search.reindex_session(session_id)
+                except Exception:
+                    pass  # Non-critical: search will catch up on next startup
+
+            # 3. Write to JSONL (immediate or deferred)
             from twicc.agent.manager import get_process_manager
             from twicc.agent.states import ProcessState
 
@@ -1174,8 +1181,8 @@ def search_sessions(request):
     session_id = request.GET.get("session_id")
 
     from_role = request.GET.get("from")
-    if from_role is not None and from_role not in ("user", "assistant"):
-        return JsonResponse({"error": "Invalid 'from' parameter: must be 'user' or 'assistant'"}, status=400)
+    if from_role is not None and from_role not in ("user", "assistant", "title"):
+        return JsonResponse({"error": "Invalid 'from' parameter: must be 'user', 'assistant', or 'title'"}, status=400)
 
     after = None
     before = None

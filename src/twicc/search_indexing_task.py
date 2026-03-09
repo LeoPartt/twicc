@@ -127,7 +127,7 @@ async def _run_indexing():
 
 
 async def _index_session(session_id: str):
-    """Index all user/assistant messages for a single session."""
+    """Index all user/assistant messages and the session title for a single session."""
     # Load session and its message items
     session = await sync_to_async(Session.objects.get)(id=session_id)
 
@@ -142,6 +142,19 @@ async def _index_session(session_id: str):
 
     # Delete existing documents for this session (re-indexing case)
     await asyncio.to_thread(search.delete_session_documents, session.id)
+
+    # Index session title (if any)
+    if session.title:
+        await asyncio.to_thread(
+            search.index_document,
+            session.id,
+            session.project_id,
+            0,  # line_num 0 = title document
+            session.title,
+            "title",
+            session.created_at,
+            session.archived,
+        )
 
     # Index each message item
     for item in items:

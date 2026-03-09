@@ -189,11 +189,6 @@ async function performSearch(resetOffset = true) {
         return
     }
 
-    if (!searchIndexReady.value) {
-        error.value = 'Search index is still being built…'
-        return
-    }
-
     if (resetOffset) {
         offset.value = 0
     }
@@ -414,13 +409,14 @@ defineExpose({ open })
 
                     <wa-select
                         v-model="filters.from"
-                        placeholder="Any author"
+                        placeholder="Any source"
                         size="small"
                         with-clear
                         class="filter-select"
                     >
                         <wa-option value="user">User</wa-option>
                         <wa-option value="assistant">Assistant</wa-option>
+                        <wa-option value="title">Title</wa-option>
                     </wa-select>
 
                     <wa-select
@@ -442,15 +438,15 @@ defineExpose({ open })
                 </div>
             </div>
 
-            <!-- Index not ready state -->
-            <div v-if="!searchIndexReady && query.trim().length >= 2" class="search-index-building">
+            <!-- Indexing in progress banner (non-blocking — shown alongside results) -->
+            <div v-if="!searchIndexReady" class="search-index-banner">
                 <wa-icon name="hourglass-half"></wa-icon>
-                <span>Search index is being built… ({{ searchIndexPercent }}%)</span>
+                <span>Indexing in progress ({{ searchIndexPercent }}%) — results may be incomplete</span>
                 <wa-progress-bar :value="searchIndexPercent"></wa-progress-bar>
             </div>
 
             <!-- Error state -->
-            <div v-else-if="error" class="search-error">
+            <div v-if="error" class="search-error">
                 <wa-callout variant="danger">{{ error }}</wa-callout>
             </div>
 
@@ -751,8 +747,7 @@ defineExpose({ open })
 /* ─── State panels ──────────────────────────────────────────────────────── */
 .search-loading,
 .search-empty,
-.search-hint,
-.search-index-building {
+.search-hint {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -763,13 +758,20 @@ defineExpose({ open })
     font-size: var(--wa-font-size-s);
 }
 
-.search-index-building {
-    padding: var(--wa-space-l) var(--wa-space-xl);
+.search-index-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-xs);
+    padding: var(--wa-space-xs) var(--wa-space-m);
+    font-size: var(--wa-font-size-xs);
+    color: var(--wa-color-text-muted);
+    border-bottom: 1px solid var(--wa-color-surface-border);
 }
 
-.search-index-building wa-progress-bar {
-    width: 100%;
-    max-width: 300px;
+.search-index-banner wa-progress-bar {
+    flex: 1;
+    min-width: 60px;
+    max-width: 120px;
 }
 
 .search-error {

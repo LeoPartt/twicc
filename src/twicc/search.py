@@ -5,11 +5,11 @@ No other module in the codebase should ever import tantivy directly.
 All indexing and searching goes through the functions exposed here.
 
 Schema fields:
-    body       — full-text content (user/assistant messages), tokenized with custom "twicc" analyzer
-    line_num   — SessionItem.line_num within the session (unsigned integer)
+    body       — full-text content (user/assistant messages/titles), tokenized with custom "twicc" analyzer
+    line_num   — SessionItem.line_num within the session (unsigned integer); 0 for title documents
     session_id — session identifier (exact match via raw tokenizer)
     project_id — project identifier (exact match via raw tokenizer)
-    from_role  — message author: "user" or "assistant" (exact match via raw tokenizer)
+    from_role  — message source: "user", "assistant", or "title" (exact match via raw tokenizer)
     timestamp  — message timestamp (date, for range filtering)
     archived   — whether the session is archived (boolean filter)
 """
@@ -17,6 +17,7 @@ Schema fields:
 from __future__ import annotations
 
 import logging
+import math
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import NamedTuple
@@ -33,6 +34,16 @@ logger = logging.getLogger(__name__)
 _index: tantivy.Index | None = None
 _writer = None  # tantivy.IndexWriter — no public type hint in tantivy-py
 _schema: tantivy.Schema | None = None
+
+# Score multiplier for title matches — titles are more important than message content
+TITLE_SCORE_BOOST = 3.0
+
+# Session scoring: max(hit scores) + log1p(match_count) * MATCH_COUNT_FACTOR
+# The best hit determines the primary ranking; the log bonus is a small tiebreaker
+# that favors sessions where the search term appears frequently (likely a central topic).
+# With BM25 scores typically in the 1–15 range, a factor of 0.5 yields a bonus of ~1.15
+# for 10 matches — enough to differentiate without dominating.
+MATCH_COUNT_FACTOR = 0.5
 
 # ---------------------------------------------------------------------------
 # Return types
@@ -258,6 +269,69 @@ def commit() -> None:
     _writer.commit()
 
 
+def reindex_session(session_id: str) -> None:
+    """Full re-index of a session: delete all docs, re-add title + all messages, commit.
+
+    Used when a session title changes (rename, initial title set) to keep
+    the title document in sync. Also re-indexes all messages since
+    Tantivy only supports deleting by a single field (session_id), not
+    compound deletes (session_id + from_role).
+
+    Lazy-imports Django models to avoid circular imports at module level.
+    """
+    import orjson
+
+    from twicc.compute import get_message_content
+    from twicc.core.enums import ItemKind
+    from twicc.core.models import Session, SessionItem
+
+    _check_writer()
+    _check_index()
+
+    try:
+        session = Session.objects.get(id=session_id)
+    except Session.DoesNotExist:
+        logger.warning("reindex_session: session %s not found, skipping", session_id)
+        return
+
+    # Delete all existing documents for this session
+    delete_session_documents(session_id)
+
+    # Index title (if any)
+    if session.title:
+        index_document(
+            session_id, session.project_id, 0, session.title,
+            "title", session.created_at, session.archived,
+        )
+
+    # Index all user/assistant messages
+    items = (
+        SessionItem.objects.filter(
+            session_id=session_id,
+            kind__in=[ItemKind.USER_MESSAGE, ItemKind.ASSISTANT_MESSAGE],
+        )
+        .order_by("line_num")
+        .values_list("content", "kind", "line_num", "timestamp", named=True)
+    )
+
+    for item in items:
+        try:
+            parsed = orjson.loads(item.content)
+        except (orjson.JSONDecodeError, TypeError):
+            continue
+        content = get_message_content(parsed)
+        text = extract_indexable_text(content)
+        if text:
+            from_role = "user" if item.kind == ItemKind.USER_MESSAGE else "assistant"
+            index_document(
+                session_id, session.project_id, item.line_num, text,
+                from_role, item.timestamp, session.archived,
+            )
+
+    commit()
+    logger.debug("reindex_session: session %s re-indexed", session_id)
+
+
 # ---------------------------------------------------------------------------
 # Searching
 # ---------------------------------------------------------------------------
@@ -357,9 +431,9 @@ def search(
     snippet_generator = tantivy.SnippetGenerator.create(searcher, text_query, _schema, "body")
     snippet_generator.set_max_num_chars(200)
 
-    # Group hits by session_id
+    # Group hits by session_id, tracking the best score per session
     session_matches: dict[str, list[SearchMatch]] = defaultdict(list)
-    session_scores: dict[str, float] = defaultdict(float)
+    session_max_score: dict[str, float] = defaultdict(float)
 
     for score, doc_addr in result.hits:
         doc = searcher.doc(doc_addr)
@@ -381,15 +455,27 @@ def search(
             else:
                 ts_str = str(ts)
 
+        # Boost title matches so sessions matching by title rank higher
+        effective_score = score * TITLE_SCORE_BOOST if role == "title" else score
+
         match = SearchMatch(
             line_num=line,
             from_role=role,
             snippet=snippet_html,
-            score=score,
+            score=effective_score,
             timestamp=ts_str,
         )
         session_matches[sid].append(match)
-        session_scores[sid] += score
+        if effective_score > session_max_score[sid]:
+            session_max_score[sid] = effective_score
+
+    # Session score = best hit score + small log bonus for match count.
+    # The best hit determines the primary ranking; the log bonus is a tiebreaker
+    # that favors sessions where the term appears frequently.
+    session_scores = {
+        sid: session_max_score[sid] + math.log1p(len(matches)) * MATCH_COUNT_FACTOR
+        for sid, matches in session_matches.items()
+    }
 
     # Sort session groups by descending aggregate score
     sorted_sessions = sorted(session_scores.keys(), key=lambda sid: session_scores[sid], reverse=True)

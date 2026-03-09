@@ -116,7 +116,7 @@ const searchIndexingPercent = computed(() => {
                         :label="`Building search index: ${searchIndexingPercent}%`"
                     ></wa-progress-bar>
                     <p v-if="isSearchIndexingActive" class="phase-hint">
-                        Full-text search will be available once indexing is complete.
+                        Search is available now — results will become more complete as indexing progresses.
                     </p>
                 </div>
             </div>

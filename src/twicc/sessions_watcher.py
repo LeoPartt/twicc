@@ -399,7 +399,9 @@ async def sync_and_broadcast(
             claude_in_chrome=pending.get("claude_in_chrome"),
         )
 
+    old_title = session.title
     new_line_nums, modified_line_nums, agent_link_updates, tool_result_updates, agent_stopped_updates = await sync_session_items(session, path)
+    title_changed = session.title != old_title
 
     if new_line_nums:
         # Refresh session to get computed values
@@ -476,9 +478,17 @@ async def sync_and_broadcast(
                         "session": serialize_session(stopped_session),
                     })
 
-            # Index new messages for full-text search (sessions only, not subagents)
+            # Index for full-text search (sessions only, not subagents)
             if not is_subagent:
-                await _index_new_items_for_search(session, new_line_nums)
+                if title_changed:
+                    # Title changed — full session re-index (Tantivy can only delete by session_id,
+                    # not by session_id + from_role, so we must re-index everything)
+                    try:
+                        await asyncio.to_thread(search.reindex_session, session.id)
+                    except Exception:
+                        logger.exception("Error re-indexing session for search after title change (session=%s)", session.id)
+                else:
+                    await _index_new_items_for_search(session, new_line_nums)
 
     elif session.stale:
         # File reappeared - unstale
@@ -577,7 +587,7 @@ def sync_session_items(
         - List of AgentStoppedUpdate for subagents that naturally finished
     """
     if not file_path.exists():
-        return [], [], [], [], [], []
+        return [], [], [], [], []
 
     stat = file_path.stat()
     file_mtime = stat.st_mtime
