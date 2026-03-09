@@ -133,6 +133,9 @@ LOGGING = {
 # Display levels computation
 CURRENT_COMPUTE_VERSION = 61  # Bump when display rules change to trigger recomputation
 
+# Search index version
+CURRENT_SEARCH_VERSION = 1  # Bump when search indexing logic changes to trigger reindexing
+
 # Process auto-stop timeouts (in seconds)
 # Processes are automatically stopped if they remain in a state for too long
 PROCESS_TIMEOUT_STARTING = 60  # 1 minute - process stuck during startup

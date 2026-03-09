@@ -6,11 +6,13 @@ const store = useDataStore()
 
 const syncProgress = computed(() => store.initialSyncProgress)
 const computeProgress = computed(() => store.backgroundComputeProgress)
+const searchIndexingProgress = computed(() => store.searchIndexProgress)
 
 // Show callout if any phase is active (not null and not completed)
 const isVisible = computed(() => {
     return (syncProgress.value && !syncProgress.value.completed) ||
-           (computeProgress.value && !computeProgress.value.completed)
+           (computeProgress.value && !computeProgress.value.completed) ||
+           (searchIndexingProgress.value && !searchIndexingProgress.value.completed)
 })
 
 // Sync is done: either explicitly completed, or absent (cleared by backend after completion).
@@ -29,18 +31,35 @@ const isComputeActive = computed(() =>
     isSyncDone.value && computeProgress.value && !computeProgress.value.completed
 )
 
+// Search is actively running (not yet completed)
+const isSearchIndexingActive = computed(() =>
+    searchIndexingProgress.value && !searchIndexingProgress.value.completed
+)
+
 // Progress percentages (0-100)
+// Note: completed must be checked before total === 0, because a phase with
+// nothing to do broadcasts {current: 0, total: 0, completed: true}.
 const syncPercent = computed(() => {
     const p = syncProgress.value
-    if (!p || p.total === 0) return 0
+    if (!p) return 0
     if (p.completed) return 100
+    if (p.total === 0) return 0
     return Math.round((p.current / p.total) * 100)
 })
 
 const computePercent = computed(() => {
     const p = computeProgress.value
-    if (!p || p.total === 0) return 0
+    if (!p) return 0
     if (p.completed) return 100
+    if (p.total === 0) return 0
+    return Math.round((p.current / p.total) * 100)
+})
+
+const searchIndexingPercent = computed(() => {
+    const p = searchIndexingProgress.value
+    if (!p) return 0
+    if (p.completed) return 100
+    if (p.total === 0) return 0
     return Math.round((p.current / p.total) * 100)
 })
 </script>
@@ -71,7 +90,7 @@ const computePercent = computed(() => {
                 <div class="progress-phase">
                     <div class="phase-header">
                         <span class="phase-label">Indexing sessions data</span>
-                        <span v-if="isComputeActive" class="phase-counter">
+                        <span v-if="computeProgress" class="phase-counter">
                             {{ computeProgress.current }}/{{ computeProgress.total }}
                         </span>
                     </div>
@@ -81,6 +100,23 @@ const computePercent = computed(() => {
                     ></wa-progress-bar>
                     <p v-if="isComputeActive" class="phase-hint">
                         Most recent sessions are indexed first and already available to browse.
+                    </p>
+                </div>
+
+                <!-- Phase 3: Building search index -->
+                <div class="progress-phase">
+                    <div class="phase-header">
+                        <span class="phase-label">Building search index</span>
+                        <span v-if="searchIndexingProgress" class="phase-counter">
+                            {{ searchIndexingProgress.current }}/{{ searchIndexingProgress.total }}
+                        </span>
+                    </div>
+                    <wa-progress-bar
+                        :value="searchIndexingPercent"
+                        :label="`Building search index: ${searchIndexingPercent}%`"
+                    ></wa-progress-bar>
+                    <p v-if="isSearchIndexingActive" class="phase-hint">
+                        Full-text search will be available once indexing is complete.
                     </p>
                 </div>
             </div>

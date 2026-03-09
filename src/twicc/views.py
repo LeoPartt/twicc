@@ -2,7 +2,7 @@
 
 import os
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.db import IntegrityError
@@ -11,6 +11,7 @@ from django.utils import timezone
 
 import orjson
 
+from twicc import search
 from twicc.compute import get_message_content_list
 from twicc.core.models import AgentLink, DailyActivity, Project, Session, SessionItem, SessionType, SlashCommand, ToolResultLink, WeeklyActivity
 from twicc.core.serializers import (
@@ -1157,6 +1158,98 @@ def daily_activity(request, project_id=None):
             "session_count": totals["total_session_count"] or 0,
             "cost": str(totals["total_cost"] or 0),
         },
+    })
+
+
+def search_sessions(request):
+    """GET /api/search/ - Full-text search across session messages."""
+    if not search.is_initialized():
+        return JsonResponse({"error": "Search index not ready"}, status=503)
+
+    q = request.GET.get("q", "").strip()
+    if not q:
+        return JsonResponse({"error": "Missing required parameter: q"}, status=400)
+
+    project_id = request.GET.get("project_id")
+    session_id = request.GET.get("session_id")
+
+    from_role = request.GET.get("from")
+    if from_role is not None and from_role not in ("user", "assistant"):
+        return JsonResponse({"error": "Invalid 'from' parameter: must be 'user' or 'assistant'"}, status=400)
+
+    after = None
+    before = None
+    try:
+        if raw_after := request.GET.get("after"):
+            after = datetime.fromisoformat(raw_after)
+    except ValueError:
+        return JsonResponse({"error": f"Invalid 'after' parameter: {raw_after!r} is not a valid ISO datetime"}, status=400)
+    try:
+        if raw_before := request.GET.get("before"):
+            before = datetime.fromisoformat(raw_before)
+    except ValueError:
+        return JsonResponse({"error": f"Invalid 'before' parameter: {raw_before!r} is not a valid ISO datetime"}, status=400)
+
+    include_archived = request.GET.get("include_archived", "").lower() in ("true", "1", "yes")
+
+    try:
+        limit = min(int(request.GET.get("limit", 20)), 100)
+    except (ValueError, TypeError):
+        limit = 20
+    try:
+        offset = int(request.GET.get("offset", 0))
+    except (ValueError, TypeError):
+        offset = 0
+
+    try:
+        results = search.search(
+            q,
+            project_id=project_id,
+            session_id=session_id,
+            from_role=from_role,
+            after=after,
+            before=before,
+            include_archived=include_archived,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception as exc:
+        return JsonResponse({"error": f"Search failed: {exc}"}, status=500)
+
+    # Enrich results with session titles and project names from DB
+    session_ids = [sr.session_id for sr in results.results]
+    sessions_info = {}
+    if session_ids:
+        for s in Session.objects.filter(id__in=session_ids).select_related("project"):
+            sessions_info[s.id] = {
+                "title": s.title or "",
+                "project_id": s.project_id or "",
+                "project_name": s.project.name if s.project else "",
+            }
+
+    return JsonResponse({
+        "query": q,
+        "total_sessions": results.total_sessions,
+        "results": [
+            {
+                "session_id": sr.session_id,
+                "session_title": sessions_info.get(sr.session_id, {}).get("title", ""),
+                "project_id": sessions_info.get(sr.session_id, {}).get("project_id", ""),
+                "project_name": sessions_info.get(sr.session_id, {}).get("project_name", ""),
+                "score": sr.score,
+                "matches": [
+                    {
+                        "line_num": m.line_num,
+                        "from": m.from_role,
+                        "snippet": m.snippet,
+                        "score": m.score,
+                        "timestamp": m.timestamp,
+                    }
+                    for m in sr.matches
+                ],
+            }
+            for sr in results.results
+        ],
     })
 
 

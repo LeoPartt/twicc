@@ -60,6 +60,8 @@ from twicc.startup_progress import broadcast_startup_progress  # noqa: E402
 from twicc.usage_task import start_usage_sync_task, stop_usage_sync_task
 from twicc.statuspage_task import start_statuspage_task, stop_statuspage_task  # noqa: E402
 from twicc.slash_commands_task import start_slash_commands_task, stop_slash_commands_task  # noqa: E402
+from twicc.search import init_search_index, shutdown_search_index  # noqa: E402
+from twicc.search_indexing_task import start_search_index_task, stop_search_index_task  # noqa: E402
 from twicc.version_check_task import start_version_check_task, stop_version_check_task  # noqa: E402
 
 
@@ -122,6 +124,9 @@ async def run_server(port: int):
     # Threading event to cooperatively stop the initial sync thread on shutdown
     sync_stop_event = threading.Event()
 
+    # Set up signal handlers to ensure clean shutdown
+    shutdown_event = asyncio.Event()
+
     # --- Mutable container for tasks created by the orchestrator ---
     # These may still be None during shutdown if orchestrator hasn't started them yet.
     deferred = {
@@ -129,6 +134,7 @@ async def run_server(port: int):
         "compute_task": None,
         "compute_ctx": None,
         "price_sync_task": None,
+        "search_indexing_task": None,
     }
 
     # --- Initial sync task ---
@@ -186,8 +192,12 @@ async def run_server(port: int):
     # --- Orchestrator: starts dependent tasks after their prerequisites ---
     async def orchestrator_task():
         """Wait for dependencies and start watcher + background compute."""
-        # Start watcher once initial sync is done
+        # Initialize search index before watcher starts, so the watcher can
+        # index new items into the search index as they arrive in real time.
         await sync_done.wait()
+        await asyncio.to_thread(init_search_index)
+        logger.info("Search index initialized (after initial sync)")
+
         deferred["watcher_task"] = asyncio.create_task(start_watcher())
         deferred["watcher_task"].add_done_callback(_on_watcher_done)
         logger.info("Watcher started (after initial sync)")
@@ -203,6 +213,17 @@ async def run_server(port: int):
             start_background_compute_task(deferred["compute_ctx"])
         )
         logger.info("Background compute started (after sync + price sync)")
+
+        # Search indexing task starts automatically when background compute finishes
+        # (via done callback). Uses shutdown_event to skip if server is stopping.
+        # Note: init_search_index was already called above (before watcher start).
+        def _on_compute_done(task):
+            if task.cancelled() or shutdown_event.is_set():
+                return
+            deferred["search_indexing_task"] = asyncio.create_task(start_search_index_task())
+            logger.info("Background search indexing started (after compute)")
+
+        deferred["compute_task"].add_done_callback(_on_compute_done)
 
     # --- Launch all tasks ---
     sync_task = asyncio.create_task(initial_sync_task())
@@ -224,9 +245,6 @@ async def run_server(port: int):
         log_config=None,
     )
     server = uvicorn.Server(config)
-
-    # Set up signal handlers to ensure clean shutdown
-    shutdown_event = asyncio.Event()
 
     def handle_signal(signum, frame):
         logger.info("Received signal %s, initiating shutdown...", signum)
@@ -290,6 +308,16 @@ async def run_server(port: int):
         logger.info("Stopping slash commands task...")
         stop_slash_commands_task()
         await _cancel_task(slash_commands_task, "Slash commands task")
+
+        # Clean shutdown of search index task (may not have started yet)
+        if deferred["search_indexing_task"] is not None:
+            logger.info("Stopping search index task...")
+            stop_search_index_task()
+            await _cancel_task(deferred["search_indexing_task"], "Search index task")
+        else:
+            logger.info("Search index task was not started, skipping")
+        logger.info("Shutting down search index...")
+        await asyncio.to_thread(shutdown_search_index)
 
         # Clean shutdown of Claude processes (also stops the internal timeout monitor)
         # This gracefully terminates any active Claude SDK processes

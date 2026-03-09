@@ -127,11 +127,12 @@ def save_ports_to_env(backend_port: int, frontend_port: int) -> None:
         f.write("\n".join(lines_to_add))
 
 
-def copy_database_from_main() -> bool:
-    """Copy the database from the main data directory to the worktree.
+def copy_data_from_main() -> bool:
+    """Copy the database and search index from the main data directory to the worktree.
 
-    Copies data.sqlite and any WAL/SHM files (data.sqlite-wal, data.sqlite-shm).
+    Copies data.sqlite and any WAL/SHM files, plus the search-index/ directory.
     Only called in worktree mode when the local database doesn't exist yet.
+    Both are copied together (all or nothing) to keep them in sync.
 
     Returns True if the copy succeeded (or source doesn't exist), False on error.
     """
@@ -140,12 +141,13 @@ def copy_database_from_main() -> bool:
     target_db = target_db_dir / "data.sqlite"
 
     if target_db.exists():
-        return True  # Already have a local database
+        return True  # Already have local data
 
     if not source_db.exists():
         print("  No main database found, starting fresh")
         return True  # No source to copy, Django migrate will create it
 
+    # Copy database
     print(f"  Copying database from {source_db.parent}...", end=" ", flush=True)
 
     # Ensure target directory exists
@@ -161,25 +163,39 @@ def copy_database_from_main() -> bool:
 
     print("OK")
     print(f"    Files: {', '.join(copied_files)}")
+
+    # Copy search index (if it exists in the main data dir)
+    source_search = DEFAULT_DATA_DIR / "search-index"
+    target_search = DATA_DIR / "search-index"
+
+    if source_search.exists() and not target_search.exists():
+        print(f"  Copying search index from {source_search}...", end=" ", flush=True)
+        shutil.copytree(source_search, target_search)
+        print("OK")
+
     return True
 
 
-def clear_local_database() -> None:
-    """Delete the local database files in the worktree.
+def clear_local_data() -> None:
+    """Delete the local database and search index in the worktree.
 
-    Removes data.sqlite and any WAL/SHM files so Django migrate
-    creates a fresh empty database on next start.
+    Removes data.sqlite and any WAL/SHM files, plus the search-index/ directory,
+    so the next start creates a fresh empty database and rebuilds the search index.
     """
+    # Clear database
     target_db = DATA_DIR / "db" / "data.sqlite"
-    if not target_db.exists():
-        return  # Nothing to clear
+    if target_db.exists():
+        removed_files = []
+        for db_file in glob.glob(str(target_db) + "*"):
+            os.remove(db_file)
+            removed_files.append(os.path.basename(db_file))
+        print(f"  Cleared local database: {', '.join(removed_files)}")
 
-    removed_files = []
-    for db_file in glob.glob(str(target_db) + "*"):
-        os.remove(db_file)
-        removed_files.append(os.path.basename(db_file))
-
-    print(f"  Cleared local database: {', '.join(removed_files)}")
+    # Clear search index
+    target_search = DATA_DIR / "search-index"
+    if target_search.exists():
+        shutil.rmtree(target_search)
+        print("  Cleared local search index")
 
 
 def load_env_file() -> dict[str, str]:
@@ -611,10 +627,10 @@ DEV HOSTNAME:
     This adds the hostname to Vite's allowedHosts so it accepts requests
     for that host. Without this, Vite rejects requests from unknown hosts.
 
-DATABASE (WORKTREE MODE):
+DATABASE & SEARCH INDEX (WORKTREE MODE):
     On start/restart in a worktree, devctl automatically copies the
-    database from ~/.twicc/db/ if no local database exists yet.
-    Use --empty-db to skip the copy and start with a fresh database.
+    database and search index from ~/.twicc/ if no local data exists yet.
+    Use --empty-db to skip the copy and start fresh (clears both).
 
 EXAMPLES:
     uv run ./devctl.py start           # Start both servers
@@ -629,6 +645,7 @@ EXAMPLES:
 FILES:
     <data_dir>/.env               Configuration (ports, password hash)
     <data_dir>/db/data.sqlite     SQLite database
+    <data_dir>/search-index/      Tantivy full-text search index
     <data_dir>/logs/backend.log   Backend application logs
     <data_dir>/logs/frontend.log  Frontend (Vite) process output
     <data_dir>/logs/sdk/          Raw SDK message logs (per session)
@@ -680,12 +697,12 @@ def main():
 
     if command == "start":
         targets = parse_target(target, processes)
-        # In worktree mode: copy DB from main data dir, or clear it if --empty-db
+        # In worktree mode: copy DB + search index from main, or clear both if --empty-db
         if is_git_worktree():
             if empty_db:
-                clear_local_database()
+                clear_local_data()
             else:
-                copy_database_from_main()
+                copy_data_from_main()
         print(f"Starting processes (frontend:{frontend_port}, backend:{backend_port})...")
         for key in targets:
             start(key, processes)
@@ -699,12 +716,12 @@ def main():
 
     elif command == "restart":
         targets = parse_target(target, processes)
-        # In worktree mode: copy DB from main data dir, or clear it if --empty-db
+        # In worktree mode: copy DB + search index from main, or clear both if --empty-db
         if is_git_worktree():
             if empty_db:
-                clear_local_database()
+                clear_local_data()
             else:
-                copy_database_from_main()
+                copy_data_from_main()
         print(f"Restarting processes (frontend:{frontend_port}, backend:{backend_port})...")
         for key in targets:
             stop(key, processes)

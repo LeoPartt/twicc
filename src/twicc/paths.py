@@ -11,11 +11,13 @@ Structure:
     ├── settings.json     # User preferences synced across devices
     ├── db/
     │   └── data.sqlite (+shm, +wal)
-    └── logs/
-        ├── backend.log              # Backend application logs
-        ├── frontend.log             # Frontend (Vite) process output
-        └── sdk/
-            └── {session_id}.jsonl   # Raw SDK message logs
+    ├── logs/
+    │   ├── backend.log              # Backend application logs
+    │   ├── frontend.log             # Frontend (Vite) process output
+    │   └── sdk/
+    │       └── {session_id}.jsonl   # Raw SDK message logs
+    └── search-index/
+        └── (tantivy index files)
 
 In development with worktrees, devctl.py sets TWICC_DATA_DIR to the
 worktree root so each worktree gets its own DB, logs, and .env.
@@ -84,7 +86,13 @@ def get_synced_settings_path() -> Path:
     return get_data_dir() / "settings.json"
 
 
+def get_search_dir() -> Path:
+    """Return the search index directory (<data_dir>/search-index/)."""
+    return get_data_dir() / "search-index"
+
+
 def ensure_data_dirs() -> None:
     """Create the data directory structure if it doesn't exist."""
     get_db_dir().mkdir(parents=True, exist_ok=True)
     get_sdk_logs_dir().mkdir(parents=True, exist_ok=True)
+    get_search_dir().mkdir(parents=True, exist_ok=True)

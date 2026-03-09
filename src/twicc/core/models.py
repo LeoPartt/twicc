@@ -242,6 +242,7 @@ class Session(models.Model):
     mtime = models.FloatField(default=0)
     stale = models.BooleanField(default=False)  # True if folder/file no longer exists on disk
     compute_version = models.PositiveIntegerField(null=True, blank=True)  # NULL = never computed
+    search_version = models.PositiveIntegerField(null=True, blank=True)
     title = models.CharField(max_length=250, null=True, blank=True)  # Session title (from first user message or custom-title)
     user_message_count = models.PositiveIntegerField(default=0)  # Number of user messages (message turns)
 

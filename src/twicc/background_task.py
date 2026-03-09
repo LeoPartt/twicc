@@ -378,7 +378,11 @@ async def start_background_compute_task(ctx: ComputeContext) -> None:
 
     if total_to_compute == 0:
         logger.info("Background compute: no sessions to process")
-        await broadcast_startup_progress("background_compute", 0, 0, completed=True)
+        # Report the total session count so the frontend can show "N/N" instead of "0/0"
+        total_display = await sync_to_async(
+            Session.objects.filter(type=SessionType.SESSION).count
+        )()
+        await broadcast_startup_progress("background_compute", total_display, total_display, completed=True)
         return
 
     # Count only real sessions (not subagents) for progress display.

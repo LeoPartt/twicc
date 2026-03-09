@@ -16,6 +16,7 @@ from channels.layers import get_channel_layer
 from django.conf import settings
 from watchfiles import Change, awatch
 
+import twicc.search as search
 from twicc.compute import AgentLinkUpdate, AgentStoppedUpdate, ToolResultUpdate, cache_agent_prompt, \
     check_agent_naturally_stopped, compute_item_cost_and_usage, \
     compute_item_metadata, \
@@ -245,6 +246,50 @@ def refresh_project(project: Project) -> Project:
     return project
 
 
+async def _index_new_items_for_search(session: Session, line_nums: list[int]) -> None:
+    """Index new session items for full-text search.
+
+    Only indexes user_message and assistant_message items.
+    Errors are caught and logged to never crash the watcher.
+    """
+    try:
+        if not search.is_initialized():
+            return
+
+        items = await sync_to_async(
+            lambda: list(
+                SessionItem.objects.filter(
+                    session=session,
+                    line_num__in=line_nums,
+                    kind__in=[ItemKind.USER_MESSAGE, ItemKind.ASSISTANT_MESSAGE],
+                )
+            )
+        )()
+
+        indexed_count = 0
+        for item in items:
+            parsed = orjson.loads(item.content)
+            content = get_message_content(parsed)
+            text = search.extract_indexable_text(content)
+            if text:
+                await asyncio.to_thread(
+                    search.index_document,
+                    session.id,
+                    session.project_id,
+                    item.line_num,
+                    text,
+                    "user" if item.kind == ItemKind.USER_MESSAGE else "assistant",
+                    item.timestamp,
+                    session.archived,
+                )
+                indexed_count += 1
+
+        if indexed_count > 0:
+            await asyncio.to_thread(search.commit)
+    except Exception:
+        logger.exception("Error indexing session items for search (session=%s)", session.id)
+
+
 async def sync_project_and_broadcast(
     path: Path,
     change_type: Change,
@@ -430,6 +475,10 @@ async def sync_and_broadcast(
                         "type": "session_updated",
                         "session": serialize_session(stopped_session),
                     })
+
+            # Index new messages for full-text search (sessions only, not subagents)
+            if not is_subagent:
+                await _index_new_items_for_search(session, new_line_nums)
 
     elif session.stale:
         # File reappeared - unstale

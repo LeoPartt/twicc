@@ -291,6 +291,7 @@ export const useDataStore = defineStore('data', {
         // Startup progress getters
         initialSyncProgress: (state) => state.startupProgress.initial_sync || null,
         backgroundComputeProgress: (state) => state.startupProgress.background_compute || null,
+        searchIndexProgress: (state) => state.startupProgress.search_index || null,
         isStartupInProgress: (state) =>
             Object.values(state.startupProgress).some(p => p && !p.completed),
         isInitialSyncInProgress: (state) => {
