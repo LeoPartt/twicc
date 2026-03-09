@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Directory picker in the project creation dialog
 - Track cron jobs on running sessions: prevent auto-stop timeout and show clock icon when crons are active
 - Command palette (Ctrl+K / Cmd+K) for quick access to navigation, actions, and settings
+- Configurable "Claude built-in Chrome MCP" setting: the `--chrome` / `--no-chrome` flag is now  in settings.
 
 ### Changed
 

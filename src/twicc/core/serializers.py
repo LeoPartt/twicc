@@ -85,6 +85,8 @@ def serialize_session(session):
         "effort": session.effort,
         # Thinking enabled
         "thinking_enabled": session.thinking_enabled,
+        # Claude in Chrome MCP
+        "claude_in_chrome": session.claude_in_chrome,
     }
 
 

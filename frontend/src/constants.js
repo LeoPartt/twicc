@@ -269,6 +269,33 @@ export const THINKING_DISPLAY_LABELS = {
 }
 
 /**
+ * Claude in Chrome MCP mode values.
+ * Controls whether the built-in Chrome MCP is activated.
+ */
+export const CLAUDE_IN_CHROME = {
+    ENABLED: true,
+    DISABLED: false,
+}
+
+export const DEFAULT_CLAUDE_IN_CHROME = CLAUDE_IN_CHROME.ENABLED
+
+/**
+ * Human-friendly labels for each Claude in Chrome mode.
+ */
+export const CLAUDE_IN_CHROME_LABELS = {
+    [CLAUDE_IN_CHROME.ENABLED]: 'Enabled',
+    [CLAUDE_IN_CHROME.DISABLED]: 'Disabled',
+}
+
+/**
+ * Display input text for each Claude in Chrome mode (shown in the collapsed select).
+ */
+export const CLAUDE_IN_CHROME_DISPLAY_LABELS = {
+    [CLAUDE_IN_CHROME.ENABLED]: 'Chrome MCP',
+    [CLAUDE_IN_CHROME.DISABLED]: 'No Chrome MCP',
+}
+
+/**
  * Settings keys that are synced across devices via backend settings.json.
  * All other settings remain local to the browser (localStorage only).
  */
@@ -283,6 +310,8 @@ export const SYNCED_SETTINGS_KEYS = new Set([
     'alwaysApplyDefaultEffort',
     'defaultThinking',
     'alwaysApplyDefaultThinking',
+    'defaultClaudeInChrome',
+    'alwaysApplyDefaultClaudeInChrome',
     'autoUnpinOnArchive',
     'terminalUseTmux',
 ])

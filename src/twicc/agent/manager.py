@@ -129,6 +129,7 @@ class ProcessManager:
         selected_model: str | None = None,
         effort: str | None = None,
         thinking_enabled: bool | None = None,
+        claude_in_chrome: bool = False,
         *,
         images: list[dict] | None = None,
         documents: list[dict] | None = None,
@@ -198,6 +199,7 @@ class ProcessManager:
                 session_id, project_id, cwd, text, resume=True,
                 permission_mode=permission_mode, selected_model=selected_model,
                 effort=effort, thinking_enabled=thinking_enabled,
+                claude_in_chrome=claude_in_chrome,
                 images=images, documents=documents
             )
 
@@ -211,6 +213,7 @@ class ProcessManager:
         selected_model: str | None = None,
         effort: str | None = None,
         thinking_enabled: bool | None = None,
+        claude_in_chrome: bool = False,
         *,
         images: list[dict] | None = None,
         documents: list[dict] | None = None,
@@ -251,6 +254,7 @@ class ProcessManager:
                 session_id, project_id, cwd, text, resume=False,
                 permission_mode=permission_mode, selected_model=selected_model,
                 effort=effort, thinking_enabled=thinking_enabled,
+                claude_in_chrome=claude_in_chrome,
                 images=images, documents=documents
             )
 
@@ -265,6 +269,7 @@ class ProcessManager:
         selected_model: str | None = None,
         effort: str | None = None,
         thinking_enabled: bool | None = None,
+        claude_in_chrome: bool = False,
         *,
         images: list[dict] | None = None,
         documents: list[dict] | None = None,
@@ -291,7 +296,17 @@ class ProcessManager:
             project_id,
             resume,
         )
-        process = ClaudeProcess(session_id, project_id, cwd, permission_mode, selected_model, effort, thinking_enabled, get_last_session_slug=get_last_session_slug)
+        process = ClaudeProcess(
+            session_id=session_id,
+            project_id=project_id,
+            cwd=cwd,
+            permission_mode=permission_mode,
+            selected_model=selected_model,
+            effort=effort,
+            thinking_enabled=thinking_enabled,
+            get_last_session_slug=get_last_session_slug,
+            claude_in_chrome=claude_in_chrome
+        )
         self._processes[session_id] = process
 
         # Update lifecycle timestamps: every process start (new or resume) is a session start

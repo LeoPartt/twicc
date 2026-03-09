@@ -71,6 +71,7 @@ class ClaudeProcess:
         effort: str | None,
         thinking_enabled: bool | None,
         get_last_session_slug: Callable[[str], Coroutine[Any, Any, str | None]],
+        claude_in_chrome: bool = False,
     ) -> None:
         """Initialize a Claude process wrapper.
 
@@ -85,6 +86,7 @@ class ClaudeProcess:
             get_last_session_slug: Async callback that retrieves the most recent
                 slug from a session's JSONL items. Takes a session_id and returns the slug
                 string or None if not found.
+            claude_in_chrome: Whether the built-in Chrome MCP is activated (default False)
         """
         self.session_id = session_id
         self.project_id = project_id
@@ -93,6 +95,7 @@ class ClaudeProcess:
         self.selected_model = selected_model
         self.effort = effort
         self.thinking_enabled = thinking_enabled
+        self.claude_in_chrome = claude_in_chrome
         self.state = ProcessState.STARTING
         self.previous_state: ProcessState | None = None
         self.started_at = time.time()
@@ -110,7 +113,7 @@ class ClaudeProcess:
         self._active_crons: dict[str, ActiveCronInfo] = {}
 
         logger.debug(
-            "ClaudeProcess created for session %s, project %s, cwd=%s, permission_mode=%s, model=%s, effort=%s, thinking=%s",
+            "ClaudeProcess created for session %s, project %s, cwd=%s, permission_mode=%s, model=%s, effort=%s, thinking=%s, chrome=%s",
             session_id,
             project_id,
             cwd,
@@ -118,6 +121,7 @@ class ClaudeProcess:
             selected_model,
             effort,
             thinking_enabled,
+            claude_in_chrome,
         )
 
     def _log_stderr(self, line: str) -> None:
@@ -710,6 +714,8 @@ class ClaudeProcess:
                 stderr=self._log_stderr,
                 extra_args={
                     "chrome": None
+                } if self.claude_in_chrome else {
+                    "no-chrome": None
                 },
             )
 

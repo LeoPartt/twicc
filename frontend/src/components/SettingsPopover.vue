@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import { useSettingsStore } from '../stores/settings'
 import { useDataStore } from '../stores/data'
 import { useAuthStore } from '../stores/auth'
-import { DISPLAY_MODE, THEME_MODE, SESSION_TIME_FORMAT, DEFAULT_TITLE_SYSTEM_PROMPT, DEFAULT_MAX_CACHED_SESSIONS, PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, MODEL, MODEL_LABELS, EFFORT, EFFORT_LABELS, THINKING, THINKING_LABELS } from '../constants'
+import { DISPLAY_MODE, THEME_MODE, SESSION_TIME_FORMAT, DEFAULT_TITLE_SYSTEM_PROMPT, DEFAULT_MAX_CACHED_SESSIONS, PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, MODEL, MODEL_LABELS, EFFORT, EFFORT_LABELS, THINKING, THINKING_LABELS, CLAUDE_IN_CHROME, CLAUDE_IN_CHROME_LABELS } from '../constants'
 import NotificationSettings from './NotificationSettings.vue'
 import AppTooltip from './AppTooltip.vue'
 
@@ -62,6 +62,8 @@ const defaultEffort = computed(() => store.getDefaultEffort)
 const alwaysApplyDefaultEffort = computed(() => store.isAlwaysApplyDefaultEffort)
 const defaultThinking = computed(() => store.getDefaultThinking)
 const alwaysApplyDefaultThinking = computed(() => store.isAlwaysApplyDefaultThinking)
+const defaultClaudeInChrome = computed(() => store.getDefaultClaudeInChrome)
+const alwaysApplyDefaultClaudeInChrome = computed(() => store.isAlwaysApplyDefaultClaudeInChrome)
 const diffSideBySide = computed(() => store.isDiffSideBySide)
 const editorWordWrap = computed(() => store.isEditorWordWrap)
 
@@ -120,6 +122,12 @@ const effortOptions = Object.values(EFFORT).map(value => ({
 const thinkingOptions = [
     { value: 'true', label: THINKING_LABELS[true] },
     { value: 'false', label: THINKING_LABELS[false] },
+]
+
+// Claude in Chrome options for the select (use string values for wa-select compatibility)
+const claudeInChromeOptions = [
+    { value: 'true', label: CLAUDE_IN_CHROME_LABELS[true] },
+    { value: 'false', label: CLAUDE_IN_CHROME_LABELS[false] },
 ]
 
 /**
@@ -253,6 +261,20 @@ function onDefaultThinkingChange(event) {
  */
 function onAlwaysApplyDefaultThinkingChange(event) {
     store.setAlwaysApplyDefaultThinking(event.target.checked)
+}
+
+/**
+ * Handle default Claude in Chrome change.
+ */
+function onDefaultClaudeInChromeChange(event) {
+    store.setDefaultClaudeInChrome(event.target.value === 'true')
+}
+
+/**
+ * Toggle "always apply default Claude in Chrome" setting.
+ */
+function onAlwaysApplyDefaultClaudeInChromeChange(event) {
+    store.setAlwaysApplyDefaultClaudeInChrome(event.target.checked)
 }
 
 /**
@@ -443,6 +465,28 @@ function onPopoverShow() {
                             @change="onAlwaysApplyDefaultThinkingChange"
                             size="small"
                         >Always apply *</wa-switch>
+                    </div>
+                    <div class="setting-group">
+                        <label class="setting-group-label">Default Chrome MCP</label>
+                        <wa-select
+                            :value.prop="String(defaultClaudeInChrome)"
+                            @change="onDefaultClaudeInChromeChange"
+                            size="small"
+                        >
+                            <wa-option
+                                v-for="option in claudeInChromeOptions"
+                                :key="option.value"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </wa-option>
+                        </wa-select>
+                        <wa-switch
+                            :checked="alwaysApplyDefaultClaudeInChrome"
+                            @change="onAlwaysApplyDefaultClaudeInChromeChange"
+                            size="small"
+                        >Always apply *</wa-switch>
+                        <span class="setting-group-hint">Only applies to new sessions.</span>
                     </div>
                     <div>
                         <span class="setting-group-hint">* Override the per-session saved value with the default one.</span>

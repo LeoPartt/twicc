@@ -296,6 +296,8 @@ class Session(models.Model):
     effort = models.CharField(max_length=10, null=True, default=None)
     # Whether extended thinking is enabled (True=adaptive, False=disabled)
     thinking_enabled = models.BooleanField(null=True, default=None)
+    # Whether the built-in Chrome MCP (Claude in Chrome) is activated for this session
+    claude_in_chrome = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-mtime"]

@@ -8,7 +8,7 @@ import { sendWsMessage, notifyUserDraftUpdated } from '../composables/useWebSock
 import { useVisualViewport } from '../composables/useVisualViewport'
 import { isSupportedMimeType, MAX_FILE_SIZE, SUPPORTED_IMAGE_TYPES, draftMediaToMediaItem } from '../utils/fileUtils'
 import { toast } from '../composables/useToast'
-import { PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, MODEL, MODEL_LABELS, EFFORT, EFFORT_LABELS, EFFORT_DISPLAY_LABELS, THINKING_LABELS, THINKING_DISPLAY_LABELS } from '../constants'
+import { PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, MODEL, MODEL_LABELS, EFFORT, EFFORT_LABELS, EFFORT_DISPLAY_LABELS, THINKING_LABELS, THINKING_DISPLAY_LABELS, CLAUDE_IN_CHROME_LABELS, CLAUDE_IN_CHROME_DISPLAY_LABELS } from '../constants'
 import MediaThumbnailGroup from './MediaThumbnailGroup.vue'
 import AppTooltip from './AppTooltip.vue'
 import FilePickerPopup from './FilePickerPopup.vue'
@@ -89,11 +89,18 @@ const thinkingOptions = [
     { value: 'false', label: THINKING_LABELS[false] },
 ]
 
+// Claude in Chrome options for the dropdown (use string values for wa-select compatibility)
+const claudeInChromeOptions = [
+    { value: 'true', label: CLAUDE_IN_CHROME_LABELS[true] },
+    { value: 'false', label: CLAUDE_IN_CHROME_LABELS[false] },
+]
+
 // Summary text for the settings button (labels joined with middle dot)
 const settingsSummary = computed(() => [
     MODEL_LABELS[selectedModel.value],
     EFFORT_DISPLAY_LABELS[selectedEffort.value],
     THINKING_DISPLAY_LABELS[selectedThinking.value],
+    CLAUDE_IN_CHROME_DISPLAY_LABELS[selectedClaudeInChrome.value],
     PERMISSION_MODE_LABELS[selectedPermissionMode.value],
 ].join(' · '))
 
@@ -108,6 +115,9 @@ const selectedEffort = ref('medium')
 
 // Selected thinking mode for the current session
 const selectedThinking = ref(true)
+
+// Selected Claude in Chrome mode for the current session
+const selectedClaudeInChrome = ref(true)
 
 // Get process state for this session
 const processState = computed(() => store.getProcessState(props.sessionId))
@@ -202,6 +212,7 @@ const activeModel = ref(null)
 const activePermissionMode = ref(null)
 const activeEffort = ref(null)
 const activeThinking = ref(null)
+const activeClaudeInChrome = ref(null)
 
 // Detect whether the user has changed the dropdowns from their reference values.
 // This works regardless of process state (used for Reset button visibility).
@@ -209,7 +220,8 @@ const hasDropdownsChanged = computed(() =>
     selectedModel.value !== activeModel.value ||
     selectedPermissionMode.value !== activePermissionMode.value ||
     selectedEffort.value !== activeEffort.value ||
-    selectedThinking.value !== activeThinking.value
+    selectedThinking.value !== activeThinking.value ||
+    selectedClaudeInChrome.value !== activeClaudeInChrome.value
 )
 
 // Detect dropdown changes on an active process (used for Send button "Update" mode).
@@ -258,6 +270,14 @@ function resolveThinking(sess) {
     return sess?.thinking_enabled ?? settingsStore.getDefaultThinking
 }
 
+// Determine the effective Claude in Chrome mode for the current session.
+function resolveClaudeInChrome(sess) {
+    if (settingsStore.isAlwaysApplyDefaultClaudeInChrome) {
+        return settingsStore.getDefaultClaudeInChrome
+    }
+    return sess?.claude_in_chrome ?? settingsStore.getDefaultClaudeInChrome
+}
+
 // Sync permission mode and model when session changes
 watch(() => props.sessionId, (newId) => {
     const sess = store.getSession(newId)
@@ -265,16 +285,19 @@ watch(() => props.sessionId, (newId) => {
     const resolvedModel = resolveModel(sess)
     const resolvedEffort = resolveEffort(sess)
     const resolvedThinking = resolveThinking(sess)
+    const resolvedClaudeInChrome = resolveClaudeInChrome(sess)
     selectedPermissionMode.value = resolvedPermission
     selectedModel.value = resolvedModel
     selectedEffort.value = resolvedEffort
     selectedThinking.value = resolvedThinking
+    selectedClaudeInChrome.value = resolvedClaudeInChrome
     // Initialize active values from the session, falling back to resolved defaults
     // so that dropdown change detection works even when no process is active.
     activePermissionMode.value = sess?.permission_mode || resolvedPermission
     activeModel.value = sess?.selected_model || resolvedModel
     activeEffort.value = sess?.effort || resolvedEffort
     activeThinking.value = sess?.thinking_enabled ?? resolvedThinking
+    activeClaudeInChrome.value = sess?.claude_in_chrome ?? resolvedClaudeInChrome
 }, { immediate: true })
 
 // When the default permission mode setting changes, or the "always apply" toggle
@@ -331,6 +354,18 @@ watch(
     }
 )
 
+// When the default Claude in Chrome setting changes, update the dropdown for sessions that should follow the default.
+watch(
+    () => [settingsStore.getDefaultClaudeInChrome, settingsStore.isAlwaysApplyDefaultClaudeInChrome],
+    () => {
+        if (processIsActive.value) return
+        const sess = store.getSession(props.sessionId)
+        const resolved = resolveClaudeInChrome(sess)
+        selectedClaudeInChrome.value = resolved
+        activeClaudeInChrome.value = resolved
+    }
+)
+
 // Also react when session data arrives from backend (e.g., after watcher creates the row).
 // Don't overwrite user's selection when a process is active.
 // Always update the active values to track what the process is currently using.
@@ -382,6 +417,19 @@ watch(
             activeThinking.value = newThinking
             if (!processIsActive.value) {
                 selectedThinking.value = newThinking
+            }
+        }
+    }
+)
+
+// React when claude_in_chrome data arrives from backend.
+watch(
+    () => store.getSession(props.sessionId)?.claude_in_chrome,
+    (newValue) => {
+        if (newValue != null) {
+            activeClaudeInChrome.value = newValue
+            if (!processIsActive.value) {
+                selectedClaudeInChrome.value = newValue
             }
         }
     }
@@ -710,6 +758,7 @@ async function handleSend() {
         selected_model: selectedModel.value,
         effort: selectedEffort.value,
         thinking_enabled: selectedThinking.value,
+        claude_in_chrome: selectedClaudeInChrome.value,
     }
 
     // For draft sessions with a title, include it
@@ -743,6 +792,7 @@ async function handleSend() {
         activePermissionMode.value = selectedPermissionMode.value
         activeEffort.value = selectedEffort.value
         activeThinking.value = selectedThinking.value
+        activeClaudeInChrome.value = selectedClaudeInChrome.value
 
         // For settings-only updates, nothing else to clean up
         if (isSettingsOnlyUpdate) return
@@ -848,6 +898,9 @@ async function handleReset() {
         }
         if (activeThinking.value !== null) {
             selectedThinking.value = activeThinking.value
+        }
+        if (activeClaudeInChrome.value !== null) {
+            selectedClaudeInChrome.value = activeClaudeInChrome.value
         }
     }
 }
@@ -1019,6 +1072,20 @@ async function handleReset() {
                                 </wa-option>
                             </wa-select>
                             <span class="setting-help">Can be changed at any time, even while Claude is working.</span>
+                        </div>
+                        <div class="setting-row">
+                            <label class="setting-label">Claude built-in Chrome MCP</label>
+                            <wa-select
+                                :value.prop="String(selectedClaudeInChrome)"
+                                @change="selectedClaudeInChrome = $event.target.value === 'true'"
+                                size="small"
+                                :disabled="isEffortThinkingDisabled"
+                            >
+                                <wa-option v-for="option in claudeInChromeOptions" :key="option.value" :value="option.value" :label="option.label">
+                                    {{ option.label }}
+                                </wa-option>
+                            </wa-select>
+                            <span class="setting-help">Cannot be changed while a process is running.</span>
                         </div>
                     </div>
                 </wa-popover>

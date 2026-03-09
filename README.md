@@ -138,10 +138,6 @@ TWICC runs on **Linux and macOS**. There is no Windows support — the codebase 
 
 **WSL (Windows Subsystem for Linux)** is the most realistic path for Windows users. TWICC should work unmodified under WSL2, though this has not been tested. If you are a Windows user and would like to help with testing or contributing WSL compatibility fixes, feel free to open an issue or a pull request.
 
-## Current limitations
-
-- The built-in **MCP server** (Chrome integration) is always active
-
 ## FAQ
 
 **Can I use TWICC while Claude Code is running?**

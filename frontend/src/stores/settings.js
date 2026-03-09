@@ -3,7 +3,7 @@
 
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { watch } from 'vue'
-import { DEFAULT_DISPLAY_MODE, DEFAULT_THEME_MODE, DEFAULT_SESSION_TIME_FORMAT, DEFAULT_TITLE_SYSTEM_PROMPT, DEFAULT_MAX_CACHED_SESSIONS, DEFAULT_PERMISSION_MODE, DEFAULT_MODEL, DEFAULT_EFFORT, DEFAULT_THINKING, DISPLAY_MODE, THEME_MODE, SESSION_TIME_FORMAT, PERMISSION_MODE, MODEL, EFFORT, SYNCED_SETTINGS_KEYS } from '../constants'
+import { DEFAULT_DISPLAY_MODE, DEFAULT_THEME_MODE, DEFAULT_SESSION_TIME_FORMAT, DEFAULT_TITLE_SYSTEM_PROMPT, DEFAULT_MAX_CACHED_SESSIONS, DEFAULT_PERMISSION_MODE, DEFAULT_MODEL, DEFAULT_EFFORT, DEFAULT_THINKING, DEFAULT_CLAUDE_IN_CHROME, DISPLAY_MODE, THEME_MODE, SESSION_TIME_FORMAT, PERMISSION_MODE, MODEL, EFFORT, SYNCED_SETTINGS_KEYS } from '../constants'
 import { NOTIFICATION_SOUNDS } from '../utils/notificationSounds'
 // Note: useDataStore is imported lazily to avoid circular dependency (settings.js ↔ data.js)
 import { setThemeMode } from '../utils/theme'
@@ -40,6 +40,8 @@ const SETTINGS_SCHEMA = {
     alwaysApplyDefaultEffort: false,
     defaultThinking: DEFAULT_THINKING,
     alwaysApplyDefaultThinking: false,
+    defaultClaudeInChrome: DEFAULT_CLAUDE_IN_CHROME,
+    alwaysApplyDefaultClaudeInChrome: false,
     // Notification settings: sound + browser notification for each event type
     notifUserTurnSound: NOTIFICATION_SOUNDS.NONE,
     notifUserTurnBrowser: false,
@@ -85,6 +87,8 @@ const SETTINGS_VALIDATORS = {
     alwaysApplyDefaultEffort: (v) => typeof v === 'boolean',
     defaultThinking: (v) => typeof v === 'boolean',
     alwaysApplyDefaultThinking: (v) => typeof v === 'boolean',
+    defaultClaudeInChrome: (v) => typeof v === 'boolean',
+    alwaysApplyDefaultClaudeInChrome: (v) => typeof v === 'boolean',
     notifUserTurnSound: (v) => Object.values(NOTIFICATION_SOUNDS).includes(v),
     notifUserTurnBrowser: (v) => typeof v === 'boolean',
     notifPendingRequestSound: (v) => Object.values(NOTIFICATION_SOUNDS).includes(v),
@@ -179,6 +183,8 @@ export const useSettingsStore = defineStore('settings', {
         isAlwaysApplyDefaultEffort: (state) => state.alwaysApplyDefaultEffort,
         getDefaultThinking: (state) => state.defaultThinking,
         isAlwaysApplyDefaultThinking: (state) => state.alwaysApplyDefaultThinking,
+        getDefaultClaudeInChrome: (state) => state.defaultClaudeInChrome,
+        isAlwaysApplyDefaultClaudeInChrome: (state) => state.alwaysApplyDefaultClaudeInChrome,
         getNotifUserTurnSound: (state) => state.notifUserTurnSound,
         isNotifUserTurnBrowser: (state) => state.notifUserTurnBrowser,
         getNotifPendingRequestSound: (state) => state.notifPendingRequestSound,
@@ -459,6 +465,27 @@ export const useSettingsStore = defineStore('settings', {
         },
 
         /**
+         * Set the default Claude in Chrome MCP mode for new sessions.
+         * @param {boolean} enabled - true to enable, false to disable
+         */
+        setDefaultClaudeInChrome(enabled) {
+            if (SETTINGS_VALIDATORS.defaultClaudeInChrome(enabled)) {
+                this.defaultClaudeInChrome = enabled
+            }
+        },
+
+        /**
+         * Set whether the default Claude in Chrome MCP mode should always be applied,
+         * even for sessions that have an explicit value in the database.
+         * @param {boolean} enabled
+         */
+        setAlwaysApplyDefaultClaudeInChrome(enabled) {
+            if (SETTINGS_VALIDATORS.alwaysApplyDefaultClaudeInChrome(enabled)) {
+                this.alwaysApplyDefaultClaudeInChrome = enabled
+            }
+        },
+
+        /**
          * Set notification sound for user turn events.
          * @param {string} sound - One of NOTIFICATION_SOUNDS values
          */
@@ -582,6 +609,8 @@ export function initSettings() {
             alwaysApplyDefaultEffort: store.alwaysApplyDefaultEffort,
             defaultThinking: store.defaultThinking,
             alwaysApplyDefaultThinking: store.alwaysApplyDefaultThinking,
+            defaultClaudeInChrome: store.defaultClaudeInChrome,
+            alwaysApplyDefaultClaudeInChrome: store.alwaysApplyDefaultClaudeInChrome,
             notifUserTurnSound: store.notifUserTurnSound,
             notifUserTurnBrowser: store.notifUserTurnBrowser,
             notifPendingRequestSound: store.notifPendingRequestSound,

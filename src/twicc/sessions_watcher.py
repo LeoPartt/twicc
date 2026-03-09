@@ -146,11 +146,13 @@ def create_session(
     selected_model: str | None = None,
     effort: str | None = None,
     thinking_enabled: bool | None = None,
+    claude_in_chrome: bool | None = None,
 ) -> Session:
     """Create a session or subagent in the database.
 
     For subagents, parent_session must be provided.
-    If permission_mode, selected_model, effort or thinking_enabled is provided, it overrides the default.
+    If permission_mode, selected_model, effort, thinking_enabled, or claude_in_chrome
+    is provided, it overrides the default.
     Returns the created session.
     """
     if parsed.type == SessionType.SUBAGENT:
@@ -178,6 +180,8 @@ def create_session(
             kwargs["effort"] = effort
         if thinking_enabled is not None:
             kwargs["thinking_enabled"] = thinking_enabled
+        if claude_in_chrome is not None:
+            kwargs["claude_in_chrome"] = claude_in_chrome
         return Session.objects.create(**kwargs)
 
 
@@ -347,6 +351,7 @@ async def sync_and_broadcast(
             selected_model=pending.get("selected_model"),
             effort=pending.get("effort"),
             thinking_enabled=pending.get("thinking_enabled"),
+            claude_in_chrome=pending.get("claude_in_chrome"),
         )
 
     new_line_nums, modified_line_nums, agent_link_updates, tool_result_updates, agent_stopped_updates = await sync_session_items(session, path)
