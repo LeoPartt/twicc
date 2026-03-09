@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import NamedTuple
@@ -34,6 +35,7 @@ logger = logging.getLogger(__name__)
 _index: tantivy.Index | None = None
 _writer = None  # tantivy.IndexWriter — no public type hint in tantivy-py
 _schema: tantivy.Schema | None = None
+_writer_lock = threading.Lock()  # Serialize all writer operations (add, delete, commit)
 
 # Score multiplier for title matches — titles are more important than message content
 TITLE_SCORE_BOOST = 3.0
@@ -250,7 +252,8 @@ def index_document(
     doc.add_date("timestamp", timestamp)
     doc.add_boolean("archived", archived)
 
-    _writer.add_document(doc)
+    with _writer_lock:
+        _writer.add_document(doc)
 
 
 def delete_session_documents(session_id: str) -> None:
@@ -260,13 +263,15 @@ def delete_session_documents(session_id: str) -> None:
     or when a session is archived/unarchived).
     """
     _check_writer()
-    _writer.delete_documents("session_id", session_id)
+    with _writer_lock:
+        _writer.delete_documents("session_id", session_id)
 
 
 def commit() -> None:
     """Commit pending changes to the index, making them searchable."""
     _check_writer()
-    _writer.commit()
+    with _writer_lock:
+        _writer.commit()
 
 
 def reindex_session(session_id: str) -> None:
