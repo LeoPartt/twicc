@@ -352,6 +352,13 @@ def session_detail(request, project_id, session_id, parent_session_id=None):
             session.save(update_fields=["archived"])
             needs_broadcast = True
 
+            # Re-index for full-text search (archived flag is denormalized in every document)
+            if search.is_initialized():
+                try:
+                    search.reindex_session(session_id)
+                except Exception:
+                    pass  # Non-critical: search will catch up on next startup
+
             # Stop process and clean up tmux session if archiving
             if archived:
                 from asgiref.sync import async_to_sync
