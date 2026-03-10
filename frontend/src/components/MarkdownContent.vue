@@ -1,5 +1,6 @@
 <script setup>
 import { ref, inject, watch, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { renderMarkdown } from '../utils/markdown.js'
 import { vHighlight } from '../directives/vHighlight.js'
 // Uses the combined version that includes both light and dark
@@ -15,6 +16,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['rendered'])
+
+const router = useRouter()
 
 // Search highlight terms injected from SessionItemsList (empty when no search active)
 const highlightTerms = inject('searchHighlightTerms', ref([]))
@@ -98,6 +101,29 @@ async function render() {
 
 watch(() => props.source, render)
 onMounted(render)
+
+// Intercept clicks on relative links inside rendered markdown to use Vue Router
+// navigation instead of full page reloads (SPA-friendly).
+function handleLinkClick(event) {
+    // Walk up from the click target to find an <a> element (if any)
+    const anchor = event.target.closest('a')
+    if (!anchor) return
+
+    // Skip absolute links (they already have target="_blank")
+    if (anchor.getAttribute('target') === '_blank') return
+
+    const href = anchor.getAttribute('href')
+    if (!href) return
+
+    // Skip non-http(s) protocols (mailto:, tel:, etc.)
+    if (/^[a-z][a-z0-9+.-]*:/i.test(href) && !/^https?:/i.test(href)) return
+
+    // Let the browser handle modifier clicks (open in new tab)
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return
+
+    event.preventDefault()
+    router.push(href)
+}
 </script>
 
 <template>
@@ -106,6 +132,7 @@ onMounted(render)
         class="markdown-body"
         v-html="renderedHtml"
         v-highlight="highlightTerms"
+        @click="handleLinkClick"
     ></div>
 </template>
 

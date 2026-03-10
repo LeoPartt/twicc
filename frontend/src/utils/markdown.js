@@ -20,13 +20,18 @@ const md = MarkdownItAsync({
 // (e.g. "example.py" or "config.json" would become clickable links).
 md.linkify.set({ fuzzyLink: false, fuzzyEmail: false, fuzzyIP: false })
 
-// Open all links in a new tab for safety and UX (content stays in place).
+// Open absolute links in a new tab for safety and UX (content stays in place).
+// Relative links (e.g. /projects) stay in the same tab for SPA navigation.
 const defaultLinkOpenRender = md.renderer.rules.link_open || function (tokens, idx, options, env, self) {
     return self.renderToken(tokens, idx, options)
 }
 md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
-    tokens[idx].attrSet('target', '_blank')
-    tokens[idx].attrSet('rel', 'noopener noreferrer')
+    const href = tokens[idx].attrGet('href') || ''
+    const isAbsolute = /^(?:https?:)?\/\//i.test(href)
+    if (isAbsolute) {
+        tokens[idx].attrSet('target', '_blank')
+        tokens[idx].attrSet('rel', 'noopener noreferrer')
+    }
     return defaultLinkOpenRender(tokens, idx, options, env, self)
 }
 
