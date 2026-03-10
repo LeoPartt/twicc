@@ -548,7 +548,7 @@ onMounted(() => {
         },
         {
             id: 'ui.focus-search',
-            label: 'Focus Session Search',
+            label: 'Focus Session Filter',
             icon: 'magnifying-glass',
             category: 'ui',
             action: () => {

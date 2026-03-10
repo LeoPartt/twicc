@@ -917,21 +917,27 @@ function closeSessionSearch() {
 }
 
 /**
- * Handle F3 / Shift+F3 globally within the session.
- * When the search bar is visible, F3 navigates to next/previous match
- * regardless of where focus is (not just when the search input is focused).
+ * Handle global keyboard shortcuts for in-session search.
+ * When the search bar is visible:
+ * - F3 / Shift+F3: navigate to next/previous match
+ * - Escape: close the search bar
+ * These work regardless of where focus is within the session.
  */
 function handleSessionSearchKeydown(e) {
-    if (e.key !== 'F3') return
     if (!showSessionSearch.value) return
     if (props.parentSessionId) return
     if (!sessionActive.value) return
 
-    e.preventDefault()
-    if (e.shiftKey) {
-        sessionSearchRef.value?.goToPrevious()
-    } else {
-        sessionSearchRef.value?.goToNext()
+    if (e.key === 'F3') {
+        e.preventDefault()
+        if (e.shiftKey) {
+            sessionSearchRef.value?.goToPrevious()
+        } else {
+            sessionSearchRef.value?.goToNext()
+        }
+    } else if (e.key === 'Escape') {
+        e.preventDefault()
+        closeSessionSearch()
     }
 }
 

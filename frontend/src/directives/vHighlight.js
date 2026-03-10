@@ -40,7 +40,9 @@ function applyHighlights(el, terms) {
     const pattern = terms.map(escapeRegex).filter(Boolean).join('|')
     if (!pattern) return
 
-    const regex = new RegExp(`(${pattern})`, 'gi')
+    // Use word boundaries (\b) to match whole words only, consistent with
+    // Tantivy's token-level matching (SimpleTokenizer splits on word boundaries)
+    const regex = new RegExp(`\\b(${pattern})\\b`, 'gi')
 
     // Collect all text nodes first to avoid live-mutation issues
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
