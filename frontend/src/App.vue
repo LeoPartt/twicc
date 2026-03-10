@@ -56,9 +56,12 @@ watch(versionMismatchDetected, (mismatch) => {
     }
 })
 
-// ─── Command Palette (Ctrl+K / Cmd+K) & Search (Ctrl+Shift+F) ───────────
+// ─── Command Palette (Ctrl+K / Cmd+K) & Search (Ctrl+Shift+F / Ctrl+F) ──
 const commandPaletteRef = ref(null)
 const searchOverlayRef = ref(null)
+
+// Route names where Ctrl+F opens in-session search (main chat tab only)
+const SESSION_CHAT_ROUTES = new Set(['session', 'projects-session'])
 
 function handleGlobalKeydown(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -70,6 +73,14 @@ function handleGlobalKeydown(e) {
         e.preventDefault()
         e.stopPropagation()
         searchOverlayRef.value?.open()
+    }
+    // Ctrl+F (without Shift): in-session search when on a session's chat tab
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'f') {
+        if (SESSION_CHAT_ROUTES.has(route.name)) {
+            e.preventDefault()
+            e.stopPropagation()
+            window.dispatchEvent(new Event('twicc:toggle-session-search'))
+        }
     }
 }
 

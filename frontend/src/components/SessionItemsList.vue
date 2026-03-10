@@ -1,5 +1,5 @@
 <script setup>
-import { computed, watch, ref, nextTick, inject, onActivated, onDeactivated } from 'vue'
+import { computed, watch, ref, nextTick, inject, onMounted, onBeforeUnmount, onActivated, onDeactivated } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { useDataStore } from '../stores/data'
 import { INITIAL_ITEMS_COUNT } from '../constants'
@@ -9,6 +9,7 @@ import { apiFetch } from '../utils/api'
 import { getParsedContent, hasContent } from '../utils/parsedContent'
 import VirtualScroller from './VirtualScroller.vue'
 import SessionItem from './SessionItem.vue'
+import SessionSearchBar from './SessionSearchBar.vue'
 import FetchErrorPanel from './FetchErrorPanel.vue'
 import GroupToggle from './GroupToggle.vue'
 import MessageInput from './MessageInput.vue'
@@ -64,6 +65,10 @@ let pendingScrollToBottom = null
 
 // Reference to the VirtualScroller component
 const scrollerRef = ref(null)
+
+// In-session search bar state
+const sessionSearchRef = ref(null)
+const showSessionSearch = ref(false)
 
 // Flag to track if we're currently auto-scrolling to bottom
 // Used to handle new items arriving during the scroll retry loop
@@ -873,6 +878,40 @@ async function processDroppedFile(file) {
     }
 }
 
+// =============================================================================
+// In-session search (Ctrl+F)
+// =============================================================================
+
+/**
+ * Toggle the in-session search bar.
+ * Only responds when this is a main session (not subagent) and is currently active.
+ */
+function handleToggleSessionSearch() {
+    // Only respond for the main chat tab (not subagent views)
+    if (props.parentSessionId) return
+    // Only respond when this session is active (KeepAlive)
+    if (!sessionActive.value) return
+
+    if (showSessionSearch.value) {
+        closeSessionSearch()
+    } else {
+        showSessionSearch.value = true
+        nextTick(() => sessionSearchRef.value?.open())
+    }
+}
+
+function closeSessionSearch() {
+    showSessionSearch.value = false
+    sessionSearchRef.value?.reset()
+}
+
+onMounted(() => {
+    window.addEventListener('twicc:toggle-session-search', handleToggleSessionSearch)
+})
+onBeforeUnmount(() => {
+    window.removeEventListener('twicc:toggle-session-search', handleToggleSessionSearch)
+})
+
 // Expose methods for parent components
 defineExpose({
     getScrollerElement
@@ -888,6 +927,14 @@ defineExpose({
         @dragover="onDragOver"
         @drop="onDrop"
     >
+        <!-- In-session search bar (Ctrl+F) -->
+        <SessionSearchBar
+            v-if="showSessionSearch"
+            ref="sessionSearchRef"
+            :session-id="sessionId"
+            @close="closeSessionSearch"
+        />
+
         <!-- Compute pending state -->
         <div v-if="isComputePending" class="compute-pending-state">
             <wa-callout variant="warning">

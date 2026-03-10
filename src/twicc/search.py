@@ -396,6 +396,10 @@ def search(
 
     if session_id is not None:
         clauses.append((Occur.Must, Query.term_query(_schema, "session_id", session_id)))
+        # In-session search: exclude title documents (title matches are useful for global
+        # search to find sessions, but irrelevant when searching within a specific session)
+        if from_role is None:
+            clauses.append((Occur.MustNot, Query.term_query(_schema, "from_role", "title")))
 
     if from_role is not None:
         clauses.append((Occur.Must, Query.term_query(_schema, "from_role", from_role)))
@@ -425,8 +429,12 @@ def search(
     _index.reload()
     searcher = _index.searcher()
 
-    # Use a generous raw limit to get enough hits for session grouping
-    raw_limit = max(limit * 20, 200)
+    # Use a generous raw limit to get enough hits for session grouping.
+    # In-session search needs all matches (no session grouping), so use a much higher limit.
+    if session_id is not None:
+        raw_limit = 10000
+    else:
+        raw_limit = max(limit * 20, 200)
     result = searcher.search(combined_query, limit=raw_limit)
 
     if not result.hits:
