@@ -8,6 +8,7 @@ import { isSupportedMimeType, MAX_FILE_SIZE } from '../utils/fileUtils'
 import { toast } from '../composables/useToast'
 import { apiFetch } from '../utils/api'
 import { getParsedContent, hasContent } from '../utils/parsedContent'
+import { pendingSessionSearch } from '../utils/pendingSearch'
 import VirtualScroller from './VirtualScroller.vue'
 import SessionItem from './SessionItem.vue'
 import SessionSearchBar from './SessionSearchBar.vue'
@@ -915,12 +916,54 @@ function closeSessionSearch() {
     searchHighlightTerms.value = []
 }
 
+/**
+ * Handle F3 / Shift+F3 globally within the session.
+ * When the search bar is visible, F3 navigates to next/previous match
+ * regardless of where focus is (not just when the search input is focused).
+ */
+function handleSessionSearchKeydown(e) {
+    if (e.key !== 'F3') return
+    if (!showSessionSearch.value) return
+    if (props.parentSessionId) return
+    if (!sessionActive.value) return
+
+    e.preventDefault()
+    if (e.shiftKey) {
+        sessionSearchRef.value?.goToPrevious()
+    } else {
+        sessionSearchRef.value?.goToNext()
+    }
+}
+
 onMounted(() => {
     window.addEventListener('twicc:toggle-session-search', handleToggleSessionSearch)
+    window.addEventListener('keydown', handleSessionSearchKeydown)
 })
 onBeforeUnmount(() => {
     window.removeEventListener('twicc:toggle-session-search', handleToggleSessionSearch)
+    window.removeEventListener('keydown', handleSessionSearchKeydown)
 })
+
+// Watch for pending search from the global SearchOverlay.
+// When the user clicks a session result in the overlay, the query is stored in
+// pendingSessionSearch. This watcher picks it up once the target session's
+// SessionItemsList is active and opens the in-session search bar with that query.
+watch(pendingSessionSearch, (pending) => {
+    if (!pending) return
+    if (pending.sessionId !== props.sessionId) return
+    if (props.parentSessionId) return  // Only main session, not subagent
+    if (!sessionActive.value) return
+
+    // Consume the pending search
+    const q = pending.query
+    pendingSessionSearch.value = null
+
+    // Open the search bar with the query
+    showSessionSearch.value = true
+    nextTick(() => {
+        sessionSearchRef.value?.openWithQuery(q)
+    })
+}, { immediate: true })
 
 // =============================================================================
 // Scroll to line number (generic, used by search navigation and future features)

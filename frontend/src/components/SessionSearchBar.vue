@@ -185,6 +185,19 @@ function open() {
 }
 
 /**
+ * Open the search bar with a pre-filled query (e.g. from global search overlay).
+ * Sets the query value and triggers an immediate search (bypassing debounce).
+ */
+async function openWithQuery(q) {
+    query.value = q
+    // Trigger search immediately (bypass debounce) since the query comes from
+    // an already-validated global search
+    await performSearch()
+    // Focus the wa-input directly (its native focus() delegates to the inner input)
+    inputRef.value?.focus()
+}
+
+/**
  * Reset search state.
  */
 function reset() {
@@ -196,7 +209,7 @@ function reset() {
     emit('update:terms', [])
 }
 
-defineExpose({ open, reset })
+defineExpose({ open, reset, openWithQuery, goToNext, goToPrevious })
 </script>
 
 <template>

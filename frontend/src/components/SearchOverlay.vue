@@ -18,6 +18,7 @@ import { useSettingsStore } from '../stores/settings'
 import { apiFetch } from '../utils/api'
 import { debounce } from '../utils/debounce'
 import { formatDate } from '../utils/date'
+import { pendingSessionSearch } from '../utils/pendingSearch'
 import { SESSION_TIME_FORMAT } from '../constants'
 import ProjectBadge from './ProjectBadge.vue'
 import ProjectSelectOptions from './ProjectSelectOptions.vue'
@@ -266,8 +267,22 @@ function loadMore() {
 }
 
 // ─── Navigation ────────────────────────────────────────────────────────────
+
+// Temporarily holds the pending search data until the dialog close animation
+// completes (wa-after-hide). Setting pendingSessionSearch only after the dialog
+// is fully closed prevents the dialog's focus restoration from stealing focus
+// from the in-session search input.
+let deferredPendingSearch = null
+
 function navigateToResult(result) {
     visitedSessionIds.add(result.session_id)
+
+    // Defer the pending search until the dialog close animation completes
+    const q = query.value.trim()
+    if (q.length >= 2) {
+        deferredPendingSearch = { sessionId: result.session_id, query: q }
+    }
+
     close()
 
     router.push({
@@ -277,6 +292,14 @@ function navigateToResult(result) {
             sessionId: result.session_id,
         },
     })
+}
+
+function handleAfterHide(e) {
+    if (e.target !== dialogRef.value) return
+    if (deferredPendingSearch) {
+        pendingSessionSearch.value = deferredPendingSearch
+        deferredPendingSearch = null
+    }
 }
 
 // ─── Keyboard navigation ───────────────────────────────────────────────────
@@ -362,6 +385,7 @@ defineExpose({ open })
         light-dismiss
         @wa-hide="handleDialogHide"
         @wa-after-show="handleAfterShow"
+        @wa-after-hide="handleAfterHide"
     >
         <div class="search-container" @keydown="handleKeydown">
             <!-- Search input -->
