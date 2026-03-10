@@ -10,7 +10,7 @@ const props = defineProps({
     },
 })
 
-const emit = defineEmits(['close', 'navigate'])
+const emit = defineEmits(['close', 'navigate', 'update:terms'])
 
 const inputRef = ref(null)
 const query = ref('')
@@ -44,6 +44,7 @@ async function performSearch() {
         currentMatchIndex.value = -1
         hasSearched.value = false
         error.value = null
+        emit('update:terms', [])
         return
     }
 
@@ -74,23 +75,32 @@ async function performSearch() {
 
         const data = await response.json()
 
-        // Extract distinct line_nums, sorted ascending
+        // Extract line_nums sorted ascending (one Tantivy doc per line_num, no duplicates)
         if (data.results && data.results.length > 0) {
             const matches = data.results[0].matches || []
-            const uniqueLineNums = [...new Set(matches.map(m => m.line_num))]
-            uniqueLineNums.sort((a, b) => a - b)
-            matchLineNums.value = uniqueLineNums
+            const lineNums = matches.map(m => m.line_num)
+            lineNums.sort((a, b) => a - b)
+            matchLineNums.value = lineNums
         } else {
             matchLineNums.value = []
         }
 
         hasSearched.value = true
         currentMatchIndex.value = -1
+
+        // Emit search terms for highlighting
+        emit('update:terms', q.split(/\s+/).filter(Boolean))
+
+        // Auto-navigate to the first match
+        if (matchLineNums.value.length > 0) {
+            goToNext()
+        }
     } catch (err) {
         error.value = 'Search failed'
         matchLineNums.value = []
         currentMatchIndex.value = -1
         hasSearched.value = false
+        emit('update:terms', [])
     } finally {
         isLoading.value = false
     }
@@ -150,12 +160,12 @@ function handleKeydown(e) {
         e.preventDefault()
         e.stopPropagation()
         emit('close')
-    } else if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault()
-        goToNext()
-    } else if (e.key === 'Enter' && e.shiftKey) {
+    } else if ((e.key === 'Enter' || e.key === 'F3') && e.shiftKey) {
         e.preventDefault()
         goToPrevious()
+    } else if ((e.key === 'Enter' || e.key === 'F3') && !e.shiftKey) {
+        e.preventDefault()
+        goToNext()
     }
 }
 
@@ -183,6 +193,7 @@ function reset() {
     currentMatchIndex.value = -1
     hasSearched.value = false
     error.value = null
+    emit('update:terms', [])
 }
 
 defineExpose({ open, reset })
@@ -213,7 +224,7 @@ defineExpose({ open, reset })
         <button
             class="nav-button"
             :disabled="!canNavigate"
-            title="Previous match (Shift+Enter)"
+            title="Previous match (Shift+Enter / Shift+F3)"
             aria-label="Previous match"
             @click="goToPrevious"
         >
@@ -222,7 +233,7 @@ defineExpose({ open, reset })
         <button
             class="nav-button"
             :disabled="!canNavigate"
-            title="Next match (Enter)"
+            title="Next match (Enter / F3)"
             aria-label="Next match"
             @click="goToNext"
         >

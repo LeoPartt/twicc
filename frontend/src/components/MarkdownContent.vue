@@ -1,6 +1,7 @@
 <script setup>
-import { ref, watch, onMounted, nextTick } from 'vue'
+import { ref, inject, watch, onMounted, nextTick } from 'vue'
 import { renderMarkdown } from '../utils/markdown.js'
+import { vHighlight } from '../directives/vHighlight.js'
 // Uses the combined version that includes both light and dark
 // Then override with our theme file that uses [data-theme] without media queries
 import 'github-markdown-css/github-markdown.css'
@@ -14,6 +15,9 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['rendered'])
+
+// Search highlight terms injected from SessionItemsList (empty when no search active)
+const highlightTerms = inject('searchHighlightTerms', ref([]))
 
 const renderedHtml = ref('')
 const container = ref(null)
@@ -101,6 +105,7 @@ onMounted(render)
         ref="container"
         class="markdown-body"
         v-html="renderedHtml"
+        v-highlight="highlightTerms"
     ></div>
 </template>
 
@@ -168,6 +173,18 @@ html.wa-dark .shiki span {
   font-style: var(--shiki-dark-font-style) !important;
   font-weight: var(--shiki-dark-font-weight) !important;
   text-decoration: var(--shiki-dark-text-decoration) !important;
+}
+
+/* -- Search highlight marks (injected by v-highlight directive) ---------- */
+mark.search-highlight {
+    background-color: oklch(0.85 0.15 90);  /* Warm yellow */
+    color: oklch(0.25 0 0);                 /* Dark text for contrast */
+    border-radius: 2px;
+    padding: 0 1px;
+}
+html.wa-dark mark.search-highlight {
+    background-color: oklch(0.65 0.15 90);  /* Dimmer yellow for dark mode */
+    color: oklch(0.95 0 0);                 /* Light text for contrast */
 }
 
 </style>

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, watch, ref, nextTick, inject, onMounted, onBeforeUnmount, onActivated, onDeactivated } from 'vue'
+import { computed, watch, ref, provide, nextTick, inject, onMounted, onBeforeUnmount, onActivated, onDeactivated } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { useDataStore } from '../stores/data'
 import { INITIAL_ITEMS_COUNT, DISPLAY_MODE } from '../constants'
@@ -883,6 +883,14 @@ async function processDroppedFile(file) {
 // In-session search (Ctrl+F)
 // =============================================================================
 
+// Search highlight terms provided to child components (MarkdownContent uses them)
+const searchHighlightTerms = ref([])
+provide('searchHighlightTerms', searchHighlightTerms)
+
+function handleSearchTerms(terms) {
+    searchHighlightTerms.value = terms
+}
+
 /**
  * Toggle the in-session search bar.
  * Only responds when this is a main session (not subagent) and is currently active.
@@ -904,6 +912,7 @@ function handleToggleSessionSearch() {
 function closeSessionSearch() {
     showSessionSearch.value = false
     sessionSearchRef.value?.reset()
+    searchHighlightTerms.value = []
 }
 
 onMounted(() => {
@@ -999,7 +1008,40 @@ async function scrollToLineNum(lineNum) {
     }
 
     // Step 4: Scroll to the item via the virtual scroller's jump-settle-correct
-    return scroller.scrollToKey(lineNum, { align: 'center' })
+    const visible = await scroller.scrollToKey(lineNum, { align: 'center' })
+    if (!visible) return false
+    if (generation !== scrollToLineNumGeneration) return false  // Stale
+
+    // Step 5: If the item is tall, scroll to the first search highlight within it
+    await nextTick()  // Let v-highlight directive apply marks
+    scrollToFirstHighlight(lineNum)
+
+    return true
+}
+
+/**
+ * Scroll the virtual scroller container so the first <mark class="search-highlight">
+ * inside the given item is visible. Useful when an item is taller than the viewport
+ * and the highlight is out of view after the initial scroll-to-item.
+ */
+function scrollToFirstHighlight(lineNum) {
+    const scrollerEl = scrollerRef.value?.$el
+    if (!scrollerEl) return
+
+    const itemEl = scrollerEl.querySelector(`.session-item[data-line-num="${lineNum}"]`)
+    if (!itemEl) return
+
+    const mark = itemEl.querySelector('mark.search-highlight')
+    if (!mark) return
+
+    // Check if the mark is already visible in the scroller viewport
+    const scrollerRect = scrollerEl.getBoundingClientRect()
+    const markRect = mark.getBoundingClientRect()
+    const isMarkVisible = markRect.top >= scrollerRect.top && markRect.bottom <= scrollerRect.bottom
+    if (isMarkVisible) return
+
+    // Scroll the mark into view within the scroller container
+    mark.scrollIntoView({ block: 'center', behavior: 'instant' })
 }
 
 /**
@@ -1031,6 +1073,7 @@ defineExpose({
             :session-id="sessionId"
             @close="closeSessionSearch"
             @navigate="handleSearchNavigate"
+            @update:terms="handleSearchTerms"
         />
 
         <!-- Compute pending state -->

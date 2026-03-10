@@ -104,7 +104,7 @@ function toggleJsonView() {
 </script>
 
 <template>
-    <div class="session-item" :data-kind="kind" :data-synthetic-kind="syntheticKind">
+    <div class="session-item" :data-kind="kind" :data-synthetic-kind="syntheticKind" :data-line-num="lineNum">
         <div><!-- all non-content stuff must be in this div for complex css rules of content stuff assuming they always start at 2nd place-->
             <!-- Detail toggle button for conversation mode (on assistant_message when collapsed,
                  or on first visible item of block when detailed) -->
