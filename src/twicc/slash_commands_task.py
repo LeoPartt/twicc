@@ -44,6 +44,7 @@ def _sync_to_database() -> dict[str, int]:
     from twicc.core.models import Project, SlashCommand, SlashCommandSource
     from twicc.slash_commands import (
         DiscoveredCommand,
+        PluginEntry,
         discover_global_commands,
         discover_project_commands,
         read_plugin_entries,
@@ -52,6 +53,16 @@ def _sync_to_database() -> dict[str, int]:
     stats = {"created": 0, "updated": 0, "deleted": 0, "unchanged": 0}
 
     plugin_entries = read_plugin_entries()
+
+    # Add the TwiCC built-in plugin (ships with the package)
+    from twicc.claude_plugin import get_plugin_dir
+
+    plugin_entries.append(PluginEntry(
+        plugin_name="twicc",
+        install_path=get_plugin_dir(),
+        scope="managed",
+        project_path=None,
+    ))
 
     # --- 1. Discover global commands ---
     global_commands = discover_global_commands(plugin_entries=plugin_entries)

@@ -23,6 +23,8 @@ from claude_agent_sdk import (
     PermissionUpdate, ResultMessage, ThinkingConfigAdaptive, ThinkingConfigDisabled, ToolPermissionContext,
 )
 
+from twicc.claude_plugin import get_plugin_dir
+
 from .sdk_logger import patch_client as patch_client_for_logging
 from .states import ActiveCronInfo, PendingRequest, ProcessInfo, ProcessState, get_process_memory
 
@@ -706,6 +708,7 @@ class ClaudeProcess:
                 effort=self.effort,
                 thinking=thinking_config,
                 setting_sources=["user", "project", "local"],
+                plugins=[{"type": "local", "path": str(get_plugin_dir())}],
                 can_use_tool=self._handle_pending_request,
                 hooks={
                     "PreToolUse": [HookMatcher(matcher=None, hooks=[_dummy_hook])],

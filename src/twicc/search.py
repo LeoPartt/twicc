@@ -516,3 +516,131 @@ def search(
         total_sessions=total_sessions,
         results=results,
     )
+
+
+# ---------------------------------------------------------------------------
+# Raw search (read-only, CLI-friendly)
+# ---------------------------------------------------------------------------
+
+
+def _init_read_only() -> tuple[tantivy.Index, tantivy.Schema]:
+    """Open the search index in read-only mode (no writer lock required).
+
+    This allows querying from a separate process while the main server holds
+    the writer lock. If the module is already fully initialized (server context),
+    the existing index and schema are reused.
+
+    Returns:
+        A (index, schema) tuple ready for searching.
+    """
+    if _index is not None and _schema is not None:
+        return _index, _schema
+
+    from twicc.paths import get_search_dir
+
+    schema = _build_schema()
+    search_dir = get_search_dir()
+    if not search_dir.exists():
+        raise RuntimeError(f"Search index directory does not exist: {search_dir}")
+
+    index = tantivy.Index(schema, path=str(search_dir))
+    _register_tokenizer(index)
+    return index, schema
+
+
+def raw_search(
+    query_str: str,
+    *,
+    limit: int = 20,
+    offset: int = 0,
+    to_json: bool = True,
+) -> dict | str:
+    """Execute a raw Tantivy query and return JSON-serializable results.
+
+    Unlike ``search()``, this function:
+    - Accepts any valid Tantivy query syntax (no implicit conjunction, no field default)
+    - Does not group results by session — returns a flat list of hits
+    - Works in read-only mode (no writer lock needed), safe to call from CLI
+    - Returns all stored fields except the full ``body`` (a snippet is provided instead)
+
+    Args:
+        query_str: A raw Tantivy query string (e.g. ``body:websocket AND from_role:user``).
+        limit: Maximum number of hits to return (default 20).
+        offset: Number of hits to skip for pagination (default 0).
+        to_json: If True (default), return a JSON string; if False, return a dict.
+
+    Returns:
+        If ``to_json`` is True: a JSON string (pretty-printed, sorted keys).
+        If ``to_json`` is False: a dict with ``query``, ``total_hits``, ``limit``, ``offset``,
+        and ``hits`` keys. Each hit contains ``score``, ``session_id``, ``project_id``,
+        ``line_num``, ``from_role``, ``timestamp``, ``archived``, and ``snippet``.
+    """
+    index, schema = _init_read_only()
+
+    try:
+        parsed_query = index.parse_query(query_str, ["body"])
+    except ValueError as exc:
+        result_dict = {
+            "query": query_str,
+            "total_hits": 0,
+            "limit": limit,
+            "offset": offset,
+            "hits": [],
+            "error": f"Query parse error: {exc}",
+        }
+        if to_json:
+            import orjson
+
+            return orjson.dumps(result_dict, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS).decode()
+        return result_dict
+
+    index.reload()
+    searcher = index.searcher()
+
+    # Fetch enough hits to satisfy offset + limit
+    raw_limit = offset + limit
+    result = searcher.search(parsed_query, limit=raw_limit)
+
+    # Generate snippets from the text query
+    snippet_generator = tantivy.SnippetGenerator.create(searcher, parsed_query, schema, "body")
+    snippet_generator.set_max_num_chars(200)
+
+    hits = []
+    for score, doc_addr in result.hits[offset:]:
+        doc = searcher.doc(doc_addr)
+
+        ts = doc.get_first("timestamp")
+        ts_str = None
+        if ts is not None:
+            if isinstance(ts, datetime):
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                ts_str = ts.isoformat()
+            else:
+                ts_str = str(ts)
+
+        snippet = snippet_generator.snippet_from_doc(doc)
+
+        hits.append({
+            "score": round(score, 4),
+            "session_id": doc.get_first("session_id"),
+            "project_id": doc.get_first("project_id"),
+            "line_num": doc.get_first("line_num"),
+            "from_role": doc.get_first("from_role"),
+            "timestamp": ts_str,
+            "archived": doc.get_first("archived"),
+            "snippet": snippet.to_html(),
+        })
+
+    result_dict = {
+        "query": query_str,
+        "total_hits": result.count,
+        "limit": limit,
+        "offset": offset,
+        "hits": hits,
+    }
+    if to_json:
+        import orjson
+
+        return orjson.dumps(result_dict, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS).decode()
+    return result_dict
