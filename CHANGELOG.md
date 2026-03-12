@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Bash tool input commands no longer incorrectly rendered as Markdown
+- Stop process button shows a loading state to prevent duplicate clicks
 
 ## [1.1.2] - 2026-03-09
 

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, inject } from 'vue'
+import { ref, computed, watch, inject } from 'vue'
 import { useDataStore } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
 import { formatDate } from '../utils/date'
@@ -170,11 +170,22 @@ const canStopProcess = computed(() => {
     return ps && !ps.synthetic && ps.state && ps.state !== PROCESS_STATE.DEAD
 })
 
+// Track when a stop request has been sent and we're waiting for the process to die
+const stoppingProcess = ref(false)
+
+// Reset stoppingProcess when the process actually dies (or becomes un-stoppable for any reason)
+watch(canStopProcess, (canStop) => {
+    if (!canStop) {
+        stoppingProcess.value = false
+    }
+})
+
 /**
  * Stop the current process.
  */
 function handleStopProcess() {
-    if (canStopProcess.value) {
+    if (canStopProcess.value && !stoppingProcess.value) {
+        stoppingProcess.value = true
         killProcess(props.sessionId)
     }
 }
@@ -464,6 +475,8 @@ defineExpose({
                         appearance="filled"
                         size="small"
                         class="stop-button"
+                        :loading="stoppingProcess"
+                        :disabled="stoppingProcess"
                         @click="handleStopProcess"
                     >
                         <wa-icon name="ban" label="Stop"></wa-icon>

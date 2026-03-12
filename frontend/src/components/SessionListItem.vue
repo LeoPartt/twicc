@@ -7,7 +7,7 @@
  * called ~9 and ~4 times respectively in the template for the same session.
  * Now each is called once via a computed, and Vue caches the result.
  */
-import { computed, inject } from 'vue'
+import { ref, computed, watch, inject } from 'vue'
 import { useDataStore } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
 import { formatDate } from '../utils/date'
@@ -153,6 +153,16 @@ const canStop = computed(() => {
     return state && state !== PROCESS_STATE.DEAD
 })
 
+// Track when a stop request has been sent and we're waiting for the process to die
+const stoppingProcess = ref(false)
+
+// Reset stoppingProcess when the process actually dies (or becomes un-stoppable for any reason)
+watch(canStop, (value) => {
+    if (!value) {
+        stoppingProcess.value = false
+    }
+})
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Actions
 // ═══════════════════════════════════════════════════════════════════════════
@@ -170,6 +180,7 @@ function handleMenuSelect(event) {
     if (action === 'rename') {
         openRenameDialog(session)
     } else if (action === 'stop') {
+        stoppingProcess.value = true
         killProcess(session.id)
     } else if (action === 'delete-draft') {
         store.deleteDraftSession(session.id)
@@ -342,9 +353,9 @@ function handleMenuSelect(event) {
             <!-- Danger actions -->
             <template v-if="canStop || session.draft">
                 <wa-divider></wa-divider>
-                <wa-dropdown-item v-if="canStop" value="stop">
+                <wa-dropdown-item v-if="canStop" value="stop" :disabled="stoppingProcess">
                     <wa-icon slot="icon" name="ban"></wa-icon>
-                    Stop the Claude Code process
+                    {{ stoppingProcess ? 'Stopping…' : 'Stop the Claude Code process' }}
                 </wa-dropdown-item>
                 <wa-dropdown-item v-if="session.draft" value="delete-draft" variant="danger">
                     <wa-icon slot="icon" name="trash"></wa-icon>
