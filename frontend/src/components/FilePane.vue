@@ -563,8 +563,19 @@ function onSideBySideToggle(event) {
     emit('update:sideBySide', sideBySide.value)
 }
 
-// Expose dirty state so parent components can check for unsaved changes
-defineExpose({ isDirty })
+/**
+ * Reload the current file content from disk.
+ * Safe to call at any time: skips reload in diff mode, when no file is
+ * selected, or when the editor has unsaved changes (edit mode + dirty).
+ */
+async function reload() {
+    if (props.diffMode || !props.filePath) return
+    if (isEditing.value && isDirty.value) return
+    await fetchFileContent(props.filePath, { isSwitch: true })
+}
+
+// Expose dirty state and reload for parent components
+defineExpose({ isDirty, reload })
 
 function formatSize(bytes) {
     if (bytes < 1024) return `${bytes} B`

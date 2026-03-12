@@ -69,6 +69,7 @@ const started = ref(false)
 // Template ref for the FileTreePanel child component — declared early because
 // immediate watchers below may reference it before the "File selection" section.
 const fileTreePanelRef = ref(null)
+const filePaneRef = ref(null)
 
 // ─── Root directory selection ────────────────────────────────────────────────
 
@@ -382,6 +383,9 @@ async function refresh() {
             await fileTreePanelRef.value?.scrollToPath(directory.value)
         }
     }
+
+    // Reload the open file content (skips if editing with unsaved changes)
+    filePaneRef.value?.reload()
 }
 
 // ─── File selection ──────────────────────────────────────────────────────────
@@ -606,6 +610,7 @@ defineExpose({ revealFile, setRootByPath })
         <div ref="contentOwnerRef" class="reparent-owner">
             <div class="files-content-inner">
                 <FilePane
+                    ref="filePaneRef"
                     v-show="selectedFile"
                     :project-id="projectId"
                     :session-id="sessionId"
