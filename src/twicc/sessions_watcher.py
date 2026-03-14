@@ -378,6 +378,11 @@ async def sync_and_broadcast(
             "project": serialize_project(project),
         })
 
+    # Track whether this session was just created via TwiCC (had pending settings).
+    # Used below to broadcast an early session_updated even before the user message
+    # appears in the JSONL, so the frontend can drop the draft flag immediately.
+    pending = {}
+
     if session is None:
         # New file - check if it has content before creating
         has_content = await check_file_has_content_async(path)
@@ -409,12 +414,16 @@ async def sync_and_broadcast(
 
         # Only broadcast if session has user messages — empty sessions (e.g. just
         # system/metadata lines) stay silent in DB until a user message arrives.
-        if session.user_message_count > 0:
+        # Exception: TwiCC-initiated sessions (identified by having had pending
+        # settings) get an early session_updated so the frontend drops the draft
+        # flag immediately, without waiting for the user message to appear in JSONL.
+        if session.user_message_count > 0 or pending:
             await broadcast_message(channel_layer, {
                 "type": "session_updated",
                 "session": serialize_session(session),
             })
 
+        if session.user_message_count > 0:
             # Broadcast new items (with updated metadata of pre-existing items if any)
             new_items = await get_session_items(session, new_line_nums)
             if new_items:
