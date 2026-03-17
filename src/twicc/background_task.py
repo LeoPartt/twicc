@@ -25,7 +25,8 @@ from asgiref.sync import sync_to_async
 from channels.layers import get_channel_layer
 from django.conf import settings
 
-from twicc.compute import apply_session_complete, load_project_directories, load_project_git_roots
+from twicc.compute import load_project_directories, load_project_git_roots
+from twicc.compute_batch import apply_session_complete
 from twicc.core.models import Project, Session, SessionType
 from twicc.core.serializers import serialize_project, serialize_session
 from twicc.startup_progress import broadcast_startup_progress
@@ -117,7 +118,7 @@ def compute_worker_main(command_queue: Queue, result_queue: Queue, stop_event: M
     import logging
     worker_logger = logging.getLogger(__name__)
 
-    from twicc.compute import compute_session_metadata
+    from twicc.compute_batch import compute_session_metadata
 
     worker_logger.info("Compute worker process started")
 

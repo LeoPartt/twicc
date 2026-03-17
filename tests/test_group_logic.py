@@ -21,11 +21,8 @@ import queue
 import orjson
 import pytest
 
-from twicc.compute import (
-    apply_session_complete,
-    compute_item_metadata_live,
-    compute_session_metadata,
-)
+from twicc.compute import compute_item_metadata_live
+from twicc.compute_batch import apply_session_complete, compute_session_metadata
 from twicc.core.models import Project, Session, SessionItem
 
 
