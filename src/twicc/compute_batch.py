@@ -374,7 +374,7 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
     all_tool_result_links: list[dict] = []
     all_agent_links: list[dict] = []
     content_overrides: list[dict] = []
-    batch_size = 50
+    batch_size = 500
 
     def serialize_items(items: list[SessionItem]) -> list[dict]:
         return [
