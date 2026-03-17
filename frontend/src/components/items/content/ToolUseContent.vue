@@ -772,11 +772,13 @@ wa-details.with-right-part {
     .items-details-summary {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: var(--wa-space-m);
         width: 100%;
 
         wa-button {
             margin-block: -1rem;
+            margin-left: auto; /* Stay right-aligned when wrapped */
         }
         .agent-starting-spinner, .tool-running-spinner {
             font-size: 1.2em;
@@ -794,7 +796,7 @@ wa-details.with-right-part {
 
     .items-details-summary-left {
         flex: 1;
-        min-width: 0; /* Allow text wrapping */
+        min-width: 60%; /* Force right-side elements to wrap before text gets too narrow */
     }
 
     .tool-error-icon {
