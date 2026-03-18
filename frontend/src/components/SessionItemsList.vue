@@ -895,8 +895,11 @@ function handleSearchTerms(terms) {
 /**
  * Toggle the in-session search bar.
  * Only responds when this is a main session (not subagent) and is currently active.
+ *
+ * When opening: sets e.detail.handled = true so App.vue blocks the native browser Find.
+ * When closing: leaves handled = false so the native Ctrl+F passes through to the browser.
  */
-function handleToggleSessionSearch() {
+function handleToggleSessionSearch(e) {
     // Only respond for the main chat tab (not subagent views)
     if (props.parentSessionId) return
     // Only respond when this session is active (KeepAlive)
@@ -904,9 +907,11 @@ function handleToggleSessionSearch() {
 
     if (showSessionSearch.value) {
         closeSessionSearch()
+        // Don't set handled — let the browser open its native Find bar
     } else {
         showSessionSearch.value = true
         nextTick(() => sessionSearchRef.value?.open())
+        e.detail.handled = true
     }
 }
 

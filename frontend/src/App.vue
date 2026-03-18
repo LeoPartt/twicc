@@ -74,12 +74,17 @@ function handleGlobalKeydown(e) {
         e.stopPropagation()
         searchOverlayRef.value?.open()
     }
-    // Ctrl+F (without Shift): in-session search when on a session's chat tab
+    // Ctrl+F (without Shift): in-session search when on a session's chat tab.
+    // First press opens the custom search bar (and blocks native browser Find).
+    // Second press (bar already open) closes it and lets the native Find through.
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'f') {
         if (SESSION_CHAT_ROUTES.has(route.name)) {
-            e.preventDefault()
-            e.stopPropagation()
-            window.dispatchEvent(new Event('twicc:toggle-session-search'))
+            const detail = { handled: false }
+            window.dispatchEvent(new CustomEvent('twicc:toggle-session-search', { detail }))
+            if (detail.handled) {
+                e.preventDefault()
+                e.stopPropagation()
+            }
         }
     }
 }
