@@ -162,7 +162,8 @@ def calculate_line_cost(
         + Decimal(cache_1h) * cache_write_1h_price
     ) / Decimal(1_000_000)
 
-    return cost
+    # Quantize to 6 decimal places to match SessionItem.cost DecimalField precision
+    return cost.quantize(Decimal('0.000001'))
 
 
 def calculate_line_context_usage(usage: dict) -> int:

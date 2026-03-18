@@ -70,10 +70,10 @@ class Project(models.Model):
         from decimal import Decimal
         from django.db.models import Sum
 
-        total = SessionItem.objects.filter(
-            session__project_id=self.id,
-            cost__isnull=False,
-        ).aggregate(total=Sum("cost"))["total"] or Decimal(0)
+        total = self.sessions.filter(
+            type=SessionType.SESSION,
+            total_cost__isnull=False,
+        ).aggregate(total=Sum("total_cost"))["total"] or Decimal(0)
         self.total_cost = total if total > 0 else None
 
     def __str__(self):

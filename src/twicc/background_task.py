@@ -23,6 +23,7 @@ from multiprocessing import Event as MPEvent, Process, Queue
 from asgiref.sync import sync_to_async
 from channels.layers import get_channel_layer
 from django.conf import settings
+from django.db.models import Q
 
 from twicc.compute import load_project_directories, load_project_git_roots
 from twicc.compute_batch import apply_session_complete
@@ -411,7 +412,7 @@ async def start_background_compute_task(ctx: ComputeContext) -> None:
     sessions_to_display = await sync_to_async(
         lambda: set(
             Session.objects.filter(type=SessionType.SESSION)
-            .exclude(compute_version=settings.CURRENT_COMPUTE_VERSION)
+            .filter(Q(compute_version__isnull=True) | Q(compute_version__lt=settings.CURRENT_COMPUTE_VERSION))
             .values_list("id", flat=True)
         )
     )()
@@ -442,7 +443,8 @@ async def start_background_compute_task(ctx: ComputeContext) -> None:
     # Load all session IDs needing computation in one query, ordered by most recent first
     session_ids_to_compute = await sync_to_async(
         lambda: list(
-            Session.objects.exclude(compute_version=settings.CURRENT_COMPUTE_VERSION)
+            Session.objects
+            .filter(Q(compute_version__isnull=True) | Q(compute_version__lt=settings.CURRENT_COMPUTE_VERSION))
             .order_by('-mtime')
             .values_list('id', flat=True)
         )
