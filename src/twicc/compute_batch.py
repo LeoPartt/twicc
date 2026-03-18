@@ -368,9 +368,8 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
 
     state = GroupState()
     items_to_update: list[SessionItem] = []
-    tool_result_links_to_create: list[dict] = []
     all_item_updates: list[dict] = []
-    all_tool_result_links: list[dict] = []
+    all_tool_result_links: dict[tuple[str, int], dict] = {}  # (tool_use_id, tool_result_line_num) -> serialized
     all_agent_links: dict[tuple[str, str], dict] = {}  # (agent_id, tool_use_id) -> serialized
     content_overrides: list[dict] = []
     batch_size = 500
@@ -396,6 +395,18 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
             if serialized != original_serialized.get(item.id):
                 all_item_updates.append(serialized)
 
+    def serialize_tool_result_link(link: ToolResultLink) -> dict:
+        return {
+            'session_id': link.session_id,
+            'tool_use_line_num': link.tool_use_line_num,
+            'tool_result_line_num': link.tool_result_line_num,
+            'tool_use_id': link.tool_use_id,
+            'tool_name': link.tool_name,
+            'tool_result_at': link.tool_result_at.isoformat() if link.tool_result_at else None,
+            'extra': link.extra,
+            'error': link.error,
+        }
+
     def serialize_agent_link(link: AgentLink) -> dict:
         return {
             'session_id': link.session_id,
@@ -405,10 +416,6 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
             'is_background': link.is_background,
             'started_at': link.started_at.isoformat() if link.started_at else None,
         }
-
-    def flush_tool_result_links(links: list[dict]) -> None:
-        if links:
-            all_tool_result_links.extend(links)
 
     tool_use_map: dict[str, tuple[int, str]] = {}
     task_tool_use_map: dict[str, tuple[int, bool, datetime]] = {}
@@ -431,7 +438,14 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
     agent_stopped_list: list[dict] = []
     original_serialized: dict[int, dict] = {}
 
-    # Load existing agent links for change detection
+    # Load existing links for change detection
+    original_tool_result_links: dict[tuple[str, int], dict] = {}
+    original_tool_result_links_ids: dict[tuple[str, int], int] = {}
+    for link in ToolResultLink.objects.filter(session_id=session_id):
+        key = (link.tool_use_id, link.tool_result_line_num)
+        original_tool_result_links[key] = serialize_tool_result_link(link)
+        original_tool_result_links_ids[key] = link.id
+
     original_agent_links: dict[tuple[str, str], dict] = {}
     original_agent_links_ids: dict[tuple[str, str], int] = {}
     for link in AgentLink.objects.filter(session_id=session_id):
@@ -534,16 +548,16 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
             tu_line_num, tu_name = tool_use_map[tool_result_ref]
             extra = compute_file_change_stats(parsed) if tu_name in ('Edit', 'Write') else None
             error = analysis.tool_result_error
-            tool_result_links_to_create.append({
-                'session_id': session_id,
-                'tool_use_line_num': tu_line_num,
-                'tool_result_line_num': item.line_num,
-                'tool_use_id': tool_result_ref,
-                'tool_name': tu_name,
-                'tool_result_at': item.timestamp,
-                'extra': extra,
-                'error': error,
-            })
+            all_tool_result_links[(tool_result_ref, item.line_num)] = serialize_tool_result_link(ToolResultLink(
+                session_id=session_id,
+                tool_use_line_num=tu_line_num,
+                tool_result_line_num=item.line_num,
+                tool_use_id=tool_result_ref,
+                tool_name=tu_name,
+                tool_result_at=item.timestamp,
+                extra=extra,
+                error=error,
+            ))
             if tu_name in AGENT_TOOL_NAMES:
                 prev_count, _ = agent_tool_result_counts.get(tool_result_ref, (0, None))
                 agent_tool_result_counts[tool_result_ref] = (prev_count + 1, item.timestamp)
@@ -583,16 +597,26 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
         if len(items_to_update) >= batch_size:
             flush_items(items_to_update)
             items_to_update = []
-        if len(tool_result_links_to_create) >= batch_size:
-            flush_tool_result_links(tool_result_links_to_create)
-            tool_result_links_to_create = []
 
     # Finalize pending groups
     finalized = state.finalize()
     items_to_update.extend(finalized)
 
     flush_items(items_to_update)
-    flush_tool_result_links(tool_result_links_to_create)
+
+    # Diff tool result links: create / update / delete
+    trl_to_create: list[dict] = []
+    trl_to_update: list[dict] = []
+    for key, serialized in all_tool_result_links.items():
+        original = original_tool_result_links.get(key)
+        if original is None:
+            trl_to_create.append(serialized)
+        elif serialized != original:
+            serialized['id'] = original_tool_result_links_ids[key]
+            trl_to_update.append(serialized)
+    trl_to_delete: list[int] = [
+        pk for key, pk in original_tool_result_links_ids.items() if key not in all_tool_result_links
+    ]
 
     # Diff agent links: create / update / delete
     agent_links_to_create: list[dict] = []
@@ -637,7 +661,9 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
         'item_updates': all_item_updates,
         'item_fields': ['display_level', 'group_head', 'group_tail', 'kind', 'message_id', 'cost', 'context_usage', 'timestamp', 'git_directory', 'git_branch'],
         'content_overrides': content_overrides,
-        'tool_result_links': all_tool_result_links,
+        'tool_result_links_to_create': trl_to_create,
+        'tool_result_links_to_update': trl_to_update,
+        'tool_result_links_to_delete': trl_to_delete,
         'agent_links_to_create': agent_links_to_create,
         'agent_links_to_update': agent_links_to_update,
         'agent_links_to_delete': agent_links_to_delete,
@@ -706,12 +732,48 @@ def apply_session_complete(msg: dict) -> None:
         ]
         SessionItem.objects.bulk_update(items, ['content'], 50)
 
-    # 3. Create links
-    tool_result_links_data = msg.get('tool_result_links', [])
-    if tool_result_links_data:
-        links = [ToolResultLink(**d) for d in tool_result_links_data]
+    # 3. Sync tool result links
+    trl_to_create = msg.get('tool_result_links_to_create', [])
+    if trl_to_create:
+        links = [
+            ToolResultLink(
+                session_id=d['session_id'],
+                tool_use_line_num=d['tool_use_line_num'],
+                tool_result_line_num=d['tool_result_line_num'],
+                tool_use_id=d['tool_use_id'],
+                tool_name=d['tool_name'],
+                tool_result_at=datetime.fromisoformat(d['tool_result_at']) if d.get('tool_result_at') else None,
+                extra=d.get('extra'),
+                error=d.get('error'),
+            )
+            for d in trl_to_create
+        ]
         ToolResultLink.objects.bulk_create(links, ignore_conflicts=True)
 
+    trl_to_update = msg.get('tool_result_links_to_update', [])
+    if trl_to_update:
+        trl_update_fields = ['tool_use_line_num', 'tool_name', 'tool_result_at', 'extra', 'error']
+        links = [
+            ToolResultLink(
+                id=d['id'],
+                session_id=d['session_id'],
+                tool_use_line_num=d['tool_use_line_num'],
+                tool_result_line_num=d['tool_result_line_num'],
+                tool_use_id=d['tool_use_id'],
+                tool_name=d['tool_name'],
+                tool_result_at=datetime.fromisoformat(d['tool_result_at']) if d.get('tool_result_at') else None,
+                extra=d.get('extra'),
+                error=d.get('error'),
+            )
+            for d in trl_to_update
+        ]
+        ToolResultLink.objects.bulk_update(links, trl_update_fields, 50)
+
+    trl_to_delete = msg.get('tool_result_links_to_delete', [])
+    if trl_to_delete:
+        ToolResultLink.objects.filter(id__in=trl_to_delete).delete()
+
+    # 4. Sync agent links
     agent_links_to_create = msg.get('agent_links_to_create', [])
     if agent_links_to_create:
         links = [
