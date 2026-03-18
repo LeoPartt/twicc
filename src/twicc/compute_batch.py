@@ -467,7 +467,7 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
         new_content = transform_task_notification(parsed)
         if new_content is None:
             new_content = transform_local_command_output(parsed)
-        if new_content is not None:
+        if new_content is not None and new_content != item.content:
             item.content = new_content
             content_overrides.append({'id': item.id, 'content': new_content})
 
