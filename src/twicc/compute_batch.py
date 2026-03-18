@@ -376,27 +376,26 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
     content_overrides: list[dict] = []
     batch_size = 500
 
-    def serialize_items(items: list[SessionItem]) -> list[dict]:
-        return [
-            {
-                'id': item.id,
-                'display_level': item.display_level,
-                'group_head': item.group_head,
-                'group_tail': item.group_tail,
-                'kind': item.kind,
-                'message_id': item.message_id,
-                'cost': str(item.cost) if item.cost is not None else None,
-                'context_usage': item.context_usage,
-                'timestamp': item.timestamp.isoformat() if item.timestamp else None,
-                'git_directory': item.git_directory,
-                'git_branch': item.git_branch,
-            }
-            for item in items
-        ]
+    def serialize_item(item: SessionItem) -> dict:
+        return {
+            'id': item.id,
+            'display_level': item.display_level,
+            'group_head': item.group_head,
+            'group_tail': item.group_tail,
+            'kind': item.kind,
+            'message_id': item.message_id,
+            'cost': str(item.cost) if item.cost is not None else None,
+            'context_usage': item.context_usage,
+            'timestamp': item.timestamp.isoformat() if item.timestamp else None,
+            'git_directory': item.git_directory,
+            'git_branch': item.git_branch,
+        }
 
     def flush_items(items: list[SessionItem]) -> None:
-        if items:
-            all_item_updates.extend(serialize_items(items))
+        for item in items:
+            serialized = serialize_item(item)
+            if serialized != original_serialized.get(item.id):
+                all_item_updates.append(serialized)
 
     def flush_tool_result_links(links: list[dict]) -> None:
         if links:
@@ -425,8 +424,12 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
     last_resolved_git_branch: str | None = None
     agent_tool_result_counts: dict[str, tuple[int, datetime | None]] = {}
     agent_stopped_list: list[dict] = []
+    original_serialized: dict[int, dict] = {}
 
     for item in queryset.iterator(chunk_size=batch_size):
+        # Snapshot original state before any computation, for change detection
+        original_serialized[item.id] = serialize_item(item)
+
         try:
             parsed = orjson.loads(item.content)
         except orjson.JSONDecodeError:
