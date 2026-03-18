@@ -369,10 +369,9 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
     state = GroupState()
     items_to_update: list[SessionItem] = []
     tool_result_links_to_create: list[dict] = []
-    agent_links_to_create: list[dict] = []
     all_item_updates: list[dict] = []
     all_tool_result_links: list[dict] = []
-    all_agent_links: list[dict] = []
+    all_agent_links: dict[tuple[str, str], dict] = {}  # (agent_id, tool_use_id) -> serialized
     content_overrides: list[dict] = []
     batch_size = 500
 
@@ -397,13 +396,19 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
             if serialized != original_serialized.get(item.id):
                 all_item_updates.append(serialized)
 
+    def serialize_agent_link(link: AgentLink) -> dict:
+        return {
+            'session_id': link.session_id,
+            'tool_use_line_num': link.tool_use_line_num,
+            'tool_use_id': link.tool_use_id,
+            'agent_id': link.agent_id,
+            'is_background': link.is_background,
+            'started_at': link.started_at.isoformat() if link.started_at else None,
+        }
+
     def flush_tool_result_links(links: list[dict]) -> None:
         if links:
             all_tool_result_links.extend(links)
-
-    def flush_agent_links(links: list[dict]) -> None:
-        if links:
-            all_agent_links.extend(links)
 
     tool_use_map: dict[str, tuple[int, str]] = {}
     task_tool_use_map: dict[str, tuple[int, bool, datetime]] = {}
@@ -425,6 +430,14 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
     agent_tool_result_counts: dict[str, tuple[int, datetime | None]] = {}
     agent_stopped_list: list[dict] = []
     original_serialized: dict[int, dict] = {}
+
+    # Load existing agent links for change detection
+    original_agent_links: dict[tuple[str, str], dict] = {}
+    original_agent_links_ids: dict[tuple[str, str], int] = {}
+    for link in AgentLink.objects.filter(session_id=session_id):
+        key = (link.agent_id, link.tool_use_id)
+        original_agent_links[key] = serialize_agent_link(link)
+        original_agent_links_ids[key] = link.id
 
     for item in queryset.iterator(chunk_size=batch_size):
         # Snapshot original state before any computation, for change detection
@@ -538,14 +551,14 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
             tu_id, agent_id = analysis.tool_result_agent_info
             if tu_id in task_tool_use_map:
                 line_num, is_background, started_at = task_tool_use_map[tu_id]
-                agent_links_to_create.append({
-                    'session_id': session_id,
-                    'tool_use_line_num': line_num,
-                    'tool_use_id': tu_id,
-                    'agent_id': agent_id,
-                    'is_background': is_background,
-                    'started_at': started_at,
-                })
+                all_agent_links[(agent_id, tu_id)] = serialize_agent_link(AgentLink(
+                    session_id=session_id,
+                    tool_use_line_num=line_num,
+                    tool_use_id=tu_id,
+                    agent_id=agent_id,
+                    is_background=is_background,
+                    started_at=started_at,
+                ))
                 del task_tool_use_map[tu_id]
 
         # Prefix/suffix for group state machine
@@ -573,9 +586,6 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
         if len(tool_result_links_to_create) >= batch_size:
             flush_tool_result_links(tool_result_links_to_create)
             tool_result_links_to_create = []
-        if len(agent_links_to_create) >= batch_size:
-            flush_agent_links(agent_links_to_create)
-            agent_links_to_create = []
 
     # Finalize pending groups
     finalized = state.finalize()
@@ -583,12 +593,27 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
 
     flush_items(items_to_update)
     flush_tool_result_links(tool_result_links_to_create)
-    flush_agent_links(agent_links_to_create)
 
+    # Diff agent links: create / update / delete
+    agent_links_to_create: list[dict] = []
+    agent_links_to_update: list[dict] = []
+    for key, serialized in all_agent_links.items():
+        original = original_agent_links.get(key)
+        if original is None:
+            agent_links_to_create.append(serialized)
+        elif serialized != original:
+            # Carry the existing PK so apply_session_complete can bulk_update
+            serialized['id'] = original_agent_links_ids[key]
+            agent_links_to_update.append(serialized)
+    agent_links_to_delete: list[int] = [
+        pk for key, pk in original_agent_links_ids.items() if key not in all_agent_links
+    ]
+
+    # Determine which agents have stopped (using all_agent_links dict)
     for tu_id, (result_count, last_ts) in agent_tool_result_counts.items():
         if last_ts is None:
             continue
-        for link in all_agent_links:
+        for link in all_agent_links.values():
             if link['tool_use_id'] == tu_id:
                 required = 2 if link.get('is_background') else 1
                 if result_count >= required:
@@ -613,7 +638,9 @@ def compute_session_metadata(session_id: str, result_queue) -> None:
         'item_fields': ['display_level', 'group_head', 'group_tail', 'kind', 'message_id', 'cost', 'context_usage', 'timestamp', 'git_directory', 'git_branch'],
         'content_overrides': content_overrides,
         'tool_result_links': all_tool_result_links,
-        'agent_links': all_agent_links,
+        'agent_links_to_create': agent_links_to_create,
+        'agent_links_to_update': agent_links_to_update,
+        'agent_links_to_delete': agent_links_to_delete,
         'session_fields': {
             'compute_version': settings.CURRENT_COMPUTE_VERSION,
             'user_message_count': user_message_count,
@@ -685,10 +712,41 @@ def apply_session_complete(msg: dict) -> None:
         links = [ToolResultLink(**d) for d in tool_result_links_data]
         ToolResultLink.objects.bulk_create(links, ignore_conflicts=True)
 
-    agent_links_data = msg.get('agent_links', [])
-    if agent_links_data:
-        links = [AgentLink(**d) for d in agent_links_data]
+    agent_links_to_create = msg.get('agent_links_to_create', [])
+    if agent_links_to_create:
+        links = [
+            AgentLink(
+                session_id=d['session_id'],
+                tool_use_line_num=d['tool_use_line_num'],
+                tool_use_id=d['tool_use_id'],
+                agent_id=d['agent_id'],
+                is_background=d['is_background'],
+                started_at=datetime.fromisoformat(d['started_at']) if d.get('started_at') else None,
+            )
+            for d in agent_links_to_create
+        ]
         AgentLink.objects.bulk_create(links, ignore_conflicts=True)
+
+    agent_links_to_update = msg.get('agent_links_to_update', [])
+    if agent_links_to_update:
+        agent_link_fields = ['tool_use_line_num', 'is_background', 'started_at']
+        links = [
+            AgentLink(
+                id=d['id'],
+                session_id=d['session_id'],
+                tool_use_line_num=d['tool_use_line_num'],
+                tool_use_id=d['tool_use_id'],
+                agent_id=d['agent_id'],
+                is_background=d['is_background'],
+                started_at=datetime.fromisoformat(d['started_at']) if d.get('started_at') else None,
+            )
+            for d in agent_links_to_update
+        ]
+        AgentLink.objects.bulk_update(links, agent_link_fields, 50)
+
+    agent_links_to_delete = msg.get('agent_links_to_delete', [])
+    if agent_links_to_delete:
+        AgentLink.objects.filter(id__in=agent_links_to_delete).delete()
 
     # 4. Update session fields
     session_fields = msg.get('session_fields', {})
