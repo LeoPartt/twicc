@@ -1103,7 +1103,6 @@ function updateSidebarClosedClass(closed) {
 
 <style scoped>
 .project-view-wrapper {
-    height: 100vh;
     height: 100dvh;
 }
 
@@ -1145,7 +1144,6 @@ wa-split-panel::part(divider) {
 
 .sidebar {
     --transition-duration: .3s;
-    height: 100vh;
     height: 100dvh;
     background: var(--wa-color-surface-default);
     display: flex;
@@ -1198,7 +1196,7 @@ wa-split-panel::part(divider) {
     &::part(listbox) {
         overflow: visible;
         overflow-y: auto;
-        max-height: 50vh;
+        max-height: 50dvh;
         width: max-content;
     }
     wa-option {
@@ -1313,7 +1311,7 @@ wa-split-panel::part(divider) {
     /* Limit dropdown menu height: set the variable directly on #menu (via ::part)
        so it overrides the value inherited from wa-popup's inline style */
     & wa-dropdown::part(menu) {
-        --auto-size-available-height: 50vh;
+        --auto-size-available-height: 50dvh;
     }
 }
 
@@ -1331,7 +1329,7 @@ wa-split-panel::part(divider) {
     /* Limit dropdown menu height: set the variable directly on #menu (via ::part)
        so it overrides the value inherited from wa-popup's inline style */
     &::part(menu) {
-        --auto-size-available-height: 50vh;
+        --auto-size-available-height: 50dvh;
     }
 
     /* Style the trigger button label */
@@ -1533,7 +1531,6 @@ wa-split-panel::part(divider) {
 @media (width < 640px) {
     /* Use dynamic viewport height on mobile to account for browser chrome */
     .project-view-wrapper {
-        height: 100vh;
         height: 100dvh;
     }
 
@@ -1553,7 +1550,6 @@ wa-split-panel::part(divider) {
         left: 0;
         top: 0;
         width: var(--sidebar-width);
-        height: 100vh;
         height: 100dvh;
         z-index: 100;
         transform: translateX(-100%);
@@ -1595,9 +1591,9 @@ wa-split-panel::part(divider) {
             left: 0;
             /* Its top starts from the label so we have to move it up and on the right of the sidebar */
             --translate-x: 0px;
-            translate: calc(var(--translate-x) - var(--wa-space-s)) calc(-100vh + var(--checkbox-label-size) + var(--wa-space-s));
+            translate: calc(var(--translate-x) - var(--wa-space-s)) calc(-100dvh + var(--checkbox-label-size) + var(--wa-space-s));
             width: 100vw;
-            height: 100vh;
+            height: 100dvh;
             pointer-events: none;
             transition: background var(--transition-duration) ease, translate var(--transition-duration) ease;
             background: transparent;

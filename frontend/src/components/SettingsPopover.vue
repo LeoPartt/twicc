@@ -760,7 +760,7 @@ function onPopoverShow() {
 
 .settings-content {
     padding: var(--wa-space-m);
-    max-height: calc(90vh - 8rem);
+    max-height: calc(90dvh - 8rem);
     overflow-y: auto;
 }
 

@@ -843,7 +843,7 @@ wa-divider {
     gap: var(--wa-space-s);
     padding: var(--wa-space-s);
     background: var(--wa-color-surface-default);
-    max-height: 50vh;
+    max-height: 50dvh;
     &.expanded {
         max-height: unset;
         position: absolute;

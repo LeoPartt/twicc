@@ -576,7 +576,7 @@ defineExpose({ open })
 .search-container {
     display: flex;
     flex-direction: column;
-    max-height: 70vh;
+    max-height: 70dvh;
 }
 
 .search-header {
@@ -640,7 +640,7 @@ defineExpose({ open })
     &::part(listbox) {
         overflow: visible;
         overflow-y: auto;
-        max-height: 50vh;
+        max-height: 50dvh;
         width: max-content;
         max-width: calc(100vw - 4rem);
         min-width: 100%;
@@ -666,7 +666,7 @@ defineExpose({ open })
 .search-results {
     overflow-y: auto;
     padding: var(--wa-space-xs) 0;
-    max-height: 60vh;
+    max-height: 60dvh;
 }
 
 /* ─── Result card — matches CommandPalette .command-item pattern ─────────── */
@@ -813,14 +813,11 @@ defineExpose({ open })
     .search-overlay::part(panel) {
         --width: 100vw;
         margin-top: 0;
-        height: 90vh;
         height: 90dvh;
-        max-height: 90vh;
         max-height: 90dvh;
         border-radius: 0;
     }
     .search-container {
-        max-height: 90vh;
         max-height: 90dvh;
     }
     .search-results {

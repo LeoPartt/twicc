@@ -1145,7 +1145,7 @@ onMounted(() => {
 }
 
 wa-callout {
-    max-width: min(40rem, 90vh);
+    max-width: min(40rem, 90dvh);
 }
 
 .panel-placeholder {

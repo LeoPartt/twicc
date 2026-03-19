@@ -460,7 +460,7 @@ wa-divider {
 }
 
 .palette-list {
-    max-height: min(400px, 60vh);
+    max-height: min(400px, 60dvh);
     overflow-y: auto;
     padding: var(--wa-space-xs) 0;
 }

@@ -262,7 +262,7 @@ defineExpose({ open, close })
 .preview-image {
     display: block;
     max-width: 100%;
-    max-height: calc(90vh - 100px);
+    max-height: calc(90dvh - 100px);
     object-fit: contain;
 }
 
@@ -276,7 +276,7 @@ defineExpose({ open, close })
     background: var(--wa-color-surface-secondary);
     min-width: 300px;
     max-width: calc(90vw - 2rem);
-    max-height: calc(90vh - 100px);
+    max-height: calc(90dvh - 100px);
     overflow: auto;
 }
 

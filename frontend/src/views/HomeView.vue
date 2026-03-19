@@ -53,14 +53,8 @@ function openNewProjectDialog() {
     createDialogRef.value?.open()
 }
 
-// Allow native page scroll on HomeView (the root has overflow:hidden for
-// ProjectView/SessionView which manage their own internal scroll panels).
 onMounted(() => {
-    document.documentElement.style.overflowY = 'auto'
     window.addEventListener('twicc:open-new-project-dialog', openNewProjectDialog)
-})
-onUnmounted(() => {
-    document.documentElement.style.overflowY = ''
 })
 onBeforeUnmount(() => {
     window.removeEventListener('twicc:open-new-project-dialog', openNewProjectDialog)
@@ -123,7 +117,7 @@ onBeforeUnmount(() => {
     display: flex;
     flex-direction: column;
     /* Native page scroll is enabled via onMounted (overrides :root overflow:hidden) */
-    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 .home-header {
@@ -163,7 +157,7 @@ onBeforeUnmount(() => {
     align-items: center;
     justify-content: center;
     gap: var(--wa-space-s);
-    min-height: 50vh;
+    min-height: 50dvh;
     color: var(--wa-color-text-quiet);
     font-size: var(--wa-font-size-m);
 }

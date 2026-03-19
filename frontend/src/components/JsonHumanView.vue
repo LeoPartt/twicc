@@ -1280,7 +1280,7 @@ function generateDiff(oldStr, newStr) {
     border-radius: var(--wa-form-control-border-radius);
     overflow: hidden;
     border: var(--wa-form-control-border-width) var(--wa-form-control-border-style) var(--wa-form-control-border-color);
-    max-height: 40vh;
+    max-height: 40dvh;
 }
 
 .jhv-edit-diff {

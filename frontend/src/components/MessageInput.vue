@@ -5,7 +5,6 @@ import { useRouter, useRoute } from 'vue-router'
 import { useDataStore } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
 import { sendWsMessage, notifyUserDraftUpdated } from '../composables/useWebSocket'
-import { useVisualViewport } from '../composables/useVisualViewport'
 import { isSupportedMimeType, MAX_FILE_SIZE, SUPPORTED_IMAGE_TYPES, draftMediaToMediaItem } from '../utils/fileUtils'
 import { toast } from '../composables/useToast'
 import { PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, MODEL, MODEL_LABELS, EFFORT, EFFORT_LABELS, EFFORT_DISPLAY_LABELS, THINKING_LABELS, THINKING_DISPLAY_LABELS, CLAUDE_IN_CHROME_LABELS, CLAUDE_IN_CHROME_DISPLAY_LABELS, CONTEXT_MAX, CONTEXT_MAX_LABELS } from '../constants'
@@ -13,9 +12,6 @@ import MediaThumbnailGroup from './MediaThumbnailGroup.vue'
 import AppTooltip from './AppTooltip.vue'
 import FilePickerPopup from './FilePickerPopup.vue'
 import SlashCommandPickerPopup from './SlashCommandPickerPopup.vue'
-
-// Track visual viewport height for mobile keyboard handling
-useVisualViewport()
 
 const props = defineProps({
     sessionId: {
@@ -1303,7 +1299,7 @@ async function handleReset() {
 
 .message-input wa-textarea::part(textarea) {
     /* Limit height to 40% of visual viewport (accounts for mobile keyboard) */
-    max-height: calc(var(--visual-viewport-height, 100dvh) * 0.4);
+    max-height: 40dvh;
     /* Allow scrolling when content exceeds max-height */
     overflow-y: auto;
 }
@@ -1358,7 +1354,7 @@ body.sidebar-closed .message-input-toolbar {
     display: flex;
     flex-direction: column;
     gap: var(--wa-space-m);
-    max-height: 60vh;
+    max-height: 60dvh;
     overflow-y: auto;
 }
 

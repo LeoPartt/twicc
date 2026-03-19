@@ -196,13 +196,13 @@ body {
 }
 
 .app-container {
-    min-height: 100vh;
+    min-height: 100dvh;
     background: var(--wa-color-surface-default);
     color: var(--wa-color-text-normal);
 }
 
 :root {
-    overflow: hidden;
+    overflow-y: auto;
 
     --user-card-base-color: var(--wa-color-indigo-95);
     --assistant-card-base-color: var(--wa-color-gray-95);

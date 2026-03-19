@@ -271,7 +271,7 @@ const displayedCommitLabel = computed(() => {
 .gitlog-test-view {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     background: #ffffff;
     color: #1a1a2e;
@@ -374,7 +374,7 @@ const displayedCommitLabel = computed(() => {
 
 .gitlog-box {
     width: 90%;
-    height: 50vh;
+    height: 50dvh;
     border: 2px solid #888;
     border-radius: 6px;
     overflow: hidden;

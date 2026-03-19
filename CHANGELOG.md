@@ -33,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Quota cutoff time now visible even when cost display is disabled (cutoff is burn-rate-based, not cost-based)
 - Draft session stayed in draft state for seconds or minutes after sending, until the SDK wrote the user message to JSONL
 - WebSocket reconnection now re-fetches tool states and agent links for changed sessions
+- Mobile: layout no longer breaks when the browser chrome (address bar) hides/shows during scrolling
 
 ## [1.1.2] - 2026-03-09
 

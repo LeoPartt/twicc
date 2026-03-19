@@ -259,7 +259,7 @@ const testCases = reactive([
     margin: 0 auto;
     padding: 2rem;
     color: var(--wa-color-text);
-    height: 100vh;
+    height: 100dvh;
     overflow-y: auto;
 }
 
