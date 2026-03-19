@@ -257,17 +257,93 @@ async def restart_session_crons(
     )
 
 
-def _build_restart_message(crons_data: list[dict]) -> str:
-    """Build the user message asking Claude to recreate cron jobs."""
-    lines = [
-        "Please recreate the following cron jobs using CronCreate for each one:",
-        "",
-    ]
-    for i, cron in enumerate(crons_data, 1):
-        kind = "recurring" if cron["recurring"] else "one-shot"
-        lines.append(f'{i}. Schedule: `{cron["cron_expr"]}` ({kind})')
-        lines.append(f'   Prompt: "{cron["prompt"]}"')
-        lines.append("")
+def _format_cron_description(cron: dict, *, cron_id_to_delete: str | None = None) -> str:
+    """Format a single cron's details for inclusion in a message.
 
-    lines.append("Use the exact schedule and prompt shown above for each CronCreate call.")
+    Args:
+        cron: Dict with "cron_expr", "recurring", "prompt" keys.
+        cron_id_to_delete: If provided, adds an "ID to delete" line (for renewal messages).
+    """
+    lines = []
+    if cron_id_to_delete:
+        lines.append(f"**ID to delete**: `{cron_id_to_delete}`")
+    schedule = f'**Schedule**: `{cron["cron_expr"]}`'
+    if cron["recurring"]:
+        schedule += " (recurring)"
+    lines.append(schedule)
+    lines.append("**Prompt**:")
+    lines.append("<cron-prompt>")
+    lines.append(cron["prompt"])
+    lines.append("</cron-prompt>")
     return "\n".join(lines)
+
+
+def _build_cron_descriptions(crons_data: list[dict], *, with_cron_ids: bool = False) -> str:
+    """Build the formatted block of cron descriptions separated by ---."""
+    parts = ["---\n"]
+    for cron in crons_data:
+        cron_id_to_delete = cron.get("cron_id") if with_cron_ids else None
+        parts.append(_format_cron_description(cron, cron_id_to_delete=cron_id_to_delete))
+        parts.append("\n---\n")
+    return "\n".join(parts)
+
+
+def _build_restart_message(crons_data: list[dict]) -> str:
+    """Build the user message asking Claude to recreate cron jobs at startup.
+
+    Used when the process is dead and crons need to be recreated from scratch.
+    No deletion needed since the CLI crons are already gone.
+    """
+    if len(crons_data) == 1:
+        header = (
+            "This session was just resumed, so we lost our previous cron job, "
+            "please recreate it using CronCreate:"
+        )
+    else:
+        header = (
+            "This session was just resumed, so we lost our previous cron jobs, "
+            "please recreate each of them using CronCreate:"
+        )
+
+    descriptions = _build_cron_descriptions(crons_data)
+
+    return (
+        f"<twicc-cron-restart>\n"
+        f"{header}\n\n{descriptions}\n\n"
+        f"Use the exact schedule and prompt shown above for each CronCreate call.\n\n"
+        f"Do not say anything other than a short sentence acknowledging the number of crons recreated.\n"
+        f"</twicc-cron-restart>"
+    )
+
+
+def _build_renewal_message(crons_data: list[dict]) -> str:
+    """Build the user message asking Claude to delete and recreate expired cron jobs.
+
+    Used when the process is alive but crons have reached their 3-day expiry.
+    The CLI may or may not have auto-deleted them yet, so we ask Claude to
+    delete them first (if they still exist) before recreating.
+
+    Each dict in crons_data must include a "cron_id" key with the CLI cron ID.
+    """
+    if len(crons_data) == 1:
+        header = (
+            "A cron job may have automatically expired. "
+            "Please delete it using CronDelete if it still exists, "
+            "then recreate it using CronCreate:"
+        )
+    else:
+        header = (
+            "The following cron jobs may have automatically expired. "
+            "For each one, delete it using CronDelete if it still exists, "
+            "then recreate it using CronCreate:"
+        )
+
+    descriptions = _build_cron_descriptions(crons_data, with_cron_ids=True)
+
+    return (
+        f"<twicc-cron-renewal>\n"
+        f"{header}\n\n{descriptions}\n\n"
+        f"Use the exact schedule and prompt shown above for each CronCreate call.\n\n"
+        f"Do not say anything other than a short sentence acknowledging the number of crons recreated.\n"
+        f"</twicc-cron-renewal>"
+    )

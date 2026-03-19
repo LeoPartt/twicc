@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
@@ -217,6 +218,26 @@ class ClaudeProcess:
         """The active pending request, if Claude is waiting for user input."""
         return self._pending_request
 
+    def get_expired_recurring_crons(self) -> list:
+        """Return recurring SessionCron instances whose CLI auto-delete has occurred.
+
+        Checks each recurring cron's expired_at (last_fire + jitter + margin) against
+        the current time. Non-recurring crons are excluded.
+
+        This is a synchronous method (DB access) — call via asyncio.to_thread.
+
+        Returns:
+            List of SessionCron instances that have expired.
+        """
+        from twicc.core.models import SessionCron
+
+        now = datetime.now(tz=timezone.utc)
+        expired = []
+        for cron in SessionCron.objects.filter(session_id=self.session_id, recurring=True):
+            if cron.expired_at is not None and now >= cron.expired_at:
+                expired.append(cron)
+        return expired
+
     async def _handle_cron_tool_event(self, input_data: dict) -> None:
         """Process a CronCreate or CronDelete PostToolUse event.
 
@@ -235,6 +256,8 @@ class ClaudeProcess:
         tool_input = input_data.get("tool_input", {})
         tool_response = input_data.get("tool_response")
 
+        logger.debug(f"CronCreate called with input = {tool_input} and response = {tool_response}")
+
         if tool_name == "CronCreate" and isinstance(tool_response, dict):
             job_id = tool_response.get("id")
             if not job_id:
@@ -245,14 +268,14 @@ class ClaudeProcess:
             prompt = tool_input.get("prompt", "")
 
             from datetime import datetime as dt, timezone as tz
-            from cronsim import CronSim
+            from twicc.core.models import cron_occurrences
 
             created_at = dt.now(tz=tz.utc)
 
             # Compute next fire time from the cron expression (always required)
             try:
-                it = CronSim(cron_expr, created_at)
-                next_fire = next(it).replace(tzinfo=tz.utc)
+                it = cron_occurrences(cron_expr, created_at)
+                next_fire = next(it)
             except Exception:
                 logger.warning(
                     "Failed to parse cron expression '%s' for session %s, skipping persistence",

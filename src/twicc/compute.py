@@ -65,6 +65,7 @@ VISIBLE_CONTENT_TYPES = ('text', 'document', 'image')
 # These are user messages that should be treated as debug-only
 _SYSTEM_XML_PREFIXES = (
     '<local-command-',
+    '<twicc-',
 )
 
 # Prefix for task notification XML (background agent results)
@@ -1058,8 +1059,10 @@ def _is_system_xml_content(content: str | list | None) -> bool:
     """
     Check if content is a system XML message (command invocation or output).
 
-    These are user messages containing only XML tags like:
-    - <local-command-stdout>...</local-command-stdout> (command outputs)
+    Matches user messages whose text starts with a system XML prefix
+    (e.g., <local-command-stdout>, <twicc-cron-restart>).
+
+    Handles both string content and list content with a single text entry.
 
     Args:
         content: Message content (string or list)
@@ -1067,10 +1070,17 @@ def _is_system_xml_content(content: str | list | None) -> bool:
     Returns:
         True if the content is a system XML message
     """
+    text = None
     if isinstance(content, str):
-        stripped = content.lstrip()
-        return any(stripped.startswith(prefix) for prefix in _SYSTEM_XML_PREFIXES)
-    return False
+        text = content
+    elif isinstance(content, list) and len(content) == 1:
+        item = content[0]
+        if isinstance(item, dict) and item.get('type') == 'text':
+            text = item.get('text')
+    if text is None:
+        return False
+    stripped = text.lstrip()
+    return any(stripped.startswith(prefix) for prefix in _SYSTEM_XML_PREFIXES)
 
 
 def _has_visible_content(content: str | list | None) -> bool:

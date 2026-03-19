@@ -106,6 +106,7 @@ class ProcessManager:
         self._lock = asyncio.Lock()
         self._broadcast_callback: BroadcastCallback | None = None
         self._timeout_monitor_task: asyncio.Task[None] | None = None
+        self._cron_expiry_monitor_task: asyncio.Task[None] | None = None
         self._stop_event: asyncio.Event | None = None
 
     def set_broadcast_callback(self, callback: BroadcastCallback) -> None:
@@ -453,6 +454,14 @@ class ProcessManager:
                 pass
             self._timeout_monitor_task = None
 
+        if self._cron_expiry_monitor_task is not None:
+            self._cron_expiry_monitor_task.cancel()
+            try:
+                await self._cron_expiry_monitor_task
+            except asyncio.CancelledError:
+                pass
+            self._cron_expiry_monitor_task = None
+
         async with self._lock:
             if not self._processes:
                 return
@@ -512,6 +521,14 @@ class ProcessManager:
         )
         logger.debug("Started process timeout monitor task")
 
+        # Start cron expiry monitor alongside timeout monitor
+        if self._cron_expiry_monitor_task is None or self._cron_expiry_monitor_task.done():
+            self._cron_expiry_monitor_task = asyncio.create_task(
+                self._run_cron_expiry_monitor(),
+                name="cron-expiry-monitor",
+            )
+            logger.debug("Started cron expiry monitor task")
+
     async def _run_timeout_monitor(self) -> None:
         """Background task that monitors process timeouts and auto-stops idle processes.
 
@@ -547,6 +564,104 @@ class ProcessManager:
                 pass
 
         logger.info("Process timeout monitor stopped")
+
+    CRON_EXPIRY_MONITOR_INTERVAL = 60  # Check every 60 seconds
+
+    async def _run_cron_expiry_monitor(self) -> None:
+        """Background task that detects recurring crons auto-deleted by the CLI after 3 days.
+
+        Runs every 60 seconds. For each active process, checks if any recurring crons
+        have passed their computed expiry time (last_fire + jitter + margin).
+        """
+        logger.info("Cron expiry monitor started")
+
+        while self._stop_event is not None and not self._stop_event.is_set():
+            try:
+                await self._check_expired_crons()
+            except Exception as e:
+                logger.error("Error in cron expiry monitor: %s", e, exc_info=True)
+
+            try:
+                await asyncio.wait_for(
+                    self._stop_event.wait(), timeout=self.CRON_EXPIRY_MONITOR_INTERVAL
+                )
+            except asyncio.TimeoutError:
+                pass
+
+        logger.info("Cron expiry monitor stopped")
+
+    async def _check_expired_crons(self) -> None:
+        """Check all active processes for expired recurring crons.
+
+        Only checks processes in USER_TURN state: this guarantees the last cron fire
+        has completed (Claude is no longer working on the cron's prompt).
+
+        When expired crons are found, they are deleted from the DB and a message is
+        sent to Claude asking it to recreate them via CronCreate. The new crons will
+        be persisted by the existing PostToolUse hooks.
+        """
+        from twicc.core.models import SessionCron
+        from twicc.cron_restart import _build_renewal_message
+
+        # Snapshot active processes (no lock needed — dict iteration is safe in asyncio)
+        processes = list(self._processes.values())
+
+        for process in processes:
+            if process.state != ProcessState.USER_TURN:
+                continue
+            try:
+                expired = await asyncio.to_thread(process.get_expired_recurring_crons)
+                if not expired:
+                    continue
+
+                logger.info(
+                    "Session %s has %d expired recurring cron(s): %s",
+                    process.session_id,
+                    len(expired),
+                    ", ".join(c.cron_id for c in expired),
+                )
+
+                # Build renewal message from expired crons data before deleting them.
+                # Includes cron_id so Claude can delete the old CLI crons first.
+                crons_data = [
+                    {
+                        "cron_id": c.cron_id,
+                        "cron_expr": c.cron_expr,
+                        "recurring": c.recurring,
+                        "prompt": c.prompt,
+                    }
+                    for c in expired
+                ]
+                message = _build_renewal_message(crons_data)
+
+                # Delete expired crons from DB (they're already dead in the CLI)
+                expired_ids = [c.pk for c in expired]
+                await asyncio.to_thread(
+                    lambda: SessionCron.objects.filter(pk__in=expired_ids).delete()
+                )
+                logger.info(
+                    "Deleted %d expired cron(s) from DB for session %s",
+                    len(expired_ids), process.session_id,
+                )
+
+                # Send message to Claude asking to recreate the crons
+                try:
+                    await process.send(message)
+                    logger.info(
+                        "Sent cron renewal message to session %s for %d cron(s)",
+                        process.session_id, len(crons_data),
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to send cron renewal message to session %s: %s",
+                        process.session_id, e,
+                    )
+
+            except Exception as e:
+                logger.error(
+                    "Error checking expired crons for session %s: %s",
+                    process.session_id, e,
+                )
 
     def touch_process_activity(self, session_id: str) -> bool:
         """Update last_activity timestamp for a process.

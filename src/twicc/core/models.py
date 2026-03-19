@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from functools import cached_property
 from typing import ClassVar, TypeAlias
 
 from django.db import models
@@ -11,6 +12,27 @@ from django.db.models import Q
 from twicc.core.enums import ItemKind
 
 logger = logging.getLogger(__name__)
+
+
+def cron_occurrences(cron_expr: str, from_dt: datetime):
+    """Iterate cron occurrences from a given datetime.
+
+    CronSim expects local time (cron expressions are in local time), so this function
+    converts the input datetime from UTC to local time before passing it to CronSim,
+    then converts each result back to UTC.
+
+    Args:
+        cron_expr: A 5-field cron expression (e.g., "0 9 * * *")
+        from_dt: Start datetime (UTC). Occurrences will be after this time.
+
+    Yields:
+        datetime objects in UTC for each cron occurrence.
+    """
+    from cronsim import CronSim
+
+    local_from = from_dt.astimezone()  # Convert UTC → local
+    for occurrence in CronSim(cron_expr, local_from):
+        yield occurrence.astimezone(timezone.utc)
 
 DateType: TypeAlias = date
 
@@ -835,6 +857,54 @@ class SessionCron(models.Model):
             "created_at": self.created_at.timestamp(),
             "next_fire": self.next_fire.timestamp(),
         }
+
+    JITTER_SAFETY_MARGIN = timedelta(minutes=1)
+    """Extra margin added after jitter to ensure the last fire has completed."""
+
+    @cached_property
+    def last_fire(self) -> datetime | None:
+        """The timestamp when the CLI will fire this cron for the last time before auto-deleting it.
+
+        Only meaningful for recurring crons. Returns the first cron occurrence that falls
+        at or after created_at + 3 days (CLAUDE_RECURRING_MAX_AGE). This is the fire that
+        triggers the CLI's age check and causes deletion.
+
+        Returns None for non-recurring crons or if the cron expression is unparseable.
+        """
+        if not self.recurring:
+            return None
+        deadline = self.created_at + self.CLAUDE_RECURRING_MAX_AGE
+        try:
+            for occurrence in cron_occurrences(self.cron_expr, self.created_at):
+                if occurrence >= deadline:
+                    return occurrence
+        except Exception:
+            pass
+        return None
+
+    @cached_property
+    def expired_at(self) -> datetime | None:
+        """Timestamp after which this recurring cron has certainly finished its last fire.
+
+        Computed as: last_fire + jitter_max + safety_margin.
+        The CLI adds a random jitter of 10% of the cron period (capped at 15 minutes)
+        to each fire. We add a safety margin on top.
+
+        Returns None for non-recurring crons or if last_fire cannot be computed.
+        """
+        if self.last_fire is None:
+            return None
+        # Compute period from two consecutive occurrences
+        try:
+            it = cron_occurrences(self.cron_expr, self.created_at)
+            first = next(it)
+            second = next(it)
+            period = second - first
+        except Exception:
+            # Can't compute period — use max jitter (15 min) as fallback
+            period = timedelta(hours=3)  # 10% of 3h = 18min > 15min cap → will use cap
+        jitter_max = min(period * 0.1, timedelta(minutes=15))
+        return self.last_fire + jitter_max + self.JITTER_SAFETY_MARGIN
 
     @classmethod
     def has_active_for_session(cls, session_id: str) -> bool:

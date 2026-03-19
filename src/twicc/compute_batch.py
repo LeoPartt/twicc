@@ -233,6 +233,16 @@ def analyze_content(parsed_json: dict) -> ContentAnalysis:
 
     if entry_type == 'user':
         # --- User message: tool_result info + visibility + text ---
+        # Check for system XML in list content (single text entry starting with a system prefix)
+        is_system_xml = False
+        if len(content) == 1:
+            only_item = content[0]
+            if isinstance(only_item, dict) and only_item.get('type') == 'text':
+                text_val = only_item.get('text')
+                if isinstance(text_val, str):
+                    stripped_xml = text_val.lstrip()
+                    is_system_xml = any(stripped_xml.startswith(prefix) for prefix in _SYSTEM_XML_PREFIXES)
+
         has_tool_result = False
         first_tool_result_id: str | None = None
         # Sentinel: ... means "first tool_result not found yet"
@@ -287,7 +297,7 @@ def analyze_content(parsed_json: dict) -> ContentAnalysis:
         return ContentAnalysis(
             has_visible_content=has_visible,
             text_content=text_content,
-            is_system_xml=False,
+            is_system_xml=is_system_xml,
             has_tool_result=has_tool_result,
             tool_result_id=first_tool_result_id,
             tool_result_error=tool_result_error,
