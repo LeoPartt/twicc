@@ -503,7 +503,11 @@ class ProcessManager:
         logger.debug("Started process timeout monitor task")
 
         # Start cron expiry monitor alongside timeout monitor
-        if self._cron_expiry_monitor_task is None or self._cron_expiry_monitor_task.done():
+        from django.conf import settings
+
+        if not settings.CRON_AUTO_RESTART:
+            logger.debug("Cron expiry monitor skipped (TWICC_NO_CRON_RESTART is set)")
+        elif self._cron_expiry_monitor_task is None or self._cron_expiry_monitor_task.done():
             self._cron_expiry_monitor_task = asyncio.create_task(
                 self._run_cron_expiry_monitor(),
                 name="cron-expiry-monitor",

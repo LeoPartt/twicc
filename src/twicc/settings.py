@@ -142,3 +142,8 @@ PROCESS_TIMEOUT_STARTING = 60  # 1 minute - process stuck during startup
 PROCESS_TIMEOUT_USER_TURN = 15 * 60  # 15 minutes - idle, waiting for user input
 PROCESS_TIMEOUT_ASSISTANT_TURN = 2 * 60 * 60  # 2 hours - no activity from Claude
 PROCESS_TIMEOUT_ASSISTANT_TURN_ABSOLUTE = 6 * 60 * 60  # 6 hours - max total duration for a turn
+
+# Cron auto-restart
+# Set TWICC_NO_CRON_RESTART=1 to disable automatic restart of cron jobs,
+# both at startup (for sessions with persisted crons) and when recurring crons expire.
+CRON_AUTO_RESTART = os.environ.get("TWICC_NO_CRON_RESTART", "").strip().lower() not in ("1", "true", "yes")

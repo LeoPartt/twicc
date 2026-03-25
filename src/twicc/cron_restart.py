@@ -24,6 +24,12 @@ async def restart_all_session_crons() -> None:
     3. Collect restart data for each remaining session with active crons
     4. Launch all restarts in parallel
     """
+    from django.conf import settings
+
+    if not settings.CRON_AUTO_RESTART:
+        logger.info("Cron auto-restart disabled (TWICC_NO_CRON_RESTART is set)")
+        return
+
     restarts = await asyncio.to_thread(_prepare_restarts)
 
     if not restarts:
