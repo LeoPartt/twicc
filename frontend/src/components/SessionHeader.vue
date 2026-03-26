@@ -269,7 +269,7 @@ defineExpose({
             <div class="session-title-actions">
                 <wa-tag v-if="session.archived" :id="`session-header-${sessionId}-archived-tag`" size="small" variant="neutral" class="archived-tag" @click="handleUnarchive">Archived</wa-tag>
                 <AppTooltip v-if="session.archived" :for="`session-header-${sessionId}-archived-tag`">Click to unarchive</AppTooltip>
-                <wa-tag v-else-if="session.draft" size="small" variant="warning" class="draft-tag">Draft</wa-tag>
+                <wa-tag v-else-if="session.draft && !processState" size="small" variant="warning" class="draft-tag">Draft</wa-tag>
                 <wa-tag v-if="session.stale" :id="`session-header-${sessionId}-stale-tag`" size="small" variant="warning" class="stale-tag">Stale</wa-tag>
                 <AppTooltip v-if="session.stale" :for="`session-header-${sessionId}-stale-tag`">Session files were deleted from disk</AppTooltip>
 

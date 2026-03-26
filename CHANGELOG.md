@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Replace Monaco Editor with CodeMirror 6 for code viewing, editing, and diffs — adds mobile support
 - Bump `claude-agent-sdk` from 0.1.48 to 0.1.50 (bundled Claude Code CLI: 2.1.71 → 2.1.81)
 
+### Fixed
+
+- Draft badge now really disappears immediately when sending a message
+
 ## [1.2.1] - 2026-03-20
 
 ### Fixed

@@ -264,7 +264,7 @@ function handleMenuSelect(event) {
                 <AppTooltip v-if="compactView && showProjectName" :for="`compact-project-dot-${session.id}`">{{ store.getProjectDisplayName(session.project_id) }}</AppTooltip>
                 <wa-icon v-if="session.pinned" name="thumbtack" class="pinned-icon"></wa-icon>
                 <wa-tag v-if="session.archived" size="small" variant="neutral" class="archived-tag">Arch.</wa-tag>
-                <wa-tag v-else-if="session.draft" size="small" variant="warning" class="draft-tag">Draft</wa-tag>
+                <wa-tag v-else-if="session.draft && !processState" size="small" variant="warning" class="draft-tag">Draft</wa-tag>
                 <span class="session-name">{{ getSessionDisplayName(session) }}</span>
                 <!-- Compact mode: unread indicator (highest priority) -->
                 <wa-icon
@@ -284,7 +284,7 @@ function handleMenuSelect(event) {
                 <AppTooltip v-if="compactView && !hasUnread && pendingRequest" :for="`compact-pending-request-${session.id}`">Waiting for your response</AppTooltip>
                 <!-- Compact mode: process indicator (hidden when unread or pending request is shown) -->
                 <ProcessIndicator
-                    v-if="compactView && !session.draft && processState && !hasUnread && !pendingRequest"
+                    v-if="compactView && processState && !hasUnread && !pendingRequest"
                     :id="`compact-process-indicator-${session.id}`"
                     :state="processState.state"
                     :has-active-crons="hasActiveCrons"
@@ -292,7 +292,7 @@ function handleMenuSelect(event) {
                     :animate-states="animateStates"
                     class="compact-process-indicator"
                 />
-                <AppTooltip v-if="compactView && !session.draft && processState && !hasUnread && !pendingRequest" :for="`compact-process-indicator-${session.id}`">Claude Code state: {{ PROCESS_STATE_NAMES[processState.state] }}<template v-if="activeCronCount"> ({{ activeCronCount }} active cron{{ activeCronCount > 1 ? 's' : '' }})</template></AppTooltip>
+                <AppTooltip v-if="compactView && processState && !hasUnread && !pendingRequest" :for="`compact-process-indicator-${session.id}`">Claude Code state: {{ PROCESS_STATE_NAMES[processState.state] }}<template v-if="activeCronCount"> ({{ activeCronCount }} active cron{{ activeCronCount > 1 ? 's' : '' }})</template></AppTooltip>
             </div>
             <!-- Project badge line (hidden in compact mode, dot is shown inline instead) -->
             <!-- When unread + no process: show unread indicator on the project line (right-aligned) -->
@@ -306,9 +306,9 @@ function handleMenuSelect(event) {
                 ></wa-icon>
                 <AppTooltip v-if="hasUnread && !processState" :for="`standalone-unread-${session.id}`">New content to read</AppTooltip>
             </div>
-            <!-- Process info row (only shown when process is active and not draft, hidden in compact mode) -->
+            <!-- Process info row (only shown when process is active, hidden in compact mode) -->
             <div
-                v-if="!compactView && !session.draft && processState"
+                v-if="!compactView && processState"
                 class="process-info"
                 :style="{ color: getProcessColor(processState.state) }"
             >
