@@ -466,7 +466,11 @@ const currentSessionArchived = computed(() => {
 let sessionConfirmedNonArchived = false
 
 watch(sessionId, () => {
-    sessionConfirmedNonArchived = false
+    // When navigating between two non-archived sessions in the same project,
+    // currentSessionArchived stays false (no value change), so its watcher
+    // won't fire to re-confirm the flag. We must check immediately here.
+    const archived = currentSessionArchived.value
+    sessionConfirmedNonArchived = archived === false
 })
 
 watch(currentSessionArchived, (archived) => {
