@@ -472,10 +472,18 @@ function handleNeedsTitle() {
         const unwatch = watch(
             () => ({
                 suggestion: store.getTitleSuggestion(sid),
+                suggestionEntry: store.getTitleSuggestionEntry(sid),
                 session: store.getSession(sid),
             }),
-            ({ suggestion, session }) => {
+            ({ suggestion, suggestionEntry, session }) => {
                 if (!session) return
+
+                // Generation definitively failed (response received but no suggestion
+                // after all backend retries) — stop watching, leave session untitled.
+                if (suggestionEntry && !suggestion) {
+                    unwatch()
+                    return
+                }
 
                 // Capture the title from the first valid suggestion
                 if (suggestion && !pendingTitle) {

@@ -47,11 +47,13 @@ watch(
     { immediate: true }
 )
 
-// Watch for suggestion arrival
+// Watch for suggestion response arrival (success or failure).
+// We watch the full entry (not just the suggestion value) so the spinner
+// stops even when all backend retries failed and suggestion is null.
 watch(
-    () => props.session && store.getTitleSuggestion(props.session.id),
-    (newSuggestion) => {
-        if (newSuggestion && isLoadingSuggestion.value) {
+    () => props.session ? store.getTitleSuggestionEntry(props.session.id) : null,
+    (entry) => {
+        if (entry && isLoadingSuggestion.value) {
             isLoadingSuggestion.value = false
         }
     }

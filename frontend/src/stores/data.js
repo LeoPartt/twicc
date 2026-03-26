@@ -456,6 +456,10 @@ export const useDataStore = defineStore('data', {
         getTitleSuggestion: (state) => (sessionId) =>
             state.localState.titleSuggestions[sessionId]?.suggestion || null,
 
+        // Get the full title suggestion entry (to distinguish "no response yet" from "failed")
+        getTitleSuggestionEntry: (state) => (sessionId) =>
+            state.localState.titleSuggestions[sessionId] || null,
+
         // Get the source prompt used for a suggestion (for draft invalidation)
         getTitleSuggestionSourcePrompt: (state) => (sessionId) =>
             state.localState.titleSuggestions[sessionId]?.sourcePrompt || null,
@@ -2326,13 +2330,11 @@ export const useDataStore = defineStore('data', {
          */
         handleTitleSuggested(data) {
             const { sessionId, suggestion, sourcePrompt } = data
-            // Always store sourcePrompt for regeneration capability
-            // Store suggestion only if we got one
-            if (sourcePrompt) {
-                this.localState.titleSuggestions[sessionId] = {
-                    suggestion: suggestion || null,
-                    sourcePrompt
-                }
+            // Always store the response so the frontend knows the request completed
+            // (distinguishes "no response yet" from "response received with failure")
+            this.localState.titleSuggestions[sessionId] = {
+                suggestion: suggestion || null,
+                sourcePrompt: sourcePrompt || null,
             }
         },
 
