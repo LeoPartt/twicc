@@ -12,7 +12,7 @@ import { useDataStore } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
 import { formatDate } from '../utils/date'
 import { PROCESS_STATE, PROCESS_STATE_COLORS, PROCESS_STATE_NAMES, SESSION_TIME_FORMAT } from '../constants'
-import { killProcess } from '../composables/useWebSocket'
+import { killProcess, markSessionReadState } from '../composables/useWebSocket'
 import ProjectBadge from './ProjectBadge.vue'
 import ProcessIndicator from './ProcessIndicator.vue'
 import ProcessDuration from './ProcessDuration.vue'
@@ -81,6 +81,16 @@ const hasUnread = computed(() => {
     if (session.draft || !session.last_new_content_at) return false
     if (session.last_viewed_at && session.last_new_content_at <= session.last_viewed_at) return false
     // If process is running, only show unread when in user_turn
+    if (processState.value && processState.value.state !== PROCESS_STATE.USER_TURN) return false
+    return true
+})
+
+/**
+ * Whether the mark as read/unread menu items should be shown.
+ * Hidden when: active session, draft, or process running but not in user_turn.
+ */
+const canToggleReadState = computed(() => {
+    if (props.active || props.session.draft) return false
     if (processState.value && processState.value.state !== PROCESS_STATE.USER_TURN) return false
     return true
 })
@@ -215,6 +225,10 @@ function handleMenuSelect(event) {
         store.setSessionPinned(session.project_id, session.id, true)
     } else if (action === 'unpin') {
         store.setSessionPinned(session.project_id, session.id, false)
+    } else if (action === 'mark-unread') {
+        markSessionReadState(session.id, true)
+    } else if (action === 'mark-read') {
+        markSessionReadState(session.id, false)
     }
 }
 </script>
@@ -387,6 +401,14 @@ function handleMenuSelect(event) {
             <wa-dropdown-item v-if="session.pinned" value="unpin">
                 <wa-icon slot="icon" name="thumbtack" class="unpinned-menu-icon"></wa-icon>
                 Unpin
+            </wa-dropdown-item>
+            <wa-dropdown-item v-if="canToggleReadState && hasUnread" value="mark-read">
+                <wa-icon slot="icon" name="eye-slash"></wa-icon>
+                Mark as read
+            </wa-dropdown-item>
+            <wa-dropdown-item v-if="canToggleReadState && !hasUnread" value="mark-unread">
+                <wa-icon slot="icon" name="eye"></wa-icon>
+                Mark as unread
             </wa-dropdown-item>
             <wa-dropdown-item v-if="!session.draft && !session.archived" value="archive">
                 <wa-icon slot="icon" name="box-archive"></wa-icon>

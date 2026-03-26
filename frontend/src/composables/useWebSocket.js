@@ -186,6 +186,24 @@ export function forceNotifySessionViewed(sessionId) {
 }
 
 /**
+ * Mark a session as read or unread.
+ * Mark as read: sets last_viewed_at = now.
+ * Mark as unread: sets last_new_content_at = now, clears last_viewed_at.
+ * The backend broadcasts session_updated to all clients after the change.
+ * @param {string} sessionId - The session ID
+ * @param {boolean} unread - True to mark as unread, false to mark as read
+ * @returns {boolean} - True if message was sent, false if not connected
+ */
+export function markSessionReadState(sessionId, unread) {
+    if (!sessionId) return false
+    return sendWsMessage({
+        type: 'mark_session_read_state',
+        session_id: sessionId,
+        unread,
+    })
+}
+
+/**
  * Send synced settings to the backend for persistence in settings.json.
  * The backend will broadcast the updated settings to all connected clients.
  * @param {Object} settings - The synced settings key-value pairs

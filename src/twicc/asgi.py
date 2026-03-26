@@ -549,6 +549,7 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         - suggest_title: request a title suggestion for a session
         - update_synced_settings: update synced settings and broadcast to all clients
         - session_viewed: mark a session as viewed by the user (updates last_viewed_at)
+        - mark_session_read_state: explicitly mark a session as read or unread
         """
         msg_type = content.get("type")
 
@@ -575,6 +576,9 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
         elif msg_type == "session_viewed":
             await self._handle_session_viewed(content)
+
+        elif msg_type == "mark_session_read_state":
+            await self._handle_mark_session_read_state(content)
 
     async def send_json(self, content, close=False):
         try:
@@ -1023,6 +1027,65 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         rows = await sync_to_async(
             Session.objects.filter(id=session_id).update
         )(last_viewed_at=timezone.now())
+        if not rows:
+            return
+
+        session = await sync_to_async(Session.objects.filter(id=session_id).first)()
+        if session:
+            await self.channel_layer.group_send(
+                "updates",
+                {
+                    "type": "broadcast",
+                    "data": {
+                        "type": "session_updated",
+                        "session": serialize_session(session),
+                    },
+                },
+            )
+
+    async def _handle_mark_session_read_state(self, content: dict) -> None:
+        """Handle mark_session_read_state request from client.
+
+        Expected content format:
+        {
+            "type": "mark_session_read_state",
+            "session_id": "claude-conv-xxx",
+            "unread": true/false
+        }
+
+        Mark as read: sets last_viewed_at = now().
+        Mark as unread: clears last_viewed_at. If last_new_content_at is null
+        (old sessions without backfill), sets it to now() so the unread
+        comparison works.
+        """
+        session_id = content.get("session_id")
+        unread = content.get("unread")
+        if not session_id or unread is None:
+            return
+
+        from django.utils import timezone
+
+        from twicc.core.models import Session
+        from twicc.core.serializers import serialize_session
+
+        from django.db.models import Case, F, Value, When
+
+        now = timezone.now()
+        if unread:
+            # Clear last_viewed_at; only set last_new_content_at if it was null
+            rows = await sync_to_async(
+                Session.objects.filter(id=session_id).update
+            )(
+                last_viewed_at=None,
+                last_new_content_at=Case(
+                    When(last_new_content_at__isnull=True, then=Value(now)),
+                    default=F('last_new_content_at'),
+                ),
+            )
+        else:
+            rows = await sync_to_async(
+                Session.objects.filter(id=session_id).update
+            )(last_viewed_at=now)
         if not rows:
             return
 
