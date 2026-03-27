@@ -1158,8 +1158,27 @@ function handleSearchNavigate(lineNum) {
 }
 
 // Expose methods for parent components
+/**
+ * Process externally forwarded drop data (from drag-hover on tabs or session list).
+ * Accepts pre-extracted files and text since dataTransfer is only available
+ * synchronously in the original drop event handler.
+ * @param {{ files: File[], text: string|null }} data
+ */
+async function handleForwardedDrop({ files, text }) {
+    if (files && files.length > 0) {
+        for (const file of files) {
+            await processDroppedFile(file)
+        }
+    } else if (text) {
+        if (messageInputRef.value) {
+            messageInputRef.value.insertTextAtCursor(text)
+        }
+    }
+}
+
 defineExpose({
-    getScrollerElement
+    getScrollerElement,
+    handleForwardedDrop,
 })
 </script>
 

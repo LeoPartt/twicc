@@ -129,7 +129,10 @@ const toastTheme = computed(() => {
     <ConnectionIndicator v-if="!isLoginPage && !isConnecting" :status="wsStatus" />
     <CommandPalette ref="commandPaletteRef" />
     <SearchOverlay ref="searchOverlayRef" />
-    <div class="app-container">
+    <!-- Prevent browser default drop behavior (e.g. navigating to a dropped image).
+         Our specific drop handlers in SessionItemsList call preventDefault themselves;
+         this catches any drops that miss those zones. -->
+    <div class="app-container" @dragover.prevent @drop.prevent>
         <router-view />
     </div>
 
@@ -304,6 +307,19 @@ body .Notivue__content-title {
     border-bottom: 1px solid var(--nv-accent, var(--nv-global-accent));
     padding-bottom: var(--nv-spacing);
     margin-bottom: var(--nv-spacing);
+}
+
+/* Floating drag-hover indicator (spring-loaded folder pattern) */
+.drag-hover-indicator {
+    position: fixed;
+    z-index: 10000;
+    pointer-events: none;
+    left: calc(var(--x) * 1px + 16px);
+    top: calc(var(--y) * 1px - 16px);
+    --size: 20px;
+    --track-width: 2.5px;
+    --indicator-color: var(--wa-color-success);
+    --indicator-transition-duration: 0s;
 }
 
 </style>

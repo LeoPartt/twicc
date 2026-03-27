@@ -13,6 +13,7 @@ import { useSettingsStore } from '../stores/settings'
 import { formatDate } from '../utils/date'
 import { PROCESS_STATE, PROCESS_STATE_COLORS, PROCESS_STATE_NAMES, SESSION_TIME_FORMAT } from '../constants'
 import { killProcess, markSessionReadState, cancelSessionViewedThrottle } from '../composables/useWebSocket'
+import { useDragHover } from '../composables/useDragHover'
 import ProjectBadge from './ProjectBadge.vue'
 import ProcessIndicator from './ProcessIndicator.vue'
 import ProcessDuration from './ProcessDuration.vue'
@@ -42,7 +43,25 @@ const props = defineProps({
     }
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'drop-data'])
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Drag-hover: spring-loaded session switching (hover 1s while dragging to switch)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const { onDragenter, onDragleave, onDragover, onDrop, isPending: isDragPending, cancel: cancelDragHover } = useDragHover({
+    onActivate: () => emit('select', props.session),
+    shouldActivate: () => !props.active,
+    onDropData: (data) => {
+        // onActivate already navigated to this session — just forward the drop data
+        emit('drop-data', { session: props.session, ...data })
+    },
+})
+
+// Cancel pending drag timer when the virtual scroller recycles this component for a different session
+watch(() => props.session.id, () => {
+    cancelDragHover()
+})
 
 const store = useDataStore()
 const settingsStore = useSettingsStore()
@@ -252,8 +271,13 @@ function handleMenuSelect(event) {
         :class="{
             'session-item-wrapper--active': active,
             'session-item-wrapper--highlighted': highlighted,
-            'session-item-wrapper--compact': compactView
+            'session-item-wrapper--compact': compactView,
+            'session-item-wrapper--drag-pending': isDragPending
         }"
+        @dragenter="onDragenter"
+        @dragleave="onDragleave"
+        @dragover="onDragover"
+        @drop="onDrop"
     >
         <wa-button
             :id="`session-button-${session.id}`"
@@ -453,6 +477,7 @@ function handleMenuSelect(event) {
     position: relative;
     width: 100%;
 }
+
 
 .session-item {
     width: 100%;

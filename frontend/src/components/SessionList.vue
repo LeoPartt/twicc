@@ -232,10 +232,14 @@ function scrollToSession(targetSessionId, attempt = 0) {
     scrollerRef.value.scrollToKey(targetSessionId, { align: 'center' })
 }
 
-const emit = defineEmits(['select', 'focus-search'])
+const emit = defineEmits(['select', 'drop-data', 'focus-search'])
 
 function handleSelect(session) {
     emit('select', session)
+}
+
+function handleDropData(data) {
+    emit('drop-data', data)
 }
 
 /**
@@ -472,6 +476,7 @@ defineExpose({
                     :compact-view="compactView"
                     :show-project-name="showProjectName"
                     @select="handleSelect"
+                    @drop-data="handleDropData"
                 />
             </template>
         </VirtualScroller>

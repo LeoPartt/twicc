@@ -60,6 +60,23 @@ const slashMirroredLength = ref(0)     // length of filter text mirrored into te
 const attachments = computed(() => store.getAttachments(props.sessionId))
 const attachmentCount = computed(() => store.getAttachmentCount(props.sessionId))
 
+// Temporary tooltip shown when new files are attached
+const attachTooltipText = ref('')
+const showAttachTooltip = ref(false)
+let attachTooltipTimer = null
+
+watch(attachmentCount, (newCount, oldCount) => {
+    if (newCount > oldCount) {
+        const added = newCount - oldCount
+        clearTimeout(attachTooltipTimer)
+        attachTooltipText.value = `${added} file${added > 1 ? 's' : ''} attached`
+        showAttachTooltip.value = true
+        attachTooltipTimer = setTimeout(() => {
+            showAttachTooltip.value = false
+        }, 2000)
+    }
+})
+
 // Convert DraftMedia objects to normalized MediaItem format for the thumbnail group
 const mediaItems = computed(() => attachments.value.map(a => draftMediaToMediaItem(a)))
 
@@ -1146,6 +1163,13 @@ defineExpose({ insertTextAtCursor })
                         <wa-badge variant="primary" pill>{{ attachmentCount }}</wa-badge>
                     </button>
                     <AppTooltip :for="`attachments-popover-trigger-${sessionId}`">{{ attachmentCount }} file{{ attachmentCount > 1 ? 's' : '' }} attached</AppTooltip>
+                    <!-- Temporary tooltip shown when new files are attached -->
+                    <wa-tooltip
+                        :for="`attachments-popover-trigger-${sessionId}`"
+                        trigger="manual"
+                        placement="top"
+                        :open="showAttachTooltip || undefined"
+                    >{{ attachTooltipText }}</wa-tooltip>
                     <wa-popover
                         :for="`attachments-popover-trigger-${sessionId}`"
                         placement="top"

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch, onMounted, onUnmounted, onBeforeUnmount, provide } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted, onBeforeUnmount, provide, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDataStore, ALL_PROJECTS_ID } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
@@ -148,6 +148,11 @@ function openRenameDialog(session, options = {}) {
 }
 
 provide('openRenameDialog', openRenameDialog)
+
+// Pending drop data: set when files/text are dropped on a session list item.
+// SessionView watches this and forwards to SessionItemsList once mounted.
+const pendingDropData = ref(null)
+provide('pendingDropData', pendingDropData)
 
 // Current project from route params
 const projectId = computed(() => route.params.projectId)
@@ -335,6 +340,16 @@ function handleSessionSelect(session) {
             params: { projectId: projectId.value, sessionId: session.id }
         })
     }
+}
+
+/**
+ * Handle files/text dropped on a session list item via drag-hover.
+ * Navigates to the session and stores the drop data for SessionView to process.
+ */
+function handleDropOnSession({ session, files, text }) {
+    // Session is already active (onActivate navigated to it before the drop).
+    // Just store the drop data — SessionView will pick it up.
+    pendingDropData.value = { sessionId: session.id, files, text }
 }
 
 // Navigate back to home
@@ -829,6 +844,7 @@ function updateSidebarClosedClass(closed) {
                     :show-archived-projects="showArchivedProjects"
                     :compact-view="compactView"
                     @select="handleSessionSelect"
+                    @drop-data="handleDropOnSession"
                     @focus-search="focusSearchInput"
                 />
 

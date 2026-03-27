@@ -1,10 +1,11 @@
 <script setup>
-import { computed, watch, ref, readonly, provide, onActivated, onDeactivated, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { computed, watch, ref, readonly, provide, inject, onActivated, onDeactivated, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDataStore } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
 import { useCommandRegistry } from '../composables/useCommandRegistry'
 import { killProcess, requestTitleSuggestion, notifySessionViewed, forceNotifySessionViewed } from '../composables/useWebSocket'
+import { useDragHover } from '../composables/useDragHover'
 import { PROCESS_STATE } from '../constants'
 import SessionHeader from '../components/SessionHeader.vue'
 import SessionItemsList from '../components/SessionItemsList.vue'
@@ -99,6 +100,9 @@ onDeactivated(() => {
 
     // Unregister contextual session commands from the command palette
     unregisterCommands(SESSION_COMMAND_IDS)
+
+    // Cancel any pending drag-hover timer
+    chatTabDragHover.cancel()
 })
 
 provide('sessionActive', readonly(isActive))
@@ -288,6 +292,41 @@ function switchToTabAndCollapse(panel) {
         sessionHeaderRef.value.isCompactExpanded = false
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Drag-hover: spring-loaded tab switching (hover 1s while dragging to switch)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Drag-hover on the Chat tab: switches to it when dragging files/text over it for 1 second.
+// If files/text are dropped directly on the tab, forward to SessionItemsList for processing.
+const chatTabDragHover = useDragHover({
+    onActivate: () => switchToTab('main'),
+    shouldActivate: () => activeTabId.value !== 'main',
+    onDropData: (data) => {
+        // Ensure we're on the Chat tab before forwarding
+        if (activeTabId.value !== 'main') {
+            switchToTab('main')
+        }
+        nextTick(() => {
+            sessionItemsListRef.value?.handleForwardedDrop(data)
+        })
+    },
+})
+
+// Pick up pending drop data from ProjectView (when files/text were dropped on a session list item).
+const pendingDropData = inject('pendingDropData', ref(null))
+watch(pendingDropData, (data) => {
+    if (!data || data.sessionId !== sessionId.value) return
+    // Consume the pending data
+    pendingDropData.value = null
+    // Ensure we're on the Chat tab
+    if (activeTabId.value !== 'main') {
+        switchToTab('main')
+    }
+    nextTick(() => {
+        sessionItemsListRef.value?.handleForwardedDrop(data)
+    })
+})
 
 /**
  * Handle tab change event from wa-tab-group.
@@ -637,6 +676,7 @@ function registerSessionCommands() {
 
 onBeforeUnmount(() => {
     unregisterCommands(SESSION_COMMAND_IDS)
+    chatTabDragHover.cancel()
 })
 </script>
 
@@ -673,6 +713,11 @@ onBeforeUnmount(() => {
                             :variant="activeTabId === 'main' ? 'brand' : 'neutral'"
                             size="small"
                             @click="switchToTabAndCollapse('main')"
+                            @dragenter="chatTabDragHover.onDragenter"
+                            @dragleave="chatTabDragHover.onDragleave"
+                            @dragover="chatTabDragHover.onDragover"
+                            @drop="chatTabDragHover.onDrop"
+                            :class="{ 'drag-hover-pending': chatTabDragHover.isPending.value }"
                         >
                             Chat
                             <wa-icon
@@ -745,7 +790,13 @@ onBeforeUnmount(() => {
             class="session-tabs"
         >
             <!-- Tab navigation -->
-            <wa-tab slot="nav" panel="main">
+            <wa-tab slot="nav" panel="main"
+                @dragenter="chatTabDragHover.onDragenter"
+                @dragleave="chatTabDragHover.onDragleave"
+                @dragover="chatTabDragHover.onDragover"
+                @drop="chatTabDragHover.onDrop"
+                :class="{ 'drag-hover-pending': chatTabDragHover.isPending.value }"
+            >
                 <wa-button
                     :appearance="activeTabId === 'main' ? 'outlined' : 'plain'"
                     :variant="activeTabId === 'main' ? 'brand' : 'neutral'"
@@ -976,6 +1027,7 @@ wa-tab::part(base) {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.3; }
 }
+
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Empty state
