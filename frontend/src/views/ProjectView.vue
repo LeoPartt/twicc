@@ -623,6 +623,11 @@ function handleSplitReposition(event) {
     const checkbox = document.getElementById('sidebar-toggle-state')
     if (!checkbox) return
 
+    // Desktop: checkbox checked = sidebar closed. Ignore reposition events when closed —
+    // the sidebar is hidden via CSS (grid-template-columns: 0), so any events are
+    // spurious layout recalculations (e.g. initial mount, KeepAlive reactivation).
+    if (checkbox.checked) return
+
     const newWidth = event.target.positionInPixels
 
     // Ignore null/NaN positions emitted during KeepAlive transitions.
