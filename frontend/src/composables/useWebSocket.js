@@ -293,7 +293,7 @@ function notifyProcessStateChange(msg, previousState, route) {
                 title: 'Claude finished working',
                 duration: 15000,
                 autoDismiss: true,
-                showMarkRead: true,
+                showActions: true,
             })
         }
         // Sound notification

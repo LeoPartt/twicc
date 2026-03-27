@@ -188,7 +188,7 @@ function session(sessionId, options = {}) {
             sessionId,
             ...(options.errorMessage ? { errorMessage: options.errorMessage } : {}),
             ...(options.autoDismiss ? { autoDismiss: true } : {}),
-            ...(options.showMarkRead ? { showMarkRead: true } : {}),
+            ...(options.showActions ? { showActions: true } : {}),
         },
     })
 }

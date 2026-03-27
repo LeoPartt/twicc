@@ -32,8 +32,8 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
-    /** When true, show a "Mark as read" button alongside "Go to session" */
-    showMarkRead: {
+    /** When true, show action buttons (Archive, Mark as read) alongside "Go to session" */
+    showActions: {
         type: Boolean,
         default: false,
     },
@@ -88,6 +88,15 @@ onUnmounted(() => {
     }
 })
 
+/** Archive the session and dismiss the toast. */
+function archiveSession() {
+    const s = session.value
+    if (s) {
+        store.setSessionArchived(s.project_id, s.id, true)
+    }
+    props.item?.clear?.()
+}
+
 /** Mark the session as read and dismiss the toast. */
 function markRead() {
     markSessionReadState(props.sessionId, false)
@@ -131,7 +140,8 @@ function goToSession() {
         </span>
         <span v-if="errorMessage" class="session-toast-error">{{ errorMessage }}</span>
         <div v-if="!isCurrentSession" class="session-toast-actions">
-            <wa-button v-if="showMarkRead" size="small" variant="brand" appearance="outlined" @click="markRead">Mark as read</wa-button>
+            <wa-button v-if="showActions" size="small" variant="brand" appearance="outlined" @click="archiveSession">Archive</wa-button>
+            <wa-button v-if="showActions" size="small" variant="brand" appearance="outlined" @click="markRead">Mark as read</wa-button>
             <wa-button size="small" variant="brand" appearance="outlined" @click="goToSession">Go to session</wa-button>
         </div>
     </div>
