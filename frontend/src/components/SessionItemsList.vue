@@ -233,6 +233,10 @@ onDeactivated(() => {
 
     // Clear pending scroll — KeepAlive deactivation takes over via handlePostResume
     pendingScrollToBottom = null
+
+    // If the initial scroll was deferred (scroller hidden on first load), reset the flag
+    // so the scroller isn't left permanently invisible after reactivation.
+    isInitialScrolling.value = false
 })
 
 // On reactivation: handle scroll restoration after KeepAlive reattaches the DOM.
