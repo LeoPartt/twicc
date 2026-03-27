@@ -157,10 +157,16 @@ export const useDataStore = defineStore('data', {
             // Only caches found agents (not-found triggers polling, not caching)
             agentLinks: {},
 
-            // Tool states - maps tool_use_id to { resultCount, completedAt, error, extra?, live }
-            // { sessionId: { toolUseId: { resultCount, completedAt, error, extra?, live } } }
+            // Tool states - maps tool_use_id to { resultCount, completedAt, error, extra }
+            // { sessionId: { toolUseId: { resultCount, completedAt, error, extra } } }
             // Populated by fetchToolStates on session load and WS tool_state
             toolStates: {},
+
+            // Live tool state flags - tracks which tool_use_ids received state via WebSocket.
+            // { sessionId: Set<toolUseId> }
+            // Stored separately from toolStates so they survive fetchToolStates() replacement
+            // (reconnection, first visit). Used by auto-open live edit diffs feature.
+            liveToolStates: {},
 
             // Open wa-details state - persists open/close across virtual scroller mount/unmount.
             // { sessionId: { key: true, ... } }
@@ -436,11 +442,16 @@ export const useDataStore = defineStore('data', {
         },
 
         // Get tool state for a tool_use_id in a session
-        // Returns: { resultCount, completedAt } or null
+        // Returns: { resultCount, completedAt, error, extra, toolResultLineNum } or null
         getToolState: (state) => (sessionId, toolUseId) => {
             const sessionStates = state.localState.toolStates[sessionId]
             if (!sessionStates) return null
             return sessionStates[toolUseId] || null
+        },
+
+        // Check if a tool state was received via WebSocket (live)
+        isToolStateLive: (state) => (sessionId, toolUseId) => {
+            return !!state.localState.liveToolStates[sessionId]?.has(toolUseId)
         },
 
         // Check if a wa-details panel is open (persisted across virtual scroller cycles)
@@ -1133,6 +1144,7 @@ export const useDataStore = defineStore('data', {
             delete this.localState.optimisticMessages[sessionId]
             delete this.localState.agentLinks[sessionId]
             delete this.localState.toolStates[sessionId]
+            delete this.localState.liveToolStates[sessionId]
             delete this.localState.openDetails[sessionId]
             // Remove synthetic process state if this is a subagent
             if (this.processStates[sessionId]?.synthetic) {
@@ -1712,13 +1724,24 @@ export const useDataStore = defineStore('data', {
          * @param {string} toolUseId - The tool_use_id
          * @param {number} resultCount - The number of tool_results received
          * @param {string|null} completedAt - ISO timestamp of the latest tool_result
-         * @param {boolean} live - Whether this state arrived via WebSocket (live) vs API (historical)
+         * @param {string|null} error - Error message if the tool errored
+         * @param {string|null} extra - Extra JSON data (e.g., file change stats)
+         * @param {boolean} live - Whether this state arrived via WebSocket (live) vs API (historical).
+         *   Tracked separately in liveToolStates so it survives fetchToolStates() replacement.
+         * @param {number|null} toolResultLineNum - Line number of the tool_result item
          */
         setToolState(sessionId, toolUseId, resultCount, completedAt, error = null, extra = null, live = false, toolResultLineNum = null) {
             if (!this.localState.toolStates[sessionId]) {
                 this.localState.toolStates[sessionId] = {}
             }
-            this.localState.toolStates[sessionId][toolUseId] = { resultCount, completedAt, error, extra, live, toolResultLineNum }
+            this.localState.toolStates[sessionId][toolUseId] = { resultCount, completedAt, error, extra, toolResultLineNum }
+            // Track live flag separately so it survives fetchToolStates() replacement
+            if (live) {
+                if (!this.localState.liveToolStates[sessionId]) {
+                    this.localState.liveToolStates[sessionId] = new Set()
+                }
+                this.localState.liveToolStates[sessionId].add(toolUseId)
+            }
         },
 
         /**

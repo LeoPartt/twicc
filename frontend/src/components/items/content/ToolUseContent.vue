@@ -563,19 +563,24 @@ const showResultDetails = computed(() => {
 })
 
 // --- Auto-open Edit/Write details for live diffs when setting is enabled ---
-// Only auto-opens diffs that arrive in real-time via WebSocket (live), not
-// historical diffs loaded from the API when opening/scrolling a session.
+// Only auto-opens diffs that arrived via WebSocket (live), not historical diffs
+// loaded from the API when opening/scrolling a session. The live flag is stored
+// separately in the store (liveToolStates) so it survives fetchToolStates() calls.
+const isLive = computed(() => dataStore.isToolStateLive(props.sessionId, props.toolId))
+
 const shouldAutoOpen = computed(() => {
     if (!settingsStore.showDiffs) return false
     if (isToolError.value) return false
     if (!toolState.value?.completedAt) return false
-    if (!toolState.value?.live) return false
+    if (!isLive.value) return false
     return editValid.value || writeValid.value
 })
 
 // Guard: auto-open at most once per component instance
 let hasAutoOpened = false
 
+// immediate: true ensures auto-open fires on fresh mount (e.g., after virtual
+// scroller recycles components when returning to a KeepAlive-cached session).
 watch(shouldAutoOpen, (val) => {
     if (val && !hasAutoOpened && !isOpen.value) {
         hasAutoOpened = true
@@ -587,7 +592,7 @@ watch(shouldAutoOpen, (val) => {
         dataStore.setDetailOpen(props.sessionId, props.toolId, true)
         nextTick(() => toolUseDetailsRef.value?.show())
     }
-})
+}, { immediate: true })
 
 // Diff stats for Edit/Write tools (parsed from the extra JSON field)
 const FILE_CHANGE_TOOLS = new Set(['Edit', 'Write'])
