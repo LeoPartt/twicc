@@ -16,6 +16,7 @@ import { computed, watch, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDataStore } from '../stores/data'
 import { clearUserTurnToast, markSessionReadState } from '../composables/useWebSocket'
+import { parseProcessError } from '../utils/errorParsing'
 import ProjectBadge from './ProjectBadge.vue'
 
 const props = defineProps({
@@ -55,6 +56,12 @@ const processState = computed(() => store.processStates[props.sessionId])
 const projectId = computed(() => session.value?.project_id || processState.value?.project_id)
 
 const sessionTitle = computed(() => session.value?.title || processState.value?.session_title || 'Unknown')
+
+/** Parsed error info (clean message + optional HTTP status). */
+const parsedError = computed(() => {
+    if (!props.errorMessage) return null
+    return parseProcessError(props.errorMessage)
+})
 
 /** Whether we're already viewing this session. */
 const isCurrentSession = computed(() => route.params.sessionId === props.sessionId)
@@ -138,7 +145,9 @@ function goToSession() {
             <span class="session-toast-label">Session:</span>
             <span class="session-toast-title">{{ sessionTitle }}</span>
         </span>
-        <span v-if="errorMessage" class="session-toast-error">{{ errorMessage }}</span>
+        <span v-if="parsedError" class="session-toast-error" :title="errorMessage">
+            {{ parsedError.summary }}<span v-if="parsedError.status" class="error-status"> ({{ parsedError.status }})</span>
+        </span>
         <div v-if="!isCurrentSession" class="session-toast-actions">
             <wa-button v-if="showActions" size="small" variant="brand" appearance="outlined" @click="archiveSession">Archive</wa-button>
             <wa-button v-if="showActions" size="small" variant="brand" appearance="outlined" @click="markRead">Mark as read</wa-button>
@@ -190,6 +199,11 @@ function goToSession() {
 .session-toast-error {
     color: var(--wa-color-danger);
     font-weight: bold;
+}
+
+.error-status {
+    font-weight: normal;
+    opacity: 0.8;
 }
 
 .session-toast-actions {

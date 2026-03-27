@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { parseApiErrorString, stripAnthropicDocsUrl } from '../../utils/errorParsing'
 
 const props = defineProps({
     data: {
@@ -21,23 +22,9 @@ function extractBastardErrorInfo(data) {
     const content = data?.message?.content
     const textContent = content?.[0]?.text || ''
 
-    // Format: "API Error: 500 {json...}" or "API Error: {json...}"
-    const match = textContent.match(/^API Error:\s*(\d+)?\s*(.*)$/s)
-    if (match) {
-        const [, statusCode, jsonPart] = match
-        try {
-            const parsed = JSON.parse(jsonPart)
-            // Structure: {"type":"error","error":{"type":"api_error","message":"..."}}
-            return {
-                type: parsed?.error?.type || 'unknown_error',
-                message: parsed?.error?.message || textContent,
-                status: statusCode ? parseInt(statusCode) : null,
-                retryAttempt: null,
-                maxRetries: null
-            }
-        } catch {
-            // Invalid JSON, fall through to use raw text
-        }
+    const parsed = parseApiErrorString(textContent)
+    if (parsed) {
+        return { ...parsed, retryAttempt: null, maxRetries: null }
     }
 
     // Fallback: display raw text
@@ -60,7 +47,7 @@ const errorInfo = computed(() => {
     const error = props.data?.error?.error?.error
     return {
         type: error?.type || 'unknown_error',
-        message: error?.message || 'Unknown error',
+        message: stripAnthropicDocsUrl(error?.message || 'Unknown error'),
         status: props.data?.error?.status,
         retryAttempt: props.data?.retryAttempt,
         maxRetries: props.data?.maxRetries
