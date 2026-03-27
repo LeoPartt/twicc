@@ -368,8 +368,23 @@ async function reload() {
     await fetchFileContent(props.filePath, { isSwitch: true })
 }
 
-// Expose dirty state and reload for parent components
-defineExpose({ isDirty, reload })
+/**
+ * Scroll the editor to a 1-based line number.
+ * Delegates to the active editor (CodeEditor or DiffEditor).
+ */
+function scrollToLine(lineNum) {
+    if (props.diffMode) {
+        diffEditorRef.value?.scrollToLine(lineNum)
+    } else {
+        codeEditorRef.value?.scrollToLine(lineNum)
+    }
+}
+
+// Whether the file content is currently being fetched (initial load or file switch)
+const isLoading = computed(() => loading.value || switching.value)
+
+// Expose dirty state, reload, scrollToLine, and loading state for parent components
+defineExpose({ isDirty, isLoading, reload, scrollToLine })
 
 function formatSize(bytes) {
     if (bytes < 1024) return `${bytes} B`
@@ -551,7 +566,7 @@ function goToNextDiff() {
                 :read-only="!isEditing"
                 :word-wrap="wordWrap"
                 :line-numbers="true"
-                :save-view-state="true"
+                :save-view-state="false"
                 @save="save"
                 @ready="onEditorReady"
             />

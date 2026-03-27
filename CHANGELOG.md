@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Unread sessions: eye icon (orange) marks sessions with new assistant content you haven't seen yet, visible in the session list and aggregated at the project level
+- Add "View in Files tab" button for Read/Write/Edit tools
 
 ### Changed
 

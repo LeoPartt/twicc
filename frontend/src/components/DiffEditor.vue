@@ -8,6 +8,7 @@
 <script setup>
 import { ref, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { EditorView, keymap } from '@codemirror/view'
+import { EditorSelection } from '@codemirror/state'
 import { MergeView, unifiedMergeView, goToNextChunk, goToPreviousChunk } from '@codemirror/merge'
 import { resolveLanguage, useCodeMirrorExtensions, useSettingsWatcher } from '../composables/useCodeMirror'
 import { useSettingsStore } from '../stores/settings'
@@ -344,9 +345,26 @@ function goToPrev() {
 
 // ─── Exposed API ─────────────────────────────────────────────────────────────
 
+/**
+ * Scroll the modified-side editor so that the given 1-based line number
+ * is visible, placing it near the center of the viewport and making it the active line.
+ */
+function scrollToLine(lineNum) {
+    const v = getModifiedView()
+    if (!v) return
+    const lineCount = v.state.doc.lines
+    const clampedLine = Math.max(1, Math.min(lineNum, lineCount))
+    const line = v.state.doc.line(clampedLine)
+    v.dispatch({
+        selection: EditorSelection.cursor(line.from),
+        effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
+    })
+}
+
 defineExpose({
     goToNextChunk: goToNext,
     goToPreviousChunk: goToPrev,
+    scrollToLine,
     isDirty,
     resetDirty() { isDirty.value = false },
 })

@@ -384,6 +384,12 @@ const sessionBaseDir = computed(() => {
     return session?.git_directory || session?.cwd || null
 })
 
+// First modified line number from the backend patch (for "View in Files tab" navigation)
+const firstModifiedLine = computed(() => {
+    if (!fileChangeBackendPatch.value?.length) return null
+    return fileChangeBackendPatch.value[0].newStart
+})
+
 // "View in Files tab" button: visible when the file_path falls within a valid root
 // Uses the main session's roots (parent for subagents, self for regular sessions)
 // to match what the Files tab can display.
@@ -405,7 +411,10 @@ const canViewInFilesTab = computed(() => {
 })
 
 function openInFilesTab() {
-    viewFileInFilesTab(props.input.file_path)
+    // Edit/Write: scroll to the first modified line from the backend patch
+    // Read: scroll to the offset line from the tool input
+    const lineNum = firstModifiedLine.value || props.input.offset || null
+    viewFileInFilesTab(props.input.file_path, { lineNum })
 }
 
 // File icon URL for file tools (null if no specific icon found)

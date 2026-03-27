@@ -130,7 +130,7 @@ function onRootChanged(path) {
  *
  * @param {string} absolutePath — the absolute filesystem path to reveal
  */
-async function viewFileInFilesTab(absolutePath) {
+async function viewFileInFilesTab(absolutePath, { lineNum = null } = {}) {
     // Ensure the Files tab root can reach the file.
     // Determine the root directory that contains this file path and switch to it.
     const gitDir = session.value?.git_directory
@@ -146,7 +146,7 @@ async function viewFileInFilesTab(absolutePath) {
     switchToTab('files')
     // Wait for the tab panel to become active and the FilesPanel to be ready
     await nextTick()
-    await filesPanelRef.value?.revealFile(absolutePath)
+    await filesPanelRef.value?.revealFile(absolutePath, { lineNum })
 }
 
 provide('viewFileInFilesTab', viewFileInFilesTab)

@@ -502,14 +502,18 @@ onMounted(() => {
 // ─── External file reveal (used by "View in Files tab" from Git panel) ───────
 
 /**
- * Navigate to and select a file by its absolute path.
+ * Navigate to and select a file by its absolute path, optionally scrolling
+ * the editor to a specific line number.
+ *
  * Ensures the panel is started (tree loaded), clears any active search,
  * then scrolls to the file and selects it.
  *
  * @param {string} absolutePath — the absolute filesystem path to reveal
+ * @param {Object} [options]
+ * @param {number|null} [options.lineNum=null] — 1-based line to scroll to after opening
  * @returns {boolean} true if the file was found and selected
  */
-async function revealFile(absolutePath) {
+async function revealFile(absolutePath, { lineNum = null } = {}) {
     // Ensure the panel is started (triggers tree fetch via the watcher if needed)
     if (!started.value) {
         started.value = true
@@ -536,11 +540,36 @@ async function revealFile(absolutePath) {
     // scrollToPath handles lazy-loading directories, setting revealedPaths,
     // and scrolling to the target
     const found = await fileTreePanelRef.value?.scrollToPath(absolutePath)
+
+    // Check if the file is already selected (same path) — no fetch needed
+    const alreadySelected = selectedAbsPath.value === absolutePath
+
     // Always select the file so FilePane attempts to load it.
     // If found in the tree, scrollToPath has already revealed the path.
     // If not found (deleted, moved, etc.), FilePane will fetch the content
     // and display the backend error (e.g. "File not found").
     fileTreePanelRef.value?.onFileSelect(absolutePath)
+
+    // Scroll to the requested line (default: top of file)
+    const targetLine = lineNum ?? 1
+    if (alreadySelected) {
+        // File already loaded — scroll immediately after a tick
+        await nextTick()
+        filePaneRef.value?.scrollToLine(targetLine)
+    } else {
+        // New file — wait for FilePane to finish loading, then scroll.
+        // isLoading goes true during fetch and false when content is ready.
+        const stop = watch(
+            () => filePaneRef.value?.isLoading,
+            (loading) => {
+                if (loading === false) {
+                    stop()
+                    nextTick(() => filePaneRef.value?.scrollToLine(targetLine))
+                }
+            },
+        )
+    }
+
     return !!found
 }
 

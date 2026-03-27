@@ -212,6 +212,10 @@ watch(() => props.filePath, async (newPath, oldPath) => {
     if (props.saveViewState && newPath) {
         await nextTick()
         restoreViewState(newPath)
+    } else if (view.value) {
+        // No view state to restore — scroll to top
+        await nextTick()
+        view.value.scrollDOM.scrollTop = 0
     }
 })
 
@@ -240,9 +244,26 @@ watch(() => props.lineNumbers, (newLineNumbers) => {
 
 // ─── Exposed API ─────────────────────────────────────────────────────────────
 
+/**
+ * Scroll the editor so that the given 1-based line number is visible,
+ * placing it near the center of the viewport and making it the active line.
+ */
+function scrollToLine(lineNum) {
+    const v = view.value
+    if (!v) return
+    const lineCount = v.state.doc.lines
+    const clampedLine = Math.max(1, Math.min(lineNum, lineCount))
+    const line = v.state.doc.line(clampedLine)
+    v.dispatch({
+        selection: EditorSelection.cursor(line.from),
+        effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
+    })
+}
+
 defineExpose({
     view,
     isDirty,
+    scrollToLine,
     resetDirty() {
         _savedUndoDepth = view.value ? undoDepth(view.value.state) : 0
         isDirty.value = false
