@@ -12,6 +12,7 @@
  */
 
 import { computed } from 'vue'
+import { useCodeCommentsStore } from '../stores/codeComments'
 import { useDataStore } from '../stores/data'
 import { buildProjectTree, flattenProjectTree } from '../utils/projectTree'
 import ProjectBadge from './ProjectBadge.vue'
@@ -31,6 +32,7 @@ const props = defineProps({
 })
 
 const store = useDataStore()
+const codeCommentsStore = useCodeCommentsStore()
 
 const namedProjects = computed(() =>
     props.projects.filter(p => p.name !== null)
@@ -53,7 +55,10 @@ const flatTree = computed(() => {
     >
         <span class="project-option">
             <ProjectBadge :project-id="p.id" />
-            <ProjectProcessIndicator v-if="showProcessIndicator" :project-id="p.id" size="small" />
+            <span class="project-option-indicators">
+                <wa-icon v-if="codeCommentsStore.countByProject(p.id) > 0" name="comment" variant="regular" class="code-comments-indicator"></wa-icon>
+                <ProjectProcessIndicator v-if="showProcessIndicator" :project-id="p.id" size="small" />
+            </span>
         </span>
     </wa-option>
 
@@ -78,7 +83,10 @@ const flatTree = computed(() => {
         >
             <span class="project-option" :style="{ paddingLeft: `${item.depth * 12}px` }">
                 <ProjectBadge :project-id="item.project.id" />
-                <ProjectProcessIndicator v-if="showProcessIndicator" :project-id="item.project.id" size="small" />
+                <span class="project-option-indicators">
+                    <wa-icon v-if="codeCommentsStore.countByProject(item.project.id) > 0" name="comment" variant="regular" class="code-comments-indicator"></wa-icon>
+                    <ProjectProcessIndicator v-if="showProcessIndicator" :project-id="item.project.id" size="small" />
+                </span>
             </span>
         </wa-option>
     </template>
@@ -91,6 +99,15 @@ const flatTree = computed(() => {
     gap: var(--wa-space-xs);
     width: 100%;
     justify-content: space-between;
+}
+.project-option-indicators {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+}
+.code-comments-indicator {
+    color: var(--wa-color-brand);
+    font-size: var(--wa-font-size-s);
 }
 wa-divider {
     --width: 4px;

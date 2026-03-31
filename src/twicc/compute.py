@@ -35,6 +35,7 @@ class AgentLinkUpdate(NamedTuple):
     parent_session_id: str
     agent_id: str
     tool_use_id: str
+    tool_use_line_num: int
     is_background: bool
     started_at: datetime | None
 
@@ -1767,6 +1768,7 @@ def create_agent_link_from_tool_result(session_id: str, item: SessionItem, parse
                         parent_session_id=session_id,
                         agent_id=agent_id,
                         tool_use_id=tool_use_id,
+                        tool_use_line_num=candidate.line_num,
                         is_background=is_background,
                         started_at=candidate.timestamp,
                     )
@@ -1896,6 +1898,7 @@ def create_agent_link_from_subagent(
                             parent_session_id=parent_session_id,
                             agent_id=agent_id,
                             tool_use_id=tu_id,
+                            tool_use_line_num=candidate.line_num,
                             is_background=is_background,
                             started_at=candidate.timestamp,
                         )
@@ -1992,6 +1995,7 @@ def create_agent_link_from_tool_use(
                             parent_session_id=session_id,
                             agent_id=subagent.id,
                             tool_use_id=tu_id,
+                            tool_use_line_num=item.line_num,
                             is_background=is_background,
                             started_at=item.timestamp,
                         ))

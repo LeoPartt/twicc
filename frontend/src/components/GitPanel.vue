@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onActivated, onDeactivated, useId } from 'vue'
+import { ref, computed, watch, nextTick, provide, onMounted, onActivated, onDeactivated, useId } from 'vue'
 import { apiFetch } from '../utils/api'
 import { useSettingsStore } from '../stores/settings'
 import { useContainerBreakpoint } from '../composables/useContainerBreakpoint'
@@ -14,6 +14,7 @@ import AppTooltip from './AppTooltip.vue'
 import FileTreePanel from './FileTreePanel.vue'
 import FilePane from './FilePane.vue'
 import { searchTreeFiles } from '../utils/treeSearch'
+import { useCodeCommentsStore, buildCommentedPathsSet } from '../stores/codeComments'
 
 const emit = defineEmits(['root-changed'])
 
@@ -53,6 +54,7 @@ const props = defineProps({
 })
 
 const settingsStore = useSettingsStore()
+const codeCommentsStore = useCodeCommentsStore()
 const refreshButtonId = useId()
 const gitDirButtonId = useId()
 
@@ -307,6 +309,32 @@ const displayTree = computed(() => {
 /** Whether we are viewing the index (uncommitted changes) vs a specific commit. */
 const isViewingIndex = computed(() => {
     return !selectedCommit.value || selectedCommit.value.hash === 'index'
+})
+
+/** Set of paths with code comments, scoped to the current commit/index view.
+ *  Paths are remapped from absolute (as stored in comments) to tree-relative
+ *  (as used by FileTree), replacing the git directory prefix with the tree root name. */
+const commentedPaths = computed(() => {
+    if (!props.projectId || !props.sessionId) return new Set()
+    const sourceRef = isViewingIndex.value ? '' : (selectedCommit.value?.hash ?? '')
+    const gitDir = effectiveGitDirectory.value
+    const treeRoot = displayTree.value?.name
+    if (!gitDir || !treeRoot) return new Set()
+    const comments = codeCommentsStore.getCommentsBySession(props.projectId, props.sessionId)
+        .filter(c => c.source === 'git' && c.sourceRef === sourceRef)
+    // Remap: /absolute/git/dir/file.py → TreeRootName/file.py
+    const treePaths = comments
+        .map(c => c.filePath.startsWith(gitDir + '/') ? treeRoot + c.filePath.slice(gitDir.length) : null)
+        .filter(Boolean)
+    return buildCommentedPathsSet(treePaths)
+})
+
+/** Provide a decoration checker for the git log commit list.
+ *  CommitMessageData injects this to show a comment icon per commit. */
+provide('gitCommitHasDecoration', (hash) => {
+    if (!props.projectId || !props.sessionId) return false
+    const sourceRef = hash === 'index' ? '' : hash
+    return codeCommentsStore.countBySourceRef(props.projectId, props.sessionId, 'git', sourceRef) > 0
 })
 
 // ---------------------------------------------------------------------------
@@ -963,6 +991,7 @@ onMounted(() => {
                         :show-refresh="isViewingIndex"
                         :active="active"
                         :is-mobile="isMobile"
+                        :commented-paths="commentedPaths"
                         mode="git"
                         @refresh="refreshIndexFiles"
                         @option-select="handleOptionsSelect"

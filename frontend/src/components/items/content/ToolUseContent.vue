@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, inject, provide, watch, watchEffect, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useCodeCommentsStore } from '../../../stores/codeComments'
 import { useDataStore } from '../../../stores/data'
 import { useSettingsStore } from '../../../stores/settings'
 import { apiFetch } from '../../../utils/api'
@@ -22,6 +23,7 @@ const route = useRoute()
 const router = useRouter()
 const dataStore = useDataStore()
 const settingsStore = useSettingsStore()
+const codeCommentsStore = useCodeCommentsStore()
 
 // Cross-tab file reveal (provided by SessionView)
 const viewFileInFilesTab = inject('viewFileInFilesTab', null)
@@ -64,11 +66,22 @@ const props = defineProps({
     }
 })
 
-// Provide tool context for code comments in child editors (ToolDiffViewer)
+// Line number of the Agent/Task tool_use in the parent session (for subagent comment indicators)
+const parentToolUseLineNum = computed(() => {
+    if (!props.parentSessionId) return null
+    return dataStore.getAgentToolUseLineNum(props.parentSessionId, props.sessionId)
+})
+
+// Provide tool context for code comments in child editors (ToolDiffViewer).
+// sessionId is always the root/main session so that "Add all" works session-wide.
+// subagentSessionId tracks the subagent's own ID for scoped indicators.
 provide('codeCommentToolContext', {
     toolUseId: props.toolId,
-    sessionId: props.sessionId,
+    sessionId: props.parentSessionId || props.sessionId,
+    subagentSessionId: props.parentSessionId ? props.sessionId : '',
     projectId: props.projectId,
+    lineNum: props.lineNum,  // tool_use's line number in the session
+    subagentToolLineNum: props.parentSessionId ? parentToolUseLineNum.value : null,
 })
 
 // Polling configuration
@@ -737,6 +750,12 @@ const taskDisplayName = computed(() => {
 const agentLink = computed(() => dataStore.getAgentLink(props.sessionId, props.toolId))
 const agentId = computed(() => agentLink.value?.agentId)
 
+const agentHasComments = computed(() => {
+    if (!agentId.value) return false
+    return codeCommentsStore.getCommentsBySession(props.projectId, props.parentSessionId || props.sessionId)
+        .some(c => c.subagentSessionId === agentId.value)
+})
+
 const isAgentRunning = computed(() => {
     if (!isTask.value || !agentId.value) return false
     if (isStaleToolUse.value) return false
@@ -747,6 +766,15 @@ const isAgentRunning = computed(() => {
 
 // Unique ID for the View Agent button (for tooltip targeting)
 const viewAgentButtonId = computed(() => `view-agent-${props.toolId}`)
+
+// Code comments indicator for Edit/Write tools
+const isEditOrWrite = computed(() => props.name === 'Edit' || props.name === 'Write')
+const toolHasComments = computed(() => {
+    if (!isEditOrWrite.value || !props.input?.file_path) return false
+    const rootSessionId = props.parentSessionId || props.sessionId
+    return codeCommentsStore.getCommentsBySession(props.projectId, rootSessionId)
+        .some(c => c.source === 'tool' && c.sourceRef === props.toolId)
+})
 
 /**
  * Navigate to the subagent tab.
@@ -779,6 +807,7 @@ function navigateToSubagent() {
                         <span class="items-details-summary-description">{{ description }}</span>
                     </span>
                     <span v-else class="items-details-summary-description">{{ description }}</span>
+                    <wa-icon v-if="toolHasComments" name="comment" variant="regular" class="tool-comments-indicator"></wa-icon>
                 </template>
                 <!-- Skill tool: show skill name, with namespace in quiet mode -->
                 <template v-else-if="skillDescription">
@@ -846,6 +875,7 @@ function navigateToSubagent() {
                     >
                         <wa-icon v-if="isAgentRunning" slot="start" name="robot" class="agent-running-icon"></wa-icon>
                         View Agent
+                        <wa-icon v-if="agentHasComments" slot="end" name="comment" variant="regular" class="agent-comments-indicator"></wa-icon>
                     </wa-button>
                 </template>
             </template>
@@ -968,6 +998,10 @@ wa-details.with-right-part {
         }
         .agent-running-icon {
             animation: pulse 1s ease-in-out infinite;
+        }
+        .agent-comments-indicator, .tool-comments-indicator {
+            color: var(--wa-color-brand);
+            font-size: var(--wa-font-size-xs);
         }
         & > :not(wa-button):last-child {
             margin-right: var(--spacing);

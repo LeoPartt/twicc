@@ -19,7 +19,14 @@ defineProps({
     itemCount: {
         type: Number,
         default: 0
-    }
+    },
+    /**
+     * Whether any tool in this group has code comments.
+     */
+    hasComments: {
+        type: Boolean,
+        default: false,
+    },
 })
 
 const emit = defineEmits(['toggle'])
@@ -38,7 +45,10 @@ function handleClick() {
             @change="handleClick"
         >
             <span class="toggle-label">
-                {{ expanded ? 'Hide' : 'View' }} {{ itemCount }} element{{ itemCount !== 1 ? 's' : '' }}
+                <span class="toggle-label-text">
+                    {{ expanded ? 'Hide' : 'View' }} {{ itemCount }} element{{ itemCount !== 1 ? 's' : '' }}
+                </span>
+                <wa-icon v-if="hasComments" name="comment" variant="regular" class="toggle-comments-indicator"></wa-icon>
             </span>
         </wa-switch>
     </div>
@@ -55,29 +65,52 @@ wa-switch {
     --spacing-bottom: calc(var(--content-card-not-end-item, 1) * var(--wa-space-s));
     margin-top: var(--spacing-top);
     margin-bottom: var(--spacing-bottom);
-    transition: opacity 0.2s;
-    opacity: 0.25;
-    &:hover {
-        opacity: 0.75;
-        .toggle-label {
-            opacity: 1;
-        }
-    }
     display: flex;
     width: 100%;
-    &:state(checked) {
+
+    /* Opacity on the switch control itself, not the whole element */
+    &::part(control) {
+        transition: opacity 0.2s;
+        opacity: 0.25;
+    }
+    &:hover::part(control) {
+        opacity: 0.75;
+    }
+    &:state(checked)::part(control) {
         opacity: 1;
-        .toggle-label {
-            opacity: 1;
-        }
+    }
+
+    /* Reveal label text on hover or checked */
+    &:hover .toggle-label-text {
+        max-width: 15em;
+        opacity: 0.75;
+    }
+    &:state(checked) .toggle-label-text {
+        max-width: 15em;
+        opacity: 1;
     }
 }
 
 .toggle-label {
+    display: flex;
+    align-items: center;
     font-size: var(--wa-font-size-s);
     color: var(--wa-color-text-quiet);
+}
+
+.toggle-label-text {
+    display: inline-block;
+    max-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
     opacity: 0;
-    transition: opacity 0.2s;
+    transition: max-width 0.2s, opacity 0.2s;
+}
+
+.toggle-comments-indicator {
+    color: var(--wa-color-brand);
+    font-size: 0.8em;
+    margin-left: 0.25em;
 }
 
 </style>

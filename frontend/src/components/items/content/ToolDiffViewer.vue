@@ -25,9 +25,12 @@ const commentContext = computed(() => {
     return {
         projectId: toolContext.projectId,
         sessionId: toolContext.sessionId,
+        subagentSessionId: toolContext.subagentSessionId || '',
         source: 'tool',
         sourceRef: toolContext.toolUseId,
         filePath: props.filePath,
+        toolLineNum: toolContext.lineNum ?? null,
+        subagentToolLineNum: toolContext.subagentToolLineNum ?? null,
     }
 })
 

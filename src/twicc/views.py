@@ -580,6 +580,7 @@ def subagents_state(request, project_id, session_id):
         {
             "agent_id": link.agent_id,
             "tool_use_id": link.tool_use_id,
+            "tool_use_line_num": link.tool_use_line_num,
             "is_background": link.is_background,
             "started_at": link.started_at.isoformat() if link.started_at else None,
         }

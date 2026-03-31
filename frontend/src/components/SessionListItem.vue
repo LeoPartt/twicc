@@ -8,6 +8,7 @@
  * Now each is called once via a computed, and Vue caches the result.
  */
 import { ref, computed, watch, inject } from 'vue'
+import { useCodeCommentsStore } from '../stores/codeComments'
 import { useDataStore } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
 import { formatDate } from '../utils/date'
@@ -65,6 +66,11 @@ watch(() => props.session.id, () => {
 
 const store = useDataStore()
 const settingsStore = useSettingsStore()
+const codeCommentsStore = useCodeCommentsStore()
+
+const hasCodeComments = computed(() =>
+    codeCommentsStore.countBySession(props.session.project_id, props.session.id) > 0
+)
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Cached store lookups (the whole point of this component)
@@ -303,6 +309,13 @@ function handleMenuSelect(event) {
                 <wa-tag v-if="session.archived" size="small" variant="neutral" class="archived-tag">Arch.</wa-tag>
                 <wa-tag v-else-if="session.draft && !processState" size="small" variant="warning" class="draft-tag">Draft</wa-tag>
                 <span class="session-name">{{ getSessionDisplayName(session) }}</span>
+                <!-- Compact mode: code comments indicator -->
+                <wa-icon
+                    v-if="compactView && hasCodeComments"
+                    name="comment"
+                    variant="regular"
+                    class="compact-comments-indicator"
+                ></wa-icon>
                 <!-- Compact mode: unread indicator (highest priority) -->
                 <wa-icon
                     v-if="compactView && hasUnread"
@@ -333,8 +346,14 @@ function handleMenuSelect(event) {
             </div>
             <!-- Project badge line (hidden in compact mode, dot is shown inline instead) -->
             <!-- When unread + no process: show unread indicator on the project line (right-aligned) -->
-            <div v-if="!compactView && (showProjectName || (hasUnread && !processState))" class="session-project-row">
+            <div v-if="!compactView && (showProjectName || hasCodeComments || (hasUnread && !processState))" class="session-project-row">
                 <ProjectBadge v-if="showProjectName" :project-id="session.project_id" class="session-project" />
+                <wa-icon
+                    v-if="hasCodeComments"
+                    name="comment"
+                    variant="regular"
+                    class="session-comments-indicator"
+                ></wa-icon>
                 <wa-icon
                     v-if="hasUnread && !processState"
                     :id="`standalone-unread-${session.id}`"
@@ -549,6 +568,16 @@ function handleMenuSelect(event) {
     border-color: var(--dot-color, var(--wa-color-border-quiet));
 }
 
+/* Compact mode: inline code comments indicator */
+.compact-comments-indicator {
+    margin-left: auto;
+    flex-shrink: 0;
+    color: var(--wa-color-brand);
+    font-size: var(--wa-font-size-xs);
+    position: relative;
+    left: -1.5rem;
+}
+
 /* Compact mode: inline pending request indicator */
 .compact-pending-request-indicator {
     margin-left: auto;
@@ -623,8 +652,20 @@ function handleMenuSelect(event) {
     margin-top: 0;
 }
 
+.session-comments-indicator {
+    margin-left: auto;
+    flex-shrink: 0;
+    color: var(--wa-color-brand);
+    font-size: var(--wa-font-size-xs);
+}
+
 .standalone-unread-indicator {
     margin-left: auto;
+}
+
+/* When comments indicator is present, unread doesn't need margin-left: auto */
+.session-comments-indicator + .standalone-unread-indicator {
+    margin-left: 0;
 }
 
 .session-project {

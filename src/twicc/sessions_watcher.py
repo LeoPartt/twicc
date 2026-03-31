@@ -467,6 +467,7 @@ async def sync_and_broadcast(
                     "parent_session_id": update.parent_session_id,
                     "agent_session_id": update.agent_id,
                     "tool_use_id": update.tool_use_id,
+                    "tool_use_line_num": update.tool_use_line_num,
                     "is_background": update.is_background,
                     "started_at": update.started_at.isoformat() if update.started_at else None,
                     "project_id": parsed.project_id,

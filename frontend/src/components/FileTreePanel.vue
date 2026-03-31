@@ -113,6 +113,11 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    /** Set of paths with code comments (files + ancestor dirs). */
+    commentedPaths: {
+        type: Set,
+        default: () => new Set(),
+    },
 })
 
 const emit = defineEmits(['file-select', 'refresh', 'option-select', 'filter-input'])
@@ -922,6 +927,7 @@ defineExpose({
                         :directories-only="directoriesOnly"
                         :compact-folders="compactFolders"
                         :lazy-load-fn="lazyLoadFn"
+                        :commented-paths="commentedPaths"
                         @select="onFileSelect"
                         @focus="onNodeFocus"
                     />

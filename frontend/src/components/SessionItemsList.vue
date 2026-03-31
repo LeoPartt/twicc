@@ -14,6 +14,7 @@ import SessionItem from './SessionItem.vue'
 import SessionSearchBar from './SessionSearchBar.vue'
 import FetchErrorPanel from './FetchErrorPanel.vue'
 import GroupToggle from './GroupToggle.vue'
+import { useCodeCommentsStore } from '../stores/codeComments'
 import MessageInput from './MessageInput.vue'
 import PendingRequestForm from './PendingRequestForm.vue'
 import ProcessIndicator from './ProcessIndicator.vue'
@@ -40,6 +41,7 @@ const props = defineProps({
 })
 
 const store = useDataStore()
+const codeCommentsStore = useCodeCommentsStore()
 
 const emit = defineEmits(['needs-title'])
 
@@ -793,6 +795,105 @@ function toggleGroup(groupHeadLineNum) {
     store.toggleExpandedGroup(props.sessionId, groupHeadLineNum)
 }
 
+/** Set of tool line numbers that have code comments (for GroupToggle indicators). */
+const commentedToolLineNums = computed(() => {
+    // Comments are stored with the root session ID, not the subagent's.
+    const rootSessionId = props.parentSessionId || props.sessionId
+    if (codeCommentsStore.countBySession(props.projectId, rootSessionId) === 0) return null
+    if (codeCommentsStore.countBySource(props.projectId, rootSessionId, 'tool') === 0) return null
+
+    const comments = codeCommentsStore.getCommentsBySession(props.projectId, rootSessionId)
+        .filter(c => c.source === 'tool')
+
+    const lineNums = new Set()
+    if (props.parentSessionId) {
+        // Inside a subagent: only this subagent's toolLineNums
+        for (const c of comments) {
+            if (c.subagentSessionId === props.sessionId && c.toolLineNum != null) {
+                lineNums.add(c.toolLineNum)
+            }
+        }
+    } else {
+        // Main session: direct tool comments + subagent comments via subagentToolLineNum
+        for (const c of comments) {
+            if (!c.subagentSessionId && c.toolLineNum != null) {
+                // Direct tool in main session
+                lineNums.add(c.toolLineNum)
+            } else if (c.subagentSessionId && c.subagentToolLineNum != null) {
+                // Subagent tool — use the parent session's Agent/Task tool_use line number
+                lineNums.add(c.subagentToolLineNum)
+            }
+        }
+    }
+    return lineNums.size > 0 ? lineNums : null
+})
+
+/**
+ * Set of conversation-mode block IDs (user_message lineNums) that contain
+ * tool comments. Pre-computed by scanning visual items to determine block
+ * boundaries and checking if any commentedToolLineNum falls within each block.
+ */
+const blocksWithComments = computed(() => {
+    const toolLineNums = commentedToolLineNums.value
+    if (!toolLineNums) return null
+
+    const items = visualItems.value
+    if (!items || items.length === 0) return null
+
+    // Collect block boundaries: each block starts after a user_message
+    // and ends before the next user_message (or end of items).
+    const blocks = []  // [{ blockId, startLineNum, endLineNum }]
+    let currentBlockId = null
+    let blockStartLineNum = null
+
+    for (const item of items) {
+        if (item.detailToggleFor != null) {
+            // This item has a toggle → it belongs to a block
+            if (currentBlockId !== null && currentBlockId !== item.detailToggleFor) {
+                // Close previous block
+                blocks.push({ blockId: currentBlockId, start: blockStartLineNum })
+            }
+            currentBlockId = item.detailToggleFor
+            blockStartLineNum = item.lineNum
+        }
+    }
+
+    // If no blocks have toggles, nothing to check
+    if (blocks.length === 0 && currentBlockId === null) return null
+
+    // Check which blocks have comments (using a simple approach:
+    // for each commented line num, check if it's > blockId for any block)
+    const result = new Set()
+    for (const ln of toolLineNums) {
+        // A tool at lineNum ln belongs to the block whose blockId (user_message lineNum)
+        // is the largest blockId that is less than ln
+        let bestBlockId = null
+        for (const item of items) {
+            if (item.kind === 'user_message' && item.lineNum < ln) {
+                bestBlockId = item.lineNum
+            }
+        }
+        if (bestBlockId !== null) result.add(bestBlockId)
+    }
+    return result.size > 0 ? result : null
+})
+
+/** Check if a conversation-mode block has comments. */
+function blockHasComments(blockId) {
+    return blocksWithComments.value?.has(blockId) ?? false
+}
+
+/** Check if any tool comment falls within a group's line number range. */
+function groupHasComments(groupHeadLineNum, groupTailLineNum) {
+    const lineNums = commentedToolLineNums.value
+    if (!lineNums) return false
+    const tail = groupTailLineNum ?? groupHeadLineNum
+    for (const ln of lineNums) {
+        if (ln >= groupHeadLineNum && ln <= tail) return true
+    }
+    return false
+}
+
 /**
  * Get the scroller element for scroll compensation.
  * @returns {HTMLElement|null}
@@ -1270,6 +1371,7 @@ defineExpose({
                     <GroupToggle
                         :expanded="item.isExpanded"
                         :item-count="item.groupSize"
+                        :has-comments="groupHasComments(item.lineNum, item.groupTail)"
                         @toggle="toggleGroup(item.lineNum)"
                     />
                     <SessionItem
@@ -1299,6 +1401,7 @@ defineExpose({
                     :prefix-expanded="item.prefixExpanded || false"
                     :suffix-expanded="item.suffixExpanded || false"
                     :detail-toggle-for="item.detailToggleFor ?? null"
+                    :block-has-comments="item.detailToggleFor != null && blockHasComments(item.detailToggleFor)"
                     @toggle-suffix="toggleGroup(item.suffixGroupHead)"
                 />
             </template>

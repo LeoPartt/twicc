@@ -184,9 +184,12 @@ export const useCodeCommentsStore = defineStore('codeComments', {
             const commentData = {
                 projectId: context.projectId,
                 sessionId: context.sessionId,
+                subagentSessionId: context.subagentSessionId ?? '',
                 filePath: context.filePath,
                 source: context.source,
                 sourceRef: context.sourceRef ?? '',
+                toolLineNum: context.toolLineNum ?? null,
+                subagentToolLineNum: context.subagentToolLineNum ?? null,
                 lineNumber,
                 lineText: lineText ?? '',
                 content: '',
@@ -290,6 +293,27 @@ export function formatAllComments(comments) {
         a.filePath.localeCompare(b.filePath) || a.lineNumber - b.lineNumber
     )
     return sorted.map(c => formatComment(c)).join('\n')
+}
+
+/**
+ * Build a Set of paths (files + all ancestor directories) from a list of file paths.
+ * Used by file trees to show comment indicators on both files and containing folders.
+ */
+export function buildCommentedPathsSet(filePaths) {
+    const set = new Set()
+    for (const fp of filePaths) {
+        set.add(fp)
+        // Add all ancestor directories
+        let dir = fp
+        while (true) {
+            const slash = dir.lastIndexOf('/')
+            if (slash <= 0) break
+            dir = dir.substring(0, slash)
+            if (set.has(dir)) break // already added this and all parents
+            set.add(dir)
+        }
+    }
+    return set
 }
 
 if (import.meta.hot) {

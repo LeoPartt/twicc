@@ -628,7 +628,7 @@ export function useWebSocket() {
                 // New agent link created — populate cache and create synthetic process state
                 const agentSessionId = msg.agent_session_id
                 if (msg.tool_use_id && msg.parent_session_id) {
-                    store.setAgentLink(msg.parent_session_id, msg.tool_use_id, agentSessionId, msg.is_background)
+                    store.setAgentLink(msg.parent_session_id, msg.tool_use_id, agentSessionId, msg.is_background, msg.tool_use_line_num)
                 }
                 // Agent just linked → create synthetic process state
                 const startedAtUnix = msg.started_at ? new Date(msg.started_at).getTime() / 1000 : null

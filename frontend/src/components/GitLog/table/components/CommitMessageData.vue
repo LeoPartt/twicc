@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useId, type CSSProperties } from 'vue'
+import { useId, inject, type CSSProperties } from 'vue'
 import IndexStatus from './IndexStatus.vue'
 import AppTooltip from '../../../AppTooltip.vue'
 
@@ -8,25 +8,36 @@ import AppTooltip from '../../../AppTooltip.vue'
 // Props
 // ---------------------------------------------------------------------------
 
-defineProps<{
+const props = defineProps<{
   index: number
   isIndex: boolean
+  commitHash: string
   commitMessage: string
   style?: CSSProperties
 }>()
 
 const messageId = useId()
+
+// Optional inject: a function (hash: string) => boolean that tells whether
+// a commit has decorations (e.g. code comments). Provided by the host app,
+// not by the GitLog library itself. When not provided, no decoration is shown.
+const commitHasDecoration = inject<((hash: string) => boolean) | null>('gitCommitHasDecoration', null)
 </script>
 
 <template>
   <div
     :id="messageId"
-    :class="['message', {isIndex}]"
+    :class="['message', {isIndex, hasDecoration: commitHasDecoration?.(commitHash)}]"
     :style="style"
   >
-    {{ commitMessage }}
-
+    <span class="message-text">{{ commitMessage }}</span>
     <IndexStatus v-if="isIndex" />
+    <wa-icon
+      v-if="commitHasDecoration?.(commitHash)"
+      name="comment"
+      variant="regular"
+      class="commit-decoration-icon"
+    ></wa-icon>
   </div>
   <AppTooltip :for="messageId">{{ commitMessage }}</AppTooltip>
 </template>
@@ -38,8 +49,19 @@ const messageId = useId()
   text-overflow: ellipsis;
   padding-inline: 1rem;
   font-weight: 400;
-  &.isIndex {
+  &.isIndex, &.hasDecoration {
     display: flex;
+    align-items: center;
   }
+}
+.message-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.commit-decoration-icon {
+  flex-shrink: 0;
+  color: var(--wa-color-brand, #6366f1);
+  font-size: 0.75em;
+  margin-left: 0.4em;
 }
 </style>

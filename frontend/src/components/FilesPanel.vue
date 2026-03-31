@@ -4,6 +4,7 @@ import { apiFetch } from '../utils/api'
 import { useContainerBreakpoint } from '../composables/useContainerBreakpoint'
 import FileTreePanel from './FileTreePanel.vue'
 import FilePane from './FilePane.vue'
+import { useCodeCommentsStore, buildCommentedPathsSet } from '../stores/codeComments'
 
 const emit = defineEmits(['root-changed'])
 
@@ -53,6 +54,17 @@ const props = defineProps({
 const { isBelowBreakpoint: isMobile } = useContainerBreakpoint({
     containerSelector: '.main-content',
     breakpoint: 800,
+})
+
+// ─── Code comments ───────────────────────────────────────────────────────────
+
+const codeCommentsStore = useCodeCommentsStore()
+
+const commentedPaths = computed(() => {
+    if (!props.projectId || !props.sessionId) return new Set()
+    const comments = codeCommentsStore.getCommentsBySession(props.projectId, props.sessionId)
+        .filter(c => c.source === 'files' && c.sourceRef === '')
+    return buildCommentedPathsSet(comments.map(c => c.filePath))
 })
 
 // API prefix: project-level for drafts, session-level otherwise
@@ -595,6 +607,7 @@ defineExpose({ revealFile, setRootByPath })
                 :show-refresh="true"
                 :active="active"
                 :is-mobile="isMobile"
+                :commented-paths="commentedPaths"
                 mode="files"
                 @refresh="refresh"
                 @option-select="handleOptionsSelect"

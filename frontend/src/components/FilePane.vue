@@ -77,18 +77,22 @@ const commentContext = computed(() => {
         return {
             projectId: props.projectId,
             sessionId: props.sessionId,
+            subagentSessionId: '',
             source: 'git',
             sourceRef: props.commitSha ?? '',
             filePath: props.filePath,
+            toolLineNum: null,
         }
     }
     // Files context
     return {
         projectId: props.projectId,
         sessionId: props.sessionId,
+        subagentSessionId: '',
         source: 'files',
         sourceRef: '',
         filePath: props.filePath,
+        toolLineNum: null,
     }
 })
 

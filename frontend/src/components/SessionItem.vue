@@ -63,6 +63,10 @@ const props = defineProps({
     detailToggleFor: {
         type: Number,
         default: null
+    },
+    blockHasComments: {
+        type: Boolean,
+        default: false
     }
 })
 
@@ -108,16 +112,18 @@ function toggleJsonView() {
         <div><!-- all non-content stuff must be in this div for complex css rules of content stuff assuming they always start at 2nd place-->
             <!-- Detail toggle button for conversation mode (on assistant_message when collapsed,
                  or on first visible item of block when detailed) -->
-            <wa-button
-                v-if="showDetailToggle"
-                :id="`detail-toggle-${sessionId}-${detailToggleFor}`"
-                class="detail-toggle"
-                :variant="isBlockDetailed ? 'brand' : 'neutral'"
-                size="small"
-                @click="toggleBlockDetailed"
-            >
-                <wa-icon :name="isBlockDetailed ? 'compress' : 'expand'"></wa-icon>
-            </wa-button>
+            <div v-if="showDetailToggle" class="detail-toggle-wrapper">
+                <wa-button
+                    :id="`detail-toggle-${sessionId}-${detailToggleFor}`"
+                    class="detail-toggle"
+                    :variant="isBlockDetailed ? 'brand' : 'neutral'"
+                    size="small"
+                    @click="toggleBlockDetailed"
+                >
+                    <wa-icon :name="isBlockDetailed ? 'compress' : 'expand'"></wa-icon>
+                </wa-button>
+                <wa-icon v-if="blockHasComments" name="comment" variant="regular" class="detail-toggle-comments"></wa-icon>
+            </div>
             <AppTooltip v-if="showDetailToggle" :for="`detail-toggle-${sessionId}-${detailToggleFor}`">
                 {{ isBlockDetailed ? 'Show conversation' : 'Show details' }}
             </AppTooltip>
@@ -211,24 +217,32 @@ function toggleJsonView() {
     line-height: 1.5;
 }
 
-.detail-toggle {
+.detail-toggle-wrapper {
     position: absolute;
-    top: var(--wa-space-xs);
-    right: 0;
-    opacity: 0.25;
-    transition: opacity 0.2s;
+    top: calc(-1 * var(--wa-space-xs));
+    right: calc(-1 * var(--wa-space-xs));
     z-index: 2;
-    transform-origin: top center;
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-s);
     scale: 0.6;
+    transform-origin: top right;
+    &:has(.detail-toggle-comments) {
+        right: calc(-1 * var(--wa-space-l));
+    }
+}
+
+.detail-toggle {
     &::part(label) {
         scale: 1.3;
     }
-    &[variant="brand"] {
-        opacity: 0.7;
-    }
-    &:hover {
-        opacity: 1;
-    }
+}
+
+.detail-toggle-comments {
+    color: var(--wa-color-brand);
+    font-size: var(--wa-font-size-xs);
+    scale: 1.6;
+    transform-origin: center;
 }
 
 .json-toggle {

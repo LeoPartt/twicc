@@ -441,6 +441,16 @@ export const useDataStore = defineStore('data', {
             return sessionLinks[toolId]
         },
 
+        /** Reverse lookup: find the tool_use line number in the parent session that spawned a given subagent. */
+        getAgentToolUseLineNum: (state) => (parentSessionId, subagentSessionId) => {
+            const sessionLinks = state.localState.agentLinks[parentSessionId]
+            if (!sessionLinks) return null
+            for (const link of Object.values(sessionLinks)) {
+                if (link.agentId === subagentSessionId) return link.toolUseLineNum ?? null
+            }
+            return null
+        },
+
         // Get tool state for a tool_use_id in a session
         // Returns: { resultCount, completedAt, error, extra, toolResultLineNum } or null
         getToolState: (state) => (sessionId, toolUseId) => {
@@ -1702,12 +1712,12 @@ export const useDataStore = defineStore('data', {
          * @param {string} agentId - The agent ID (only cache when found)
          * @param {boolean} isBackground - Whether the agent runs in background
          */
-        setAgentLink(sessionId, toolId, agentId, isBackground = false) {
+        setAgentLink(sessionId, toolId, agentId, isBackground = false, toolUseLineNum = null) {
             if (!agentId) return // Only cache found agents
             if (!this.localState.agentLinks[sessionId]) {
                 this.localState.agentLinks[sessionId] = {}
             }
-            this.localState.agentLinks[sessionId][toolId] = { agentId, isBackground }
+            this.localState.agentLinks[sessionId][toolId] = { agentId, isBackground, toolUseLineNum }
         },
 
         /**
@@ -1898,7 +1908,7 @@ export const useDataStore = defineStore('data', {
                 const cutoff = getSessionCutoffMs(this.sessions[sessionId])
 
                 for (const agent of agents) {
-                    this.setAgentLink(sessionId, agent.tool_use_id, agent.agent_id, agent.is_background)
+                    this.setAgentLink(sessionId, agent.tool_use_id, agent.agent_id, agent.is_background, agent.tool_use_line_num)
 
                     // Skip synthetic process state if agent predates the session's last start/stop cycle
                     const agentStartedMs = agent.started_at ? new Date(agent.started_at).getTime() : 0

@@ -172,6 +172,7 @@ function handleMouseOut() {
     <CommitMessageData
       :index="index"
       :style="tableDataStyle"
+      :commit-hash="commit.hash"
       :commit-message="commit.message"
       :is-index="commit.hash === 'index'"
     />

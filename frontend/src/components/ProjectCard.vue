@@ -10,6 +10,7 @@
  * project badge (used by ProjectTreeNode for the tree chevron).
  */
 import { computed } from 'vue'
+import { useCodeCommentsStore } from '../stores/codeComments'
 import { useDataStore } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
 import { formatDate } from '../utils/date'
@@ -31,6 +32,16 @@ const emit = defineEmits(['select', 'menu-select'])
 
 const store = useDataStore()
 const settingsStore = useSettingsStore()
+const codeCommentsStore = useCodeCommentsStore()
+
+const codeCommentsCount = computed(() => codeCommentsStore.countByProject(props.project.id))
+const codeCommentsTooltip = computed(() => {
+    const n = codeCommentsCount.value
+    if (n === 0) return ''
+    return n === 1
+        ? '1 code comment not yet sent to Claude'
+        : `${n} code comments not yet sent to Claude`
+})
 
 // Settings
 const showCosts = computed(() => settingsStore.areCostsShown)
@@ -71,6 +82,8 @@ function handleMenuSelect(event) {
             <div class="project-title-row">
                 <slot name="title-prefix"></slot>
                 <ProjectBadge :project-id="project.id" class="project-title" />
+                <wa-icon v-if="codeCommentsCount > 0" :id="`project-comments-${project.id}`" name="comment" variant="regular" class="code-comments-indicator"></wa-icon>
+                <AppTooltip v-if="codeCommentsCount > 0" :for="`project-comments-${project.id}`">{{ codeCommentsTooltip }}</AppTooltip>
                 <ProjectProcessIndicator :project-id="project.id" size="small" />
                 <wa-tag v-if="project.archived" variant="neutral" size="small">Archived</wa-tag>
             </div>
@@ -156,6 +169,11 @@ function handleMenuSelect(event) {
     display: flex;
     align-items: center;
     gap: var(--wa-space-xl);
+}
+
+.code-comments-indicator {
+    color: var(--wa-color-brand);
+    font-size: var(--wa-font-size-s);
 }
 
 .project-title {

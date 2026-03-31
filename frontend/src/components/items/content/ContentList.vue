@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useDataStore } from '../../../stores/data'
+import { useCodeCommentsStore } from '../../../stores/codeComments'
 import { DISPLAY_MODE } from '../../../constants'
 import { sdkBlockToMediaItem } from '../../../utils/fileUtils'
 import { getInternalCollapsibleGroups, getPrefixSuffixBoundaries, isVisibleItem } from '../../../utils/contentVisibility'
@@ -13,6 +14,7 @@ import ThinkingContent from './ThinkingContent.vue'
 import UnknownEntry from '../UnknownEntry.vue'
 
 const store = useDataStore()
+const codeCommentsStore = useCodeCommentsStore()
 
 // Check if we're in simplified mode (only mode with collapsible groups)
 const isSimplifiedMode = computed(() => store.getDisplayMode === DISPLAY_MODE.SIMPLIFIED)
@@ -207,6 +209,19 @@ const firstImageIndex = computed(() => {
 function toggleInternalGroup(startIndex) {
     store.toggleInternalExpandedGroup(props.sessionId, props.lineNum, startIndex)
 }
+
+/** Whether the parent message's line number range contains any tool comments. */
+const parentRangeHasComments = computed(() => {
+    const rootSessionId = props.parentSessionId || props.sessionId
+    if (codeCommentsStore.countBySession(props.projectId, rootSessionId) === 0) return false
+    if (codeCommentsStore.countBySource(props.projectId, rootSessionId, 'tool') === 0) return false
+    const subagentId = props.parentSessionId ? props.sessionId : ''
+    const comments = codeCommentsStore.getCommentsBySession(props.projectId, rootSessionId)
+        .filter(c => c.source === 'tool' && c.toolLineNum != null && c.subagentSessionId === subagentId)
+    const head = props.groupHead ?? props.lineNum
+    const tail = props.groupTail ?? props.lineNum
+    return comments.some(c => c.toolLineNum >= head && c.toolLineNum <= tail)
+})
 </script>
 
 <template>
@@ -216,6 +231,7 @@ function toggleInternalGroup(startIndex) {
             v-if="entry.showToggleBefore && entry.toggleType === 'internal'"
             :expanded="entry.toggleExpanded"
             :item-count="entry.groupSize"
+            :has-comments="parentRangeHasComments"
             @toggle="toggleInternalGroup(entry.groupStartIndex)"
         />
         <!-- Toggle for suffix (emits to parent for session-level handling) -->
@@ -223,6 +239,7 @@ function toggleInternalGroup(startIndex) {
             v-else-if="entry.showToggleBefore && entry.toggleType === 'suffix'"
             :expanded="entry.toggleExpanded"
             :item-count="entry.groupSize"
+            :has-comments="parentRangeHasComments"
             @toggle="emit('toggle-suffix')"
         />
 

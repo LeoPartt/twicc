@@ -276,49 +276,105 @@ function createField(callbacks, initialComments) {
     })
 }
 
-// ─── Gutter click handler ───────────────────────────────────────────────────
-// EditorView.domEventHandlers listens on contentDOM, but gutter elements are
-// siblings of contentDOM inside .cm-scroller — clicks on the gutter never
-// reach contentDOM. We use a ViewPlugin that registers a click handler on
-// view.dom (.cm-editor), which is the common ancestor of both.
+// ─── Hover "+" button ───────────────────────────────────────────────────────
+// A single "+" button is moved between .cm-gutterElement nodes on hover.
+// Placed INSIDE the gutter cell (position: absolute, inset: 0), it scrolls
+// naturally, needs no coordinate math, and covers the line number text.
 
-function createGutterClickPlugin(callbacks, field) {
+function createHoverButtonPlugin(callbacks, field) {
     return ViewPlugin.fromClass(class {
         constructor(view) {
             this.view = view
+            this.currentLine = -1
+
+            // Single + button (wa-button + wa-icon), moved between gutter elements
+            this.btn = document.createElement('wa-button')
+            this.btn.className = 'cm-code-comment-add-btn'
+            this.btn.setAttribute('variant', 'brand')
+            this.btn.setAttribute('appearance', 'filled-outlined')
+            this.btn.setAttribute('size', 'small')
+            const icon = document.createElement('wa-icon')
+            icon.setAttribute('name', 'comment')
+            icon.setAttribute('variant', 'regular')
+            icon.className = 'cm-code-comment-add-btn-icon'
+            this.btn.appendChild(icon)
+
+            this.handleMouseMove = this.handleMouseMove.bind(this)
+            this.handleMouseLeave = this.handleMouseLeave.bind(this)
             this.handleClick = this.handleClick.bind(this)
-            view.dom.addEventListener('click', this.handleClick)
+
+            view.dom.addEventListener('mousemove', this.handleMouseMove)
+            view.dom.addEventListener('mouseleave', this.handleMouseLeave)
+            this.btn.addEventListener('click', this.handleClick)
+        }
+
+        /** Find the gutter element at a screen Y, via elementFromPoint. */
+        _gutterElAtY(y) {
+            const gutter = this.view.dom.querySelector('.cm-lineNumbers')
+            if (!gutter) return null
+            const rect = gutter.getBoundingClientRect()
+            const el = document.elementFromPoint(rect.left + rect.width / 2, y)
+            return el?.closest('.cm-gutterElement')
+        }
+
+        /** Find the doc line at a screen Y coordinate. */
+        _lineAtY(y) {
+            const contentRect = this.view.contentDOM.getBoundingClientRect()
+            const pos = this.view.posAtCoords({ x: contentRect.left + 1, y })
+            if (pos === null) return null
+            return this.view.state.doc.lineAt(pos)
+        }
+
+        handleMouseMove(event) {
+            const line = this._lineAtY(event.clientY)
+            if (!line) { this.hide(); return }
+
+            // Same line — no update needed
+            if (line.number === this.currentLine) return
+
+            // Hide if line already has a comment
+            const fieldValue = this.view.state.field(field)
+            if (fieldValue?.commentsMap.has(line.number)) {
+                this.hide()
+                return
+            }
+
+            // Find the gutter element for this line
+            const gutterEl = this._gutterElAtY(event.clientY)
+            if (!gutterEl) { this.hide(); return }
+
+            // Move button into this gutter cell
+            this.hide()
+            this.currentLine = line.number
+            gutterEl.appendChild(this.btn)
+        }
+
+        handleMouseLeave() {
+            this.hide()
         }
 
         handleClick(event) {
-            const gutterEl = event.target.closest('.cm-lineNumbers .cm-gutterElement')
-            if (!gutterEl) return
-
-            const view = this.view
-            const gutterRect = gutterEl.getBoundingClientRect()
-            const y = gutterRect.top + gutterRect.height / 2
-            const contentRect = view.contentDOM.getBoundingClientRect()
-            const pos = view.posAtCoords({ x: contentRect.left + 1, y })
-            if (pos === null) return
-
-            const line = view.state.doc.lineAt(pos)
-            const lineText = line.text
-
-            // Check if this line already has a comment
-            const fieldValue = view.state.field(field)
-            if (fieldValue?.commentsMap.has(line.number)) {
-                return // Already has a comment, do nothing
-            }
-
-            // Add a new comment
-            view.dispatch({ effects: addCommentEffect.of({ lineNumber: line.number, lineText }) })
-            callbacks.onAdd(line.number, lineText)
-
             event.preventDefault()
+            event.stopPropagation()
+
+            if (this.currentLine < 1 || this.currentLine > this.view.state.doc.lines) return
+
+            const line = this.view.state.doc.line(this.currentLine)
+            this.view.dispatch({ effects: addCommentEffect.of({ lineNumber: this.currentLine, lineText: line.text }) })
+            callbacks.onAdd(this.currentLine, line.text)
+
+            this.hide()
+        }
+
+        hide() {
+            this.currentLine = -1
+            if (this.btn.parentElement) this.btn.parentElement.removeChild(this.btn)
         }
 
         destroy() {
-            this.view.dom.removeEventListener('click', this.handleClick)
+            this.view.dom.removeEventListener('mousemove', this.handleMouseMove)
+            this.view.dom.removeEventListener('mouseleave', this.handleMouseLeave)
+            this.hide()
         }
     })
 }
@@ -326,8 +382,22 @@ function createGutterClickPlugin(callbacks, field) {
 // ─── Theme ──────────────────────────────────────────────────────────────────
 
 const baseTheme = EditorView.baseTheme({
+    '& .cm-lineNumbers': {
+        minWidth: '3rem',
+    },
     '& .cm-lineNumbers .cm-gutterElement': {
-        cursor: 'pointer',
+        position: 'relative',
+    },
+    '& .cm-code-comment-add-btn': {
+        position: 'absolute',
+        top: '0',
+        bottom: '0',
+        left: '0',
+        zIndex: '1',
+        transform: 'scale(0.8)',
+    },
+    '& .cm-code-comment-add-btn-icon': {
+        transform: 'scale(1.4)',
     },
     '& .cm-code-comment-wrap': {
         padding: '6px 12px 6px 8px',
@@ -428,6 +498,6 @@ const baseTheme = EditorView.baseTheme({
 export function createCodeCommentsExtension({ initialComments = [], onAdd, onUpdate, onRemove, onAddToMessage, onAddAllToMessage, getSessionCommentCount }) {
     const callbacks = { onAdd, onUpdate, onRemove, onAddToMessage, onAddAllToMessage, getSessionCommentCount }
     const field = createField(callbacks, initialComments)
-    const gutterPlugin = createGutterClickPlugin(callbacks, field)
-    return [field, gutterPlugin, baseTheme]
+    const hoverPlugin = createHoverButtonPlugin(callbacks, field)
+    return [field, hoverPlugin, baseTheme]
 }

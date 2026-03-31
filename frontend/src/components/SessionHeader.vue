@@ -28,6 +28,10 @@ const props = defineProps({
     activeTabLabel: {
         type: String,
         default: null
+    },
+    activeTabHasComments: {
+        type: Boolean,
+        default: false
     }
 })
 
@@ -328,7 +332,7 @@ defineExpose({
             <!-- Clickable zone: title + project + context ring + chevron toggle compact mode -->
             <div class="compact-toggle-zone" @click="isCompactExpanded = !isCompactExpanded">
                 <!-- Active tab label: shown only in compact collapsed mode, replacing action buttons -->
-                <span v-if="activeTabLabel" class="compact-active-tab-label">{{ activeTabLabel }}</span>
+                <span v-if="activeTabLabel" class="compact-active-tab-label">{{ activeTabLabel }}<wa-icon v-if="activeTabHasComments" name="comment" variant="regular" class="compact-tab-comments-indicator"></wa-icon></span>
 
                 <h2 :id="`session-header-${sessionId}-title`">{{ displayName }}</h2>
                 <AppTooltip :for="`session-header-${sessionId}-title`">{{ displayName }}</AppTooltip>
@@ -553,6 +557,11 @@ defineExpose({
     border-width: var(--wa-border-width-s);
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     box-shadow: var(--wa-shadow-offset-x-s) var(--wa-shadow-offset-y-s) 0 0 var(--wa-color-brand-border-loud);
+}
+.compact-tab-comments-indicator {
+    color: var(--wa-color-brand);
+    font-size: var(--wa-font-size-xs);
+    margin-left: var(--wa-space-2xs);
 }
 
 .draft-tag, .archived-tag, .stale-tag {

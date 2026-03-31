@@ -104,6 +104,11 @@ const props = defineProps({
         type: Function,
         default: null,
     },
+    /** Set of absolute paths (files + ancestor dirs) that have code comments. */
+    commentedPaths: {
+        type: Set,
+        default: () => new Set(),
+    },
 })
 
 const emit = defineEmits(['select', 'focus'])
@@ -334,6 +339,11 @@ const gitBadge = computed(() => {
     }
     return entry
 })
+
+const hasComment = computed(() => {
+    if (props.commentedPaths.size === 0) return false
+    return props.commentedPaths.has(nodePath.value)
+})
 </script>
 
 <template>
@@ -369,6 +379,7 @@ const gitBadge = computed(() => {
                 height="16"
             />
             <span class="node-name">{{ compact.displayName }}</span>
+            <wa-icon v-if="hasComment" name="comment" variant="regular" class="comment-badge"></wa-icon>
             <span v-if="gitBadge" class="git-badge" :class="gitBadge.cls">{{ gitBadge.letter }}</span>
         </div>
 
@@ -396,6 +407,7 @@ const gitBadge = computed(() => {
                 :directories-only="directoriesOnly"
                 :compact-folders="compactFolders"
                 :lazy-load-fn="lazyLoadFn"
+                :commented-paths="commentedPaths"
                 @select="(path) => emit('select', path)"
                 @focus="(path) => emit('focus', path)"
             />
@@ -480,6 +492,14 @@ const gitBadge = computed(() => {
 }
 
 .node-name {
+}
+
+/* ----- Comment badge ----- */
+
+.comment-badge {
+    flex-shrink: 0;
+    color: var(--wa-color-brand);
+    font-size: 0.7em;
 }
 
 /* ----- Git status badge (git mode only) ----- */
