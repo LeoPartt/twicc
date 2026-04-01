@@ -227,16 +227,18 @@ export const useCodeCommentsStore = defineStore('codeComments', {
             const comment = this.comments[key]
             if (!comment) return
 
-            // Track content transition for count cache updates
+            // Track content transition for count cache updates.
+            // Decrement BEFORE content change (guard checks current content),
+            // increment AFTER (guard checks new content).
             const hadContent = !!comment.content?.trim()
             const hasContent = !!content?.trim()
+
+            if (hadContent && !hasContent) this._decrementCounts(comment)
 
             comment.content = content
             comment.updatedAt = Date.now()
 
-            // Update counts on empty↔non-empty transitions
             if (!hadContent && hasContent) this._incrementCounts(comment)
-            else if (hadContent && !hasContent) this._decrementCounts(comment)
 
             // Debounce IndexedDB write — use toRaw() to unwrap the reactive
             // proxy before saving; IndexedDB's structured clone cannot handle Proxies.
