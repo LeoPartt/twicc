@@ -18,7 +18,11 @@ const props = defineProps({
     originalFile: {
         type: String,
         default: null
-    }
+    },
+    isSubagent: {
+        type: Boolean,
+        default: false,
+    },
 })
 
 /**
@@ -30,6 +34,7 @@ const props = defineProps({
  *   full mode showing input.content in a read-only CodeEditor
  */
 const viewerMode = computed(() => {
+    if (props.isSubagent) return 'full'
     if (typeof props.originalFile === 'string' && props.originalFile.length > 0) {
         return 'diff'
     }

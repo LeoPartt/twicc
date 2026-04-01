@@ -67,7 +67,11 @@ const props = defineProps({
     originalFile: {
         type: String,
         default: null
-    }
+    },
+    isSubagent: {
+        type: Boolean,
+        default: false,
+    },
 })
 
 /**
@@ -79,6 +83,14 @@ const props = defineProps({
  * 2. Fallback: original = old_string, modified = new_string (fragment only)
  */
 const diffData = computed(() => {
+    // Subagent: always use raw fragment without padding
+    if (props.isSubagent) {
+        const oldStr = props.input.old_string ?? ''
+        const newStr = props.input.new_string ?? ''
+        return { original: oldStr, modified: newStr }
+    }
+
+    // Main session: try full-file mode first, then padded fragment
     if (props.originalFile != null && props.backendPatch) {
         const modified = applyStructuredPatch(props.originalFile, props.backendPatch)
         if (modified != null) {
@@ -104,13 +116,15 @@ const showSpinner = computed(() => props.backendPatchLoading && !props.backendPa
         <div v-if="showSpinner" class="edit-loading">
             <wa-spinner></wa-spinner>
         </div>
-        <ToolDiffViewer
-            v-else
-            mode="diff"
-            :original="diffData.original"
-            :modified="diffData.modified"
-            :file-path="input.file_path"
-        />
+        <template v-else>
+            <p v-if="isSubagent" class="subagent-line-warning">Line numbers shown are relative to the edited fragment, not the actual file position.</p>
+            <ToolDiffViewer
+                mode="diff"
+                :original="diffData.original"
+                :modified="diffData.modified"
+                :file-path="input.file_path"
+            />
+        </template>
     </div>
 </template>
 
@@ -122,5 +136,11 @@ const showSpinner = computed(() => props.backendPatchLoading && !props.backendPa
     display: flex;
     justify-content: center;
     padding: var(--wa-space-s) 0;
+}
+.subagent-line-warning {
+    font-size: var(--wa-font-size-xs);
+    color: var(--wa-color-text-quiet);
+    margin: 0 0 var(--wa-space-2xs) 0;
+    font-style: italic;
 }
 </style>

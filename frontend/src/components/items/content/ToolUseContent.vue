@@ -633,7 +633,25 @@ watch(shouldAutoOpen, (val) => {
 // Diff stats for Edit/Write tools (parsed from the extra JSON field)
 const FILE_CHANGE_TOOLS = new Set(['Edit', 'Write'])
 const fileChangeStats = computed(() => {
-    if (!FILE_CHANGE_TOOLS.has(props.name) || !toolState.value?.extra) return null
+    if (!FILE_CHANGE_TOOLS.has(props.name)) return null
+
+    // In subagents, compute stats from the tool_use input directly
+    // (backend patch data is not used for subagent rendering)
+    if (props.parentSessionId) {
+        if (props.name === 'Edit' && props.input?.old_string != null && props.input?.new_string != null) {
+            return {
+                lines_removed: props.input.old_string.split('\n').length,
+                lines_added: props.input.new_string.split('\n').length,
+            }
+        }
+        if (props.name === 'Write' && props.input?.content != null) {
+            return { lines_added: props.input.content.split('\n').length }
+        }
+        return null
+    }
+
+    // Main session: stats come from the backend (ToolResultLink.extra)
+    if (!toolState.value?.extra) return null
     try {
         return JSON.parse(toolState.value.extra)
     } catch {
@@ -650,6 +668,10 @@ const fileChangeOriginalFile = ref(null)
 const fileChangeBackendPatchLoading = ref(false)
 
 watchEffect(async () => {
+    // In subagents, Edit/Write tools don't use backend patch data for rendering.
+    // They use the tool_use input directly (old_string/new_string for Edit, content for Write).
+    if (props.parentSessionId) return
+
     if ((!editValid.value && !writeValid.value) || !fileChangeStats.value) {
         fileChangeBackendPatch.value = null
         fileChangeOriginalFile.value = null
@@ -910,8 +932,8 @@ function navigateToSubagent() {
         </span>
         <template v-if="isOpen">
             <TodoContent v-if="isTodoWrite && todosValid" :todos="input.todos" />
-            <EditContent v-else-if="editValid" :input="input" :backend-patch="fileChangeBackendPatch" :backend-patch-loading="fileChangeBackendPatchLoading" :original-file="fileChangeOriginalFile" />
-            <WriteContent v-else-if="writeValid" :input="input" :backend-patch="fileChangeBackendPatch" :backend-patch-loading="fileChangeBackendPatchLoading" :original-file="fileChangeOriginalFile" />
+            <EditContent v-else-if="editValid" :input="input" :backend-patch="fileChangeBackendPatch" :backend-patch-loading="fileChangeBackendPatchLoading" :original-file="fileChangeOriginalFile" :is-subagent="!!parentSessionId" />
+            <WriteContent v-else-if="writeValid" :input="input" :backend-patch="fileChangeBackendPatch" :backend-patch-loading="fileChangeBackendPatchLoading" :original-file="fileChangeOriginalFile" :is-subagent="!!parentSessionId" />
             <div v-else-if="displayInput" class="tool-input">
                 <JsonHumanView
                     :value="displayInput"
