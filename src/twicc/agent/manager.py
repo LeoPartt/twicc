@@ -89,6 +89,7 @@ class ProcessManager:
         self._timeout_monitor_task: asyncio.Task[None] | None = None
         self._cron_expiry_monitor_task: asyncio.Task[None] | None = None
         self._stop_event: asyncio.Event | None = None
+        self._cron_restart_tasks: dict[str, asyncio.Task[None]] = {}  # session_id -> restart task
 
     def set_broadcast_callback(self, callback: BroadcastCallback) -> None:
         """Set the callback for broadcasting state changes.
@@ -143,6 +144,9 @@ class ProcessManager:
             RuntimeError: If the process cannot be started or message cannot be sent
         """
         async with self._lock:
+            # Cancel any running cron restart task — user is taking over this session
+            self._cancel_cron_restart_task(session_id)
+
             if session_id in self._processes:
                 process = self._processes[session_id]
 
@@ -443,6 +447,13 @@ class ProcessManager:
                 pass
             self._cron_expiry_monitor_task = None
 
+        # Cancel all cron restart tasks — TwiCC is shutting down.
+        # ProcessRuns stay in DB for restart_all_session_crons() on next startup.
+        if self._cron_restart_tasks:
+            logger.info("Cancelling %d cron restart task(s)", len(self._cron_restart_tasks))
+            for session_id in list(self._cron_restart_tasks):
+                self._cancel_cron_restart_task(session_id)
+
         async with self._lock:
             if not self._processes:
                 return
@@ -676,6 +687,42 @@ class ProcessManager:
             process.state.value,
         )
         return True
+
+    def _cancel_cron_restart_task(self, session_id: str) -> bool:
+        """Cancel a running cron restart task for a session.
+
+        Returns True if a task was cancelled, False if none existed.
+        """
+        task = self._cron_restart_tasks.pop(session_id, None)
+        if task is not None and not task.done():
+            task.cancel()
+            logger.info("Cancelled cron restart task for session %s", session_id)
+            return True
+        return False
+
+    async def _restart_crons_for_session(self, session_id: str) -> None:
+        """Launch infinite cron restart loop for a session that died at runtime.
+
+        Thin wrapper around restart_session_crons() that handles task lifecycle
+        (CancelledError, cleanup from _cron_restart_tasks dict).
+        """
+        from twicc.cron_restart import restart_session_crons
+
+        RUNTIME_INITIAL_DELAY = 10  # seconds before first attempt (let API recover)
+
+        try:
+            await restart_session_crons(
+                session_id,
+                stop_event=self._stop_event,
+                initial_delay=RUNTIME_INITIAL_DELAY,
+            )
+        except asyncio.CancelledError:
+            logger.info("Cron restart task cancelled for session %s", session_id)
+            raise
+        except Exception as e:
+            logger.error("Cron restart task failed for session %s: %s", session_id, e, exc_info=True)
+        finally:
+            self._cron_restart_tasks.pop(session_id, None)
 
     async def check_and_stop_timed_out_processes(self) -> list[str]:
         """Check all active processes and kill those that exceeded their timeout.
@@ -965,6 +1012,27 @@ class ProcessManager:
                         )
                     except Exception as e:
                         logger.error("Error deleting process run for session %s: %s", process.session_id, e)
+
+                # --- Auto-restart crons for non-manual, non-shutdown deaths ---
+                # should_delete_run is False ⟹ process had active crons and died
+                # after USER_TURN. Launch a background restart task.
+                if (
+                    not should_delete_run
+                    and process.kill_reason not in ("manual", "shutdown")
+                    and settings.CRON_AUTO_RESTART
+                    and process.session_id not in self._cron_restart_tasks
+                    and self._stop_event is not None
+                    and not self._stop_event.is_set()
+                ):
+                    task = asyncio.create_task(
+                        self._restart_crons_for_session(process.session_id),
+                        name=f"cron-restart-{process.session_id}",
+                    )
+                    self._cron_restart_tasks[process.session_id] = task
+                    logger.info(
+                        "Launched runtime cron restart task for session %s (kill_reason=%s)",
+                        process.session_id, process.kill_reason,
+                    )
 
         # Clean up dead processes. No lock needed - see docstring for concurrency model.
         if process.state == ProcessState.DEAD:

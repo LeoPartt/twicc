@@ -1,28 +1,83 @@
 """
-Cron restart: re-launch Claude sessions that had active cron jobs when TwiCC last stopped.
+Cron restart: re-launch Claude sessions that had active cron jobs.
 
-Called once at TwiCC startup, after the file watcher is running (so that JSONL writes
-from restarted sessions are detected and synced).
+Called at TwiCC startup (restart_all_session_crons) and at runtime when a
+process with active crons dies from a non-manual cause (_restart_crons_for_session
+in ProcessManager). Both paths use the same restart_session_crons() function.
 """
 
 import asyncio
 import logging
 import os
 from collections import defaultdict
+from collections.abc import Iterator
 
 logger = logging.getLogger(__name__)
 
-RETRY_DELAYS = [0, 5, 15, 30, 60, 120, 180, 300]
+RETRY_ESCALATION = [0, 5, 15, 30, 60, 120]
+MAX_RETRY_DELAY = 300  # 5 minutes cap between attempts
 
 
-async def restart_all_session_crons() -> None:
+def _retry_delays(initial_delay: int = 0) -> Iterator[int]:
+    """Yield retry delays infinitely: initial_delay, then escalation (skipping ≤), then MAX_RETRY_DELAY forever."""
+    yield initial_delay
+    for delay in RETRY_ESCALATION:
+        # Skip delays ≤ initial_delay to keep the sequence monotonically increasing
+        # (e.g., with initial_delay=10: skip 0, 5 → yield 15, 30, 60, 120)
+        if delay <= initial_delay:
+            continue
+        yield delay
+    while True:
+        yield MAX_RETRY_DELAY
+
+
+def _collect_restart_data(session_id: str) -> dict | None:
+    """Collect restart data for a single session (synchronous, runs in thread).
+
+    Returns a dict with keys matching send_to_session() kwargs (minus text)
+    plus crons_data for message building. Returns None if restart not possible
+    (no active crons, session not found, or cwd missing).
+    """
+    from twicc.core.models import Session, SessionCron
+
+    active_crons = list(SessionCron.active_for_session(session_id))
+    if not active_crons:
+        return None
+
+    try:
+        session = Session.objects.get(id=session_id)
+    except Session.DoesNotExist:
+        logger.warning("Cron restart for session %s: session not found in DB", session_id)
+        return None
+
+    cwd = session.cwd
+    if not cwd or not os.path.isdir(cwd):
+        logger.warning("Cron restart for session %s: cwd '%s' does not exist on disk", session_id, cwd)
+        return None
+
+    return {
+        "session_id": session_id,
+        "project_id": session.project_id,
+        "cwd": cwd,
+        "crons_data": [
+            {"cron_expr": c.cron_expr, "recurring": c.recurring, "prompt": c.prompt}
+            for c in active_crons
+        ],
+        "permission_mode": session.permission_mode or "default",
+        "selected_model": session.selected_model,
+        "effort": session.effort,
+        "thinking_enabled": session.thinking_enabled,
+        "claude_in_chrome": session.claude_in_chrome,
+        "context_max": session.context_max,
+    }
+
+
+async def restart_all_session_crons(stop_event: asyncio.Event) -> None:
     """Scan ProcessRun table and restart all sessions with persisted crons.
 
     Steps:
-    1. Delete orphan process runs (runs with no associated crons)
-    2. For sessions with multiple process runs, keep only the oldest (the last confirmed one)
-    3. Collect restart data for each remaining session with active crons
-    4. Launch all restarts in parallel
+    1. Clean up orphan/stale process runs
+    2. Launch restart_session_crons() in parallel for each session with active crons
     """
     from django.conf import settings
 
@@ -30,37 +85,44 @@ async def restart_all_session_crons() -> None:
         logger.info("Cron auto-restart disabled (TWICC_NO_CRON_RESTART is set)")
         return
 
-    restarts = await asyncio.to_thread(_prepare_restarts)
+    session_ids = await asyncio.to_thread(_prepare_restarts)
 
-    if not restarts:
+    if not session_ids:
         logger.info("No cron jobs to restart")
         return
 
-    logger.info("Restarting cron jobs for %d session(s)", len(restarts))
+    logger.info("Restarting cron jobs for %d session(s)", len(session_ids))
 
-    tasks = [restart_session_crons(**r) for r in restarts]
+    tasks = [
+        restart_session_crons(sid, stop_event=stop_event)
+        for sid in session_ids
+    ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    succeeded = sum(1 for r in results if not isinstance(r, Exception))
-    failed = sum(1 for r in results if isinstance(r, Exception))
-    for restart_data, result in zip(restarts, results):
-        if isinstance(result, Exception):
-            logger.error(
-                "Cron restart failed for session %s: %s",
-                restart_data["session_id"], result,
-            )
+    succeeded = 0
+    cancelled = 0
+    for result in results:
+        if result is None:
+            succeeded += 1
+        elif isinstance(result, asyncio.CancelledError):
+            cancelled += 1
+        elif isinstance(result, BaseException):
+            logger.error("Unexpected error in cron restart: %s", result)
 
-    logger.info("Cron restart complete: %d succeeded, %d failed", succeeded, failed)
+    logger.info(
+        "Cron restart complete: %d succeeded, %d cancelled (shutdown)",
+        succeeded, cancelled,
+    )
 
 
-def _prepare_restarts() -> list[dict]:
-    """Synchronous DB work: cleanup orphan process runs and collect restart data.
+def _prepare_restarts() -> list[str]:
+    """Synchronous DB work: cleanup orphan/stale process runs, return session IDs to restart.
 
     Called in asyncio.to_thread from restart_all_session_crons().
     """
     from django.db.models import Count
 
-    from twicc.core.models import ProcessRun, SessionCron
+    from twicc.core.models import ProcessRun, Session, SessionCron
 
     # 1. Delete orphan process runs (no crons attached)
     orphan_count, _ = (
@@ -88,137 +150,96 @@ def _prepare_restarts() -> list[dict]:
             )
             runs_by_session[session_id] = [runs[0]]
 
-    # 3. Collect restart data for each session with active crons.
-    # Fetch all relevant Session rows in one query for settings and cwd.
-    from twicc.core.models import Session
-    session_ids = list(runs_by_session.keys())
-    sessions_by_id = {
-        s.id: s for s in Session.objects.filter(id__in=session_ids)
-    }
-
-    restarts = []
+    # 3. Filter to sessions with active crons, clean up the rest
+    session_ids = []
     for session_id, runs in runs_by_session.items():
         process_run = runs[0]
 
-        # Check for active crons on this process run
-        active_crons = list(
-            SessionCron.active_for_session(session_id).filter(process_run=process_run)
-        )
-        if not active_crons:
-            # All crons expired — delete the process run, nothing to restart
+        if not SessionCron.active_for_session(session_id).filter(process_run=process_run).exists():
             process_run.delete()
             logger.info("Session %s: all crons expired, deleted process run %s", session_id, process_run.pk)
             continue
 
-        # Look up session for cwd and settings
-        session = sessions_by_id.get(session_id)
-        if session is None:
-            logger.warning(
-                "Skipping cron restart for session %s: session not found in DB. "
-                "Process run %s deleted.",
-                session_id, process_run.pk,
-            )
+        # Validate session exists (clean up if JSONL was deleted)
+        if not Session.objects.filter(id=session_id).exists():
             process_run.delete()
+            logger.warning("Session %s: not found in DB, deleted process run %s", session_id, process_run.pk)
             continue
 
-        # Check that the working directory still exists on disk
-        cwd = session.cwd
-        if not cwd or not os.path.isdir(cwd):
-            # Keep the process run (directory might come back later), but skip restart for now
-            logger.warning(
-                "Skipping cron restart for session %s: cwd '%s' does not exist on disk. "
-                "Process run %s kept for future retry.",
-                session_id, cwd, process_run.pk,
-            )
-            continue
+        session_ids.append(session_id)
 
-        # Build cron data for the restart message
-        crons_data = [
-            {
-                "cron_expr": c.cron_expr,
-                "recurring": c.recurring,
-                "prompt": c.prompt,
-            }
-            for c in active_crons
-        ]
-
-        restarts.append({
-            "session_id": session_id,
-            "project_id": session.project_id,
-            "cwd": cwd,
-            "crons_data": crons_data,
-            "permission_mode": session.permission_mode or "default",
-            "selected_model": session.selected_model,
-            "effort": session.effort,
-            "thinking_enabled": session.thinking_enabled,
-            "claude_in_chrome": session.claude_in_chrome,
-            "context_max": session.context_max,
-        })
-
-    return restarts
+    return session_ids
 
 
 async def restart_session_crons(
     session_id: str,
-    project_id: str,
-    cwd: str,
-    crons_data: list[dict],
-    permission_mode: str,
-    selected_model: str | None,
-    effort: str | None,
-    thinking_enabled: bool | None,
-    claude_in_chrome: bool,
-    context_max: int,
+    *,
+    stop_event: asyncio.Event,
+    initial_delay: int = 0,
 ) -> None:
-    """Restart cron jobs for a single session with exponential backoff retry.
+    """Restart cron jobs for a single session with infinite retry.
 
-    Sends a message to Claude asking it to recreate the crons via CronCreate.
-    Waits for the first USER_TURN to confirm success, or retries on failure/timeout.
+    On each attempt: collects fresh data from DB, sends restart message to Claude,
+    waits for the first USER_TURN to confirm success. Retries indefinitely with
+    capped exponential backoff until success, cancellation (stop_event), or all
+    crons have expired (nothing left to restart).
+
+    Used identically by startup (restart_all_session_crons) and runtime
+    (_restart_crons_for_session in ProcessManager).
     """
     from twicc.agent.manager import get_process_manager
     from twicc.agent.states import ProcessState
 
     manager = get_process_manager()
-    message = _build_restart_message(crons_data)
+    delays = _retry_delays(initial_delay)
+    attempt = 0
 
-    for attempt, delay in enumerate(RETRY_DELAYS):
+    while True:
+        delay = next(delays)
+        attempt += 1
+
         if delay > 0:
             logger.info(
-                "Cron restart for session %s: attempt %d/%d in %ds",
-                session_id, attempt + 1, len(RETRY_DELAYS), delay,
+                "Cron restart for session %s: attempt %d in %ds",
+                session_id, attempt, delay,
             )
-            await asyncio.sleep(delay)
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=delay)
+                logger.info(
+                    "Cron restart for session %s: cancelled during delay (attempt %d)",
+                    session_id, attempt,
+                )
+                return
+            except asyncio.TimeoutError:
+                pass  # Normal: delay elapsed, time to retry
+
+        # Collect fresh data on each attempt (crons may expire, settings may change)
+        restart_data = await asyncio.to_thread(_collect_restart_data, session_id)
+        if restart_data is None:
+            logger.info(
+                "Cron restart for session %s: no restart data available, stopping (attempt %d)",
+                session_id, attempt,
+            )
+            return
+
+        crons_data = restart_data.pop("crons_data")
+        message = _build_restart_message(crons_data)
 
         try:
-            # send_to_session handles "no live process" by creating a resumed process.
-            # If a DEAD process exists for this session, it cleans it up first.
-            await manager.send_to_session(
-                session_id=session_id,
-                project_id=project_id,
-                cwd=cwd,
-                text=message,
-                permission_mode=permission_mode,
-                selected_model=selected_model,
-                effort=effort,
-                thinking_enabled=thinking_enabled,
-                claude_in_chrome=claude_in_chrome,
-                context_max=context_max,
-            )
+            await manager.send_to_session(**restart_data, text=message)
 
-            # Get the process that was just created
             process = manager._processes.get(session_id)
             if process is None:
                 logger.warning(
                     "Cron restart for session %s: process not found after send_to_session (attempt %d)",
-                    session_id, attempt + 1,
+                    session_id, attempt,
                 )
                 continue
 
-            # If the process already died during start() (DEAD state), retry
             if process.state == ProcessState.DEAD:
                 logger.warning(
                     "Cron restart for session %s: process died immediately (attempt %d)",
-                    session_id, attempt + 1,
+                    session_id, attempt,
                 )
                 continue
 
@@ -226,41 +247,32 @@ async def restart_session_crons(
             try:
                 await asyncio.wait_for(
                     process._first_turn_done_event.wait(),
-                    timeout=300,  # 5 minutes for Claude to respond
+                    timeout=300,
                 )
             except asyncio.TimeoutError:
                 logger.warning(
                     "Cron restart for session %s: timeout waiting for USER_TURN (attempt %d)",
-                    session_id, attempt + 1,
+                    session_id, attempt,
                 )
                 await manager.kill_process(session_id, reason="cron_restart_timeout")
                 continue
 
-            # Check outcome
             if process._first_user_turn_reached:
-                logger.info("Successfully restarted crons for session %s", session_id)
+                logger.info("Successfully restarted crons for session %s (attempt %d)", session_id, attempt)
                 return
             else:
-                # Process died (DEAD) — ProcessRun cleanup already handled by _on_state_change
                 logger.warning(
                     "Cron restart for session %s: process died before USER_TURN (attempt %d)",
-                    session_id, attempt + 1,
+                    session_id, attempt,
                 )
                 continue
 
         except Exception as e:
             logger.error(
                 "Cron restart for session %s: unexpected error (attempt %d): %s",
-                session_id, attempt + 1, e,
+                session_id, attempt, e,
             )
             continue
-
-    # All attempts exhausted
-    logger.error(
-        "Failed to restart crons for session %s after %d attempts. "
-        "Crons remain in DB for next TwiCC startup.",
-        session_id, len(RETRY_DELAYS),
-    )
 
 
 def _format_cron_description(cron: dict, *, cron_id_to_delete: str | None = None) -> str:
@@ -295,7 +307,7 @@ def _build_cron_descriptions(crons_data: list[dict], *, with_cron_ids: bool = Fa
 
 
 def _build_restart_message(crons_data: list[dict]) -> str:
-    """Build the user message asking Claude to recreate cron jobs at startup.
+    """Build the user message asking Claude to recreate cron jobs.
 
     Used when the process is dead and crons need to be recreated from scratch.
     No deletion needed since the CLI crons are already gone.

@@ -206,7 +206,9 @@ async def run_server(port: int):
         # Restart cron jobs from previous process runs.
         # Must run after watcher is up so that JSONL writes from restarted sessions are detected.
         from twicc.cron_restart import restart_all_session_crons
-        deferred["cron_restart_task"] = asyncio.create_task(restart_all_session_crons())
+        deferred["cron_restart_task"] = asyncio.create_task(
+            restart_all_session_crons(stop_event=shutdown_event)
+        )
         logger.info("Cron restart task launched")
 
         # Start background compute and periodic price sync once initial price sync is done.
