@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from pathlib import Path
 
 import orjson
@@ -39,6 +40,11 @@ from twicc.core.serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# Real subagent files are named agent-a<hex>.jsonl (e.g. agent-a6c7d21.jsonl).
+# Sidechain files like agent-acompact-<hex>.jsonl or agent-aprompt_suggestion-<hex>.jsonl are excluded.
+_REAL_SUBAGENT_RE = re.compile(r"^agent-a[0-9a-f]+\.jsonl$")
 
 
 class ParsedPath:
@@ -88,12 +94,12 @@ def parse_jsonl_path(path: Path, projects_dir: Path) -> ParsedPath | None:
             return ParsedPath(project_id, session_id, SessionType.SESSION)
 
     elif len(parts) == 4:
-        # Format: project_id/session_id/subagents/agent-xxx.jsonl
+        # Format: project_id/session_id/subagents/agent-a<hex>.jsonl
+        # Sidechain files (acompact-*, aprompt_suggestion-*) are excluded.
         project_id, parent_session_id, subdir, filename = parts
         if (
             subdir == "subagents"
-            and filename.startswith("agent-")
-            and filename.endswith(".jsonl")
+            and _REAL_SUBAGENT_RE.match(filename) is not None
         ):
             agent_id = filename.removeprefix("agent-").removesuffix(".jsonl")
             return ParsedPath(

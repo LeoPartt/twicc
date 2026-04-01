@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 import threading
 import time
@@ -34,17 +35,23 @@ def is_session_file(path: Path) -> bool:
     return path.suffix == ".jsonl" and not path.name.startswith("agent-")
 
 
+# Real subagent files are named agent-a<hex>.jsonl (e.g. agent-a6c7d21.jsonl).
+# The subagents/ directory also contains sidechain files like agent-acompact-<hex>.jsonl
+# (context compaction) and agent-aprompt_suggestion-<hex>.jsonl (title suggestions)
+# which are not real subagents and should be ignored.
+_REAL_SUBAGENT_RE = re.compile(r"^agent-a[0-9a-f]+\.jsonl$")
+
+
 def is_subagent_file(path: Path) -> bool:
     """Check if a path is a valid subagent file in the correct location.
 
     Valid subagent files:
     - Must be in a 'subagents' directory
-    - Must start with 'agent-' and end with '.jsonl'
+    - Must match agent-a<hex>.jsonl (excludes sidechain files like acompact, aprompt_suggestion)
     """
     return (
-        path.suffix == ".jsonl"
-        and path.name.startswith("agent-")
-        and path.parent.name == "subagents"
+        path.parent.name == "subagents"
+        and _REAL_SUBAGENT_RE.match(path.name) is not None
     )
 
 
