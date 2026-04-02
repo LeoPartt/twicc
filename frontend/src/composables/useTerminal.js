@@ -438,8 +438,18 @@ export function useTerminal(sessionId) {
     /**
      * Check whether the touch position is outside the terminal viewport
      * and start/stop/update auto-scrolling accordingly.
+     *
+     * Disabled in alternate screen mode (less, vim…): the program manages
+     * its own viewport, so scrolling would rewrite screen content and
+     * invalidate the selection coordinates.
      */
     function handleAutoScroll(clientY) {
+        // In alternate screen, selection is limited to visible content
+        if (isAlternateScreen() || paneAlternate.value) {
+            stopAutoScroll()
+            return
+        }
+
         const screenEl = terminal?.element?.querySelector('.xterm-screen')
         if (!screenEl) return
         const rect = screenEl.getBoundingClientRect()
