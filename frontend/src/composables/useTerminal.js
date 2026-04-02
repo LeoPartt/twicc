@@ -956,11 +956,9 @@ export function useTerminal(sessionId) {
      */
     function disconnect() {
         if (!ws) return
-        intentionalClose = true
-        ws.close()
-        ws = null
-        isConnected.value = false
-        terminal?.writeln('\x1b[31mTerminal disconnected.\x1b[0m')
+        // Send Ctrl+D (EOF) to the PTY so the shell terminates properly.
+        // In tmux this closes the pane and ends the session.
+        wsSend({ type: 'input', data: '\x04' })
     }
 
     /**
