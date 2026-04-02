@@ -5,9 +5,11 @@ import { useSettingsStore } from '../stores/settings'
 import { useDataStore } from '../stores/data'
 import { useTerminalConfigStore } from '../stores/terminalConfig'
 import AppTooltip from './AppTooltip.vue'
+import { toast } from '../composables/useToast'
 import ExtraKeysBar from './ExtraKeysBar.vue'
 import ManageCombosDialog from './ManageCombosDialog.vue'
 import ManageSnippetsDialog from './ManageSnippetsDialog.vue'
+import { getUnavailablePlaceholders } from '../utils/snippetPlaceholders'
 
 const props = defineProps({
     sessionId: {
@@ -47,10 +49,28 @@ function handlePaste() {
 const session = computed(() => props.sessionId ? dataStore.getSession(props.sessionId) : null)
 const projectId = computed(() => session.value?.project_id)
 
-// Snippets for the current project (global + project-specific, merged)
-const snippetsForProject = computed(() =>
-    projectId.value ? terminalConfigStore.getSnippetsForProject(projectId.value) : []
-)
+// Snippets for the current project (global + project-specific, merged),
+// enriched with placeholder availability info (_disabled / _disabledReason).
+const snippetsForProject = computed(() => {
+    const raw = projectId.value ? terminalConfigStore.getSnippetsForProject(projectId.value) : []
+    const s = session.value
+    const pid = projectId.value
+    const project = pid ? dataStore.getProject(pid) : null
+    const projectName = pid ? dataStore.getProjectDisplayName(pid) : null
+    const ctx = { session: s, project, projectName }
+
+    return raw.map(snippet => {
+        const placeholders = snippet.placeholders || []
+        if (placeholders.length === 0) return snippet
+        const unavailable = getUnavailablePlaceholders(placeholders, ctx)
+        if (unavailable.length === 0) return snippet
+        return {
+            ...snippet,
+            _disabled: true,
+            _disabledReason: `Not available: ${unavailable.map(p => p.label).join(', ')}`,
+        }
+    })
+})
 
 // Dialog refs
 const manageCombosDialogRef = ref(null)
@@ -194,6 +214,7 @@ watch(
             @paste="handleExtraKeyPaste"
             @combo-press="handleComboPress"
             @snippet-press="handleSnippetPress"
+            @snippet-disabled-press="(snippet) => toast.warning(snippet._disabledReason)"
             @manage-combos="manageCombosDialogRef?.open()"
             @manage-snippets="manageSnippetsDialogRef?.open()"
         />

@@ -8,6 +8,7 @@ import { ClipboardAddon } from '@xterm/addon-clipboard'
 import { useSettingsStore } from '../stores/settings'
 import { useDataStore } from '../stores/data'
 import { toast } from '../composables/useToast'
+import { resolveSnippetText } from '../utils/snippetPlaceholders'
 import '@xterm/xterm/css/xterm.css'
 
 // ── Terminal themes ──────────────────────────────────────────────────────
@@ -1657,11 +1658,19 @@ export function useTerminal(sessionId) {
     }
 
     /**
-     * Handle a snippet button press. Sends the text as raw terminal input,
-     * optionally appending a newline.
+     * Handle a snippet button press. Resolves placeholders, then sends
+     * the text as raw terminal input, optionally appending a newline.
      */
     function handleSnippetPress(snippet) {
+        const placeholders = snippet.placeholders || []
         let text = snippet.text
+        if (placeholders.length > 0) {
+            const session = dataStore.getSession(sessionId)
+            const pid = session?.project_id
+            const project = pid ? dataStore.getProject(pid) : null
+            const projectName = pid ? dataStore.getProjectDisplayName(pid) : null
+            text = resolveSnippetText(text, placeholders, { session, project, projectName })
+        }
         if (snippet.appendEnter) {
             text += '\n'
         }

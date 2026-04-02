@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { formatCombo } from '../utils/comboNotation'
+import AppTooltip from './AppTooltip.vue'
 
 const props = defineProps({
     activeModifiers: { type: Object, required: true },
@@ -12,7 +13,7 @@ const props = defineProps({
 
 const emit = defineEmits([
     'key-input', 'modifier-toggle', 'paste',
-    'combo-press', 'snippet-press',
+    'combo-press', 'snippet-press', 'snippet-disabled-press',
     'manage-combos', 'manage-snippets',
 ])
 
@@ -133,6 +134,10 @@ function handleComboPointerDown(event, combo) {
 
 function handleSnippetPointerDown(event, snippet) {
     event.preventDefault()
+    if (snippet._disabled) {
+        emit('snippet-disabled-press', snippet)
+        return
+    }
     emit('snippet-press', snippet)
 }
 
@@ -219,14 +224,19 @@ function keyClasses(keyDef) {
             <!-- Snippets tab -->
             <template v-else-if="activeTab === 'snippets'">
                 <template v-if="snippets.length > 0">
-                    <button
-                        v-for="(snippet, i) in snippets"
-                        :key="'snippet-' + i"
-                        class="extra-key"
-                        @pointerdown="handleSnippetPointerDown($event, snippet)"
-                    >
-                        {{ snippet.label }}
-                    </button>
+                    <template v-for="(snippet, i) in snippets" :key="'snippet-' + i">
+                        <button
+                            :id="snippet._disabled ? `disabled-snippet-${i}` : undefined"
+                            class="extra-key"
+                            :class="{ 'snippet-disabled': snippet._disabled }"
+                            @pointerdown="handleSnippetPointerDown($event, snippet)"
+                        >
+                            {{ snippet.label }}
+                        </button>
+                        <AppTooltip v-if="snippet._disabled" :for="`disabled-snippet-${i}`">
+                            {{ snippet._disabledReason }}
+                        </AppTooltip>
+                    </template>
                 </template>
                 <span v-else class="empty-tab-text">No snippets</span>
                 <button
@@ -374,6 +384,21 @@ button {
     border-color: var(--wa-color-brand-border-normal);
     color: var(--wa-color-brand-on-normal);
     box-shadow: 0 0 var(--wa-space-xs) var(--wa-color-brand-fill-quiet), inset 0 0 0 1px var(--wa-color-brand-border-normal);
+}
+
+/* ── Disabled snippets ────────────────────────────────────────────── */
+.extra-key.snippet-disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.extra-key.snippet-disabled:hover {
+    background: var(--wa-color-surface-raised);
+    transform: none;
+}
+
+.extra-key.snippet-disabled:active {
+    transform: none;
 }
 
 /* ── Empty tab text ───────────────────────────────────────────────── */

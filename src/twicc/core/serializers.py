@@ -73,7 +73,7 @@ def serialize_session(session):
         "total_cost": float(session.total_cost) if session.total_cost else None,  # Total cost in USD
         # Runtime environment fields
         "cwd": session.cwd,  # Current working directory
-        "git_branch": session.git_branch or session.cwd_git_branch,  # Resolved branch, fallback to cwd
+        "git_branch": session.git_branch or (session.cwd_git_branch if session.git_directory else None),  # Resolved branch, fallback to cwd
         "git_directory": session.git_directory,  # Resolved git root directory
         "model": _serialize_model(session.model),  # Model info object
         # User-controlled fields

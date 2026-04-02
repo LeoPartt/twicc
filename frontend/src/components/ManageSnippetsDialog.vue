@@ -5,6 +5,7 @@ import { useTerminalConfigStore } from '../stores/terminalConfig'
 import { useDataStore } from '../stores/data'
 import ProjectBadge from './ProjectBadge.vue'
 import { buildProjectTree, flattenProjectTree } from '../utils/projectTree'
+import { PLACEHOLDERS, extractPlaceholders } from '../utils/snippetPlaceholders'
 
 const props = defineProps({
     currentProjectId: {
@@ -153,6 +154,23 @@ function insertChar(char) {
     })
 }
 
+// ── Placeholder insertion ────────────────────────────────────────────
+function insertPlaceholder(id) {
+    const insertValue = `{${id}}`
+    const textarea = textareaRef.value?.shadowRoot?.querySelector('textarea')
+    const start = textarea?.selectionStart ?? formData.value.text.length
+    const end = textarea?.selectionEnd ?? formData.value.text.length
+    const text = formData.value.text
+    formData.value.text = text.slice(0, start) + insertValue + text.slice(end)
+    const newPos = start + insertValue.length
+    nextTick(() => {
+        if (textarea) {
+            textarea.focus()
+            textarea.setSelectionRange(newPos, newPos)
+        }
+    })
+}
+
 // ── Validation & save ────────────────────────────────────────────────
 function handleSave() {
     errorMessage.value = ''
@@ -175,6 +193,7 @@ function handleSave() {
         label: trimmedLabel,
         text: trimmedText,
         appendEnter: formData.value.appendEnter,
+        placeholders: extractPlaceholders(trimmedText),
     }
 
     // Check for duplicate label in same scope (warn but allow save on second submit)
@@ -367,6 +386,19 @@ defineExpose({ open, close })
                         @click="insertChar(char)"
                     >{{ char }}</button>
                 </div>
+
+                <!-- Placeholder picker -->
+                <p class="placeholder-hint">Insert placeholders to be resolved at send time:</p>
+                <div class="placeholder-picker-row">
+                    <button
+                        v-for="p in PLACEHOLDERS"
+                        :key="p.id"
+                        type="button"
+                        class="picker-key placeholder-key"
+                        @click="insertPlaceholder(p.id)"
+                        :title="`Insert {${p.id}}`"
+                    >{{ p.label }}</button>
+                </div>
             </div>
 
             <!-- Append Enter checkbox + Scope dropdown on same row -->
@@ -377,7 +409,7 @@ defineExpose({ open, close })
                     @change="formData.appendEnter = $event.target.checked"
                     size="small"
                 >
-                    Append Enter
+                    Append final Enter
                 </wa-checkbox>
 
                 <!-- Scope select -->
@@ -658,6 +690,32 @@ defineExpose({ open, close })
 .picker-key:active {
     background: color-mix(in srgb, var(--wa-color-surface-raised), var(--wa-color-mix-active));
     transform: scale(0.95);
+}
+
+/* ── Placeholder picker ───────────────────────────────────────────── */
+.placeholder-hint {
+    font-size: var(--wa-font-size-xs);
+    color: var(--wa-color-text-quiet);
+    margin: 0;
+}
+
+
+.placeholder-picker-row {
+    display: flex;
+    gap: var(--wa-space-2xs);
+    flex-wrap: wrap;
+}
+
+.placeholder-key {
+    font-family: var(--wa-font-family-sans) !important;
+    font-size: var(--wa-font-size-s) !important;
+    padding: 0 var(--wa-space-xs) !important;
+    border-color: var(--wa-color-brand-border-quiet) !important;
+    color: var(--wa-color-brand-on-quiet) !important;
+}
+
+.placeholder-key:hover {
+    background: var(--wa-color-brand-fill-quiet) !important;
 }
 
 .form-options-row {
