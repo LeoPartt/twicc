@@ -549,14 +549,10 @@ export function useTerminal(sessionId) {
                 : (appCursor ? '\x1bOA' : '\x1b[A')
             wsSend({ type: 'input', data: key.repeat(Math.abs(lines)) })
         } else if (shouldUseTmux()) {
-            // Shell prompt inside tmux: send SGR mouse wheel sequences.
-            // tmux copy-mode handles the scrollback.
-            // Button 64 = wheel up, 65 = wheel down.
-            const button = lines > 0 ? 65 : 64
-            const col = Math.floor(terminal.cols / 2)
-            const row = Math.floor(terminal.rows / 2)
-            const event = `\x1b[<${button};${col};${row}M`
-            wsSend({ type: 'input', data: event.repeat(Math.abs(lines)) })
+            // Shell prompt inside tmux: use backend tmux command to scroll
+            // exactly N lines in copy-mode, bypassing tmux's mouse handling
+            // which adds its own scroll on top of our bindings.
+            wsSend({ type: 'tmux_scroll', lines })
         } else if (isAlternateScreen()) {
             // Alternate screen app without tmux (less, vim run directly):
             // send arrow keys — the app handles scrolling.

@@ -12,6 +12,7 @@ Protocol:
   Client → Server (JSON text frames):
     { "type": "input", "data": "ls -la\n" }       — keyboard input
     { "type": "resize", "cols": 120, "rows": 30 }  — terminal resize
+    { "type": "tmux_scroll", "lines": -3 }         — tmux scrollback (neg=up)
 
   Server → Client:
     Plain text frames — raw PTY output (no JSON wrapping for performance).
@@ -339,6 +340,28 @@ def _tmux_set_global_option(option: str, value: str) -> bool:
         return False
 
 
+def _tmux_scroll(session_id: str, lines: int) -> None:
+    """Scroll the tmux pane by the given number of lines.
+
+    Enters hidden copy-mode (-eH) if not already in copy-mode, then
+    scrolls exactly N lines. Positive = down, negative = up.
+    The -e flag auto-exits copy-mode when scrolling back to the bottom.
+    """
+    tmux_path = get_tmux_path()
+    if tmux_path is None:
+        return
+    name = tmux_session_name(session_id)
+    cmd = "scroll-up" if lines < 0 else "scroll-down"
+    count = abs(lines)
+    # Single tmux invocation: enter copy-mode (no-op if already in) + scroll N lines
+    subprocess.run(
+        [tmux_path, "-L", TMUX_SOCKET_NAME,
+         "copy-mode", "-eH", "-t", name, ";",
+         "send-keys", "-t", name, "-X", "-N", str(count), cmd],
+        capture_output=True, timeout=5,
+    )
+
+
 def tmux_pane_is_alternate(session_id: str) -> bool:
     """Check if the active pane of the active window is in alternate screen mode.
 
@@ -361,43 +384,6 @@ def tmux_pane_is_alternate(session_id: str) -> bool:
         return result.stdout.strip() == "1"
     except (subprocess.TimeoutExpired, OSError):
         return False
-
-
-def _configure_tmux_scroll_bindings() -> None:
-    """Configure tmux mouse wheel bindings for proper scroll in all contexts.
-
-    Overrides the default WheelUpPane / WheelDownPane bindings so that:
-    - If the pane is already in copy-mode or the app captures the mouse
-      (e.g. vim with mouse): pass the mouse event through (send-keys -M).
-    - If the pane is in alternate screen mode (less, htop, etc.) WITHOUT
-      mouse capture: send arrow keys so the app scrolls natively.
-    - Otherwise (shell prompt): enter copy-mode for tmux scrollback.
-
-    These bindings are server-wide (shared by all twicc tmux sessions on
-    the same socket), so setting them repeatedly is harmless.
-    """
-    tmux_path = get_tmux_path()
-    if tmux_path is None:
-        return
-
-    condition = "#{||:#{pane_in_mode},#{mouse_any_flag}}"
-
-    for event, arrow_keys, normal_cmd in [
-        ("WheelUpPane", "Up Up Up", "copy-mode -e ; send-keys -M"),
-        ("WheelDownPane", "Down Down Down", "send-keys -M"),
-    ]:
-        alt_branch = (
-            f'if-shell -F "#{{alternate_on}}" '
-            f'"send-keys {arrow_keys}" '
-            f'"{normal_cmd}"'
-        )
-        subprocess.run(
-            [tmux_path, "-L", TMUX_SOCKET_NAME,
-             "bind-key", "-T", "root", event,
-             "if-shell", "-F", condition, "send-keys -M", alt_branch],
-            capture_output=True, timeout=5,
-        )
-
 
 
 # ── tmux pane state monitor ──────────────────────────────────────────────
@@ -495,12 +481,10 @@ async def terminal_application(scope, receive, send):
     # ── Accept connection ─────────────────────────────────────────────
     await send({"type": "websocket.accept"})
 
-    # Configure tmux session for scroll support.
-    # Mouse mode must be on for the frontend's SGR mouse wheel sequences
-    # to be interpreted by tmux (used by both mobile touch and desktop wheel).
-    # Desktop wheel is intercepted by the frontend to batch events and avoid
-    # copy-mode rendering artifacts. Desktop drag selection is also handled
-    # by the frontend in capture phase, so mouse-on doesn't interfere.
+    # Configure tmux session: force mouse OFF so tmux doesn't capture
+    # mouse events. All scroll and selection is handled by the frontend
+    # (touch handlers on mobile, capture-phase handlers on desktop).
+    # Tmux scrollback is handled via the tmux_scroll backend command.
     if use_tmux:
         # Wait for the tmux session to be fully created — spawn_tmux_pty
         # forks and returns immediately, but the child needs time to exec
@@ -510,12 +494,10 @@ async def terminal_application(scope, receive, send):
                 break
             await asyncio.sleep(0.1)
 
-        # Force mouse on at both global and session level — ensures correct
-        # state regardless of tmux server's prior configuration.
-        await asyncio.to_thread(tmux_set_option, session_id, "mouse", "on")
-        await asyncio.to_thread(_tmux_set_global_option, "mouse", "on")
-        # Override default wheel bindings for proper scroll in less/htop/etc.
-        await asyncio.to_thread(_configure_tmux_scroll_bindings)
+        # Force mouse off at both session and global level — ensures clean
+        # state regardless of prior tmux server configuration.
+        await asyncio.to_thread(tmux_set_option, session_id, "mouse", "off")
+        await asyncio.to_thread(_tmux_set_global_option, "mouse", "off")
 
     # ── PTY output reader task ────────────────────────────────────────
     # Uses add_reader for event-driven reading, and an asyncio.Queue
@@ -599,6 +581,13 @@ async def terminal_application(scope, receive, send):
                             set_winsize(master_fd, cols, rows)
                         except OSError:
                             pass
+
+                elif msg_type == "tmux_scroll" and use_tmux:
+                    scroll_lines = msg.get("lines", 0)
+                    if scroll_lines:
+                        await asyncio.to_thread(
+                            _tmux_scroll, session_id, scroll_lines,
+                        )
 
             elif message["type"] == "websocket.disconnect":
                 return
