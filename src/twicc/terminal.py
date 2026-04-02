@@ -502,6 +502,14 @@ async def terminal_application(scope, receive, send):
     # copy-mode rendering artifacts. Desktop drag selection is also handled
     # by the frontend in capture phase, so mouse-on doesn't interfere.
     if use_tmux:
+        # Wait for the tmux session to be fully created — spawn_tmux_pty
+        # forks and returns immediately, but the child needs time to exec
+        # tmux and create the session before we can configure it.
+        for _ in range(20):  # up to 2s
+            if await asyncio.to_thread(tmux_session_exists, session_id):
+                break
+            await asyncio.sleep(0.1)
+
         # Force mouse on at both global and session level — ensures correct
         # state regardless of tmux server's prior configuration.
         await asyncio.to_thread(tmux_set_option, session_id, "mouse", "on")
