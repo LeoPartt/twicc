@@ -229,13 +229,29 @@ export function useTerminal(sessionId) {
     const activeModifiers = reactive({ ctrl: false, alt: false, shift: false })
     const lockedModifiers = reactive({ ctrl: false, alt: false, shift: false })
 
-    // ── Touch state (mobile) ─────────────────────────────────────────────
+    // ── Selection state ────────────────────────────────────────────────
     let selectStartCol = 0
     let selectStartRow = 0
     // Auto-scroll state for selection mode (edge dragging)
     let autoScrollId = null
     let autoScrollLastClientX = 0
     let autoScrollLastClientY = 0
+    // Tmux scroll-selection: indexed buffer for selections that extend
+    // beyond the visible viewport via auto-scroll in tmux-normal mode.
+    // The buffer uses relative indices where 0 = initial viewport top.
+    // Scrolling up adds negative indices, scrolling down adds positive
+    // indices beyond the initial viewport. The fixed anchor stays at its
+    // original index, the moving anchor follows the finger/edge.
+    let tmuxScrollSel = null
+    //   { lines: { [index]: string },  — indexed line buffer
+    //     bufferMin: number,           — lowest index in buffer
+    //     bufferMax: number,           — highest index in buffer
+    //     viewportStart: number,       — index of current viewport row 0
+    //     fixedAnchorIdx: number,      — fixed anchor (where drag started)
+    //     fixedAnchorCol: number,
+    //     movingAnchorIdx: number,     — moving anchor (finger/edge)
+    //     movingAnchorCol: number }
+    let tmuxAutoScrollActive = false
     // Scroll physics state
     let scrollLastY = 0
     let scrollLastTime = 0
@@ -450,6 +466,217 @@ export function useTerminal(sessionId) {
         }
     }
 
+    /**
+     * Read text lines from the visible terminal screen.
+     * @param {number} fromRow - Visual row (0 = top of viewport)
+     * @param {number} toRow - Visual row (inclusive)
+     * @returns {string[]}
+     */
+    function readVisibleLines(fromRow, toRow) {
+        if (!terminal) return []
+        const buf = terminal.buffer.active
+        const base = buf.viewportY
+        const lines = []
+        for (let i = fromRow; i <= toRow; i++) {
+            lines.push(buf.getLine(base + i)?.translateToString(true) ?? '')
+        }
+        return lines
+    }
+
+    /**
+     * Reset the tmux scroll-selection buffer.
+     */
+    function resetTmuxScrollSelection() {
+        tmuxScrollSel = null
+        tmuxAutoScrollActive = false
+    }
+
+    /**
+     * Cancel any active selection and scroll back to bottom.
+     * Used when the user scrolls after a selection, or presses Escape.
+     */
+    function cancelSelectionAndScrollToBottom() {
+        terminal?.clearSelection()
+        hasSelection.value = false
+        if (tmuxScrollSel) {
+            resetTmuxScrollSelection()
+            // Scroll to bottom to exit tmux copy-mode
+            scrollToEdge('bottom')
+        }
+    }
+
+    /**
+     * Check if we're in tmux-normal mode (tmux active, pane NOT in alternate screen).
+     * This is the mode where we need the custom buffer for scroll-selection.
+     */
+    function isTmuxNormal() {
+        return shouldUseTmux() && !paneAlternate.value
+    }
+
+    /**
+     * Initialize the tmux scroll-selection buffer.
+     * Called when auto-scroll first triggers in tmux-normal mode.
+     * Captures the full visible viewport into an indexed buffer where
+     * index 0 = initial viewport row 0. Negative indices = scrolled-up lines.
+     */
+    function initTmuxScrollSelection() {
+        if (!terminal) return
+        const rows = terminal.rows
+        const anchorVisualRow = selectStartRow - terminal.buffer.active.viewportY
+
+        // Capture entire viewport into indexed buffer
+        const lines = {}
+        const visibleLines = readVisibleLines(0, rows - 1)
+        for (let i = 0; i < rows; i++) {
+            lines[i] = visibleLines[i]
+        }
+
+        tmuxScrollSel = {
+            lines,
+            bufferMin: 0,
+            bufferMax: rows - 1,
+            viewportStart: 0,
+            fixedAnchorIdx: anchorVisualRow,
+            fixedAnchorCol: selectStartCol,
+            movingAnchorIdx: anchorVisualRow,
+            movingAnchorCol: selectStartCol,
+        }
+    }
+
+    /**
+     * Update the buffer after a tmux scroll step.
+     * Shifts the viewport window and adds any new lines not yet in the buffer.
+     *
+     * @param {number} actualLines - Lines actually scrolled (neg=up, pos=down)
+     */
+    function afterTmuxScroll(actualLines) {
+        if (!tmuxScrollSel || !terminal || actualLines === 0) return
+        const rows = terminal.rows
+        const sel = tmuxScrollSel
+
+        const oldViewportStart = sel.viewportStart
+        // Shift viewport: scroll up (neg) → viewport indices decrease
+        sel.viewportStart += actualLines
+
+        const newViewportEnd = sel.viewportStart + rows - 1
+
+        if (actualLines < 0) {
+            // Scrolled up: new lines appeared at the top (lower indices)
+            for (let i = sel.viewportStart; i < sel.bufferMin; i++) {
+                const visualRow = i - sel.viewportStart
+                sel.lines[i] = readVisibleLines(visualRow, visualRow)[0]
+            }
+            sel.bufferMin = Math.min(sel.bufferMin, sel.viewportStart)
+            // Update moving anchor to top edge
+            sel.movingAnchorIdx = sel.viewportStart
+            sel.movingAnchorCol = 0
+        } else {
+            // Scrolled down: new lines appeared at the bottom (higher indices)
+            for (let i = sel.bufferMax + 1; i <= newViewportEnd; i++) {
+                const visualRow = i - sel.viewportStart
+                sel.lines[i] = readVisibleLines(visualRow, visualRow)[0]
+            }
+            sel.bufferMax = Math.max(sel.bufferMax, newViewportEnd)
+            // Update moving anchor to bottom edge
+            sel.movingAnchorIdx = newViewportEnd
+            sel.movingAnchorCol = terminal.cols
+        }
+    }
+
+    /**
+     * Update the visual selection on screen for tmux scroll-selection.
+     * Highlights the visible portion of the selection between the two anchors.
+     *
+     * @param {number|null} fingerVisualRow - Finger's visual row, or null for auto-scroll edge
+     * @param {number|null} fingerCol - Finger's column, or null for auto-scroll edge
+     */
+    function updateTmuxVisualSelection(fingerVisualRow = null, fingerCol = null) {
+        if (!tmuxScrollSel || !terminal) return
+        const rows = terminal.rows
+        const cols = terminal.cols
+        const base = terminal.buffer.active.viewportY
+        const sel = tmuxScrollSel
+
+        // Update moving anchor from finger position when provided
+        if (fingerVisualRow !== null) {
+            sel.movingAnchorIdx = sel.viewportStart + fingerVisualRow
+            sel.movingAnchorCol = fingerCol ?? 0
+        }
+
+        // Selection range in buffer indices
+        const fixedOffset = sel.fixedAnchorIdx * cols + sel.fixedAnchorCol
+        const movingOffset = sel.movingAnchorIdx * cols + sel.movingAnchorCol
+        const selMinIdx = fixedOffset <= movingOffset ? sel.fixedAnchorIdx : sel.movingAnchorIdx
+        const selMinCol = fixedOffset <= movingOffset ? sel.fixedAnchorCol : sel.movingAnchorCol
+        const selMaxIdx = fixedOffset <= movingOffset ? sel.movingAnchorIdx : sel.fixedAnchorIdx
+        const selMaxCol = fixedOffset <= movingOffset ? sel.movingAnchorCol : sel.fixedAnchorCol
+
+        // Clamp to viewport for visual display
+        const viewEnd = sel.viewportStart + rows - 1
+        const visStart = Math.max(selMinIdx, sel.viewportStart)
+        const visEnd = Math.min(selMaxIdx, viewEnd)
+
+        if (visStart > viewEnd || visEnd < sel.viewportStart) return  // nothing visible
+
+        const startVisualRow = visStart - sel.viewportStart
+        const endVisualRow = visEnd - sel.viewportStart
+        const startCol = (visStart === selMinIdx) ? selMinCol : 0
+        const endCol = (visEnd === selMaxIdx) ? selMaxCol : cols
+
+        const length = (endVisualRow * cols + endCol) - (startVisualRow * cols + startCol)
+        if (length > 0) terminal.select(startCol, base + startVisualRow, length)
+    }
+
+    /**
+     * Handle selection update when tmuxScrollSel is active and finger is
+     * in the viewport.
+     */
+    function updateTmuxInViewportSelection(clientX, clientY) {
+        if (!tmuxScrollSel || !terminal) return
+        const screenEl = terminal.element?.querySelector('.xterm-screen')
+        if (!screenEl) return
+        const rect = screenEl.getBoundingClientRect()
+        const cellWidth = rect.width / terminal.cols
+        const cellHeight = rect.height / terminal.rows
+        const col = Math.max(0, Math.min(terminal.cols - 1, Math.floor((clientX - rect.left) / cellWidth)))
+        const visualRow = Math.max(0, Math.min(terminal.rows - 1, Math.floor((clientY - rect.top) / cellHeight)))
+
+        updateTmuxVisualSelection(visualRow, col)
+    }
+
+    /**
+     * Get the full selected text from the tmux scroll-selection buffer.
+     * Returns null if no tmux scroll-selection is active.
+     */
+    function getTmuxScrollSelectionText() {
+        if (!tmuxScrollSel) return null
+        const sel = tmuxScrollSel
+        const cols = terminal?.cols ?? 80
+
+        // Determine selection range from the two anchors
+        const fixedOffset = sel.fixedAnchorIdx * cols + sel.fixedAnchorCol
+        const movingOffset = sel.movingAnchorIdx * cols + sel.movingAnchorCol
+        const startIdx = fixedOffset <= movingOffset ? sel.fixedAnchorIdx : sel.movingAnchorIdx
+        const startCol = fixedOffset <= movingOffset ? sel.fixedAnchorCol : sel.movingAnchorCol
+        const endIdx = fixedOffset <= movingOffset ? sel.movingAnchorIdx : sel.fixedAnchorIdx
+        const endCol = fixedOffset <= movingOffset ? sel.movingAnchorCol : sel.fixedAnchorCol
+
+        // Build text from buffer
+        const result = []
+        for (let i = startIdx; i <= endIdx; i++) {
+            let line = sel.lines[i] ?? ''
+            if (i === startIdx && i === endIdx) {
+                line = line.substring(startCol, endCol)
+            } else if (i === startIdx) {
+                line = line.substring(startCol)
+            } else if (i === endIdx) {
+                line = line.substring(0, endCol)
+            }
+            result.push(line)
+        }
+        return result.join('\n')
+    }
+
     // ── Selection auto-scroll (edge dragging) ────────────────────────
     // When the finger goes above or below the terminal viewport during
     // a selection drag, auto-scroll in that direction and keep extending
@@ -488,17 +715,71 @@ export function useTerminal(sessionId) {
     }
 
     /**
-     * Check whether the touch position is outside the terminal viewport
-     * and start/stop/update auto-scrolling accordingly.
+     * Async auto-scroll loop for tmux-normal mode.
+     * Sends tmux_scroll commands sequentially, waiting for each result
+     * before sending the next. Updates the custom text buffer with each step.
      *
-     * Disabled in alternate screen mode (less, vim…): the program manages
-     * its own viewport, so scrolling would rewrite screen content and
-     * invalidate the selection coordinates.
+     * @param {'up'|'down'} direction
+     */
+    async function startTmuxAutoScroll(direction) {
+        if (tmuxAutoScrollActive) return
+        tmuxAutoScrollActive = true
+
+        const sign = direction === 'up' ? -1 : 1
+        let step = 0
+
+        // Initialize the buffer on first scroll
+        if (!tmuxScrollSel) {
+            initTmuxScrollSelection()
+        }
+
+        try {
+            while (tmuxAutoScrollActive) {
+                // Ramp up: 1, 1, 2, 2, 3... capped at half the viewport
+                // to ensure we never skip lines when capturing the buffer
+                step++
+                const maxLines = Math.floor(terminal.rows / 2)
+                const lines = sign * Math.min(Math.ceil(step / 2), maxLines)
+
+                const result = await new Promise(resolve => {
+                    onScrollResult = resolve
+                    scrollByLines(lines)
+                })
+
+                if (!tmuxAutoScrollActive) break
+
+                afterTmuxScroll(result.actual)
+                updateTmuxVisualSelection()
+
+                if (result.actual === 0 || result.atTop || result.atBottom) break
+
+                // Pause between steps — starts slow (200ms), speeds up to 50ms
+                const delay = Math.max(50, 200 - step * 15)
+                await new Promise(r => setTimeout(r, delay))
+            }
+        } finally {
+            tmuxAutoScrollActive = false
+        }
+    }
+
+    function stopTmuxAutoScroll() {
+        tmuxAutoScrollActive = false
+    }
+
+    /**
+     * Check whether the pointer position is outside the terminal viewport
+     * and start/stop auto-scrolling accordingly.
+     *
+     * Three modes:
+     * - Normal (no tmux): rAF-based smooth scroll with native xterm selection
+     * - Tmux-normal: async sequential scroll with custom text buffer
+     * - Alternate (with or without tmux): disabled (program manages viewport)
      */
     function handleAutoScroll(clientY) {
         // In alternate screen, selection is limited to visible content
-        if (isAlternateScreen() || paneAlternate.value) {
+        if (paneAlternate.value || (!shouldUseTmux() && isAlternateScreen())) {
             stopAutoScroll()
+            stopTmuxAutoScroll()
             return
         }
 
@@ -508,18 +789,31 @@ export function useTerminal(sessionId) {
         const overTop = rect.top - clientY     // >0 when above
         const overBottom = clientY - rect.bottom // >0 when below
 
-        if (overTop > 0) {
-            // Finger above viewport — scroll up (negative)
-            const speed = -(AUTO_SCROLL_EDGE_PX + overTop) / 4
-            stopAutoScroll()
-            startAutoScroll(speed)
-        } else if (overBottom > 0) {
-            // Finger below viewport — scroll down (positive)
-            const speed = (AUTO_SCROLL_EDGE_PX + overBottom) / 4
-            stopAutoScroll()
-            startAutoScroll(speed)
+        if (isTmuxNormal()) {
+            // Tmux-normal: async scroll with buffer
+            if (overTop > 0) {
+                stopAutoScroll()
+                startTmuxAutoScroll('up')
+            } else if (overBottom > 0) {
+                stopAutoScroll()
+                startTmuxAutoScroll('down')
+            } else {
+                stopTmuxAutoScroll()
+            }
         } else {
-            stopAutoScroll()
+            // Normal mode: rAF-based smooth scroll
+            stopTmuxAutoScroll()
+            if (overTop > 0) {
+                const speed = -(AUTO_SCROLL_EDGE_PX + overTop) / 4
+                stopAutoScroll()
+                startAutoScroll(speed)
+            } else if (overBottom > 0) {
+                const speed = (AUTO_SCROLL_EDGE_PX + overBottom) / 4
+                stopAutoScroll()
+                startAutoScroll(speed)
+            } else {
+                stopAutoScroll()
+            }
         }
     }
 
@@ -531,6 +825,8 @@ export function useTerminal(sessionId) {
         }
         touchIsSelecting = true
         stopAutoScroll()
+        stopTmuxAutoScroll()
+        resetTmuxScrollSelection()
         const touch = e.touches[0]
         const coords = screenToTerminalCoords(touch.clientX, touch.clientY)
         selectStartCol = coords.col
@@ -546,13 +842,18 @@ export function useTerminal(sessionId) {
         autoScrollLastClientX = touch.clientX
         autoScrollLastClientY = touch.clientY
 
-        updateSelection(touch.clientX, touch.clientY)
+        if (tmuxScrollSel) {
+            updateTmuxInViewportSelection(touch.clientX, touch.clientY)
+        } else {
+            updateSelection(touch.clientX, touch.clientY)
+        }
         handleAutoScroll(touch.clientY)
         e.preventDefault()
     }
 
     function onTouchEnd() {
         stopAutoScroll()
+        stopTmuxAutoScroll()
     }
 
     // ── Scroll dispatch ────────────────────────────────────────────────
@@ -798,6 +1099,12 @@ export function useTerminal(sessionId) {
 
     function onScrollTouchStart(e) {
         stopScrollInertia()
+        // Scrolling after a selection cancels the selection
+        if (tmuxScrollSel || terminal?.getSelection()) {
+            terminal?.clearSelection()
+            hasSelection.value = false
+            resetTmuxScrollSelection()
+        }
         const touch = e.touches[0]
         scrollLastY = touch.clientY
         scrollLastTime = e.timeStamp
@@ -890,6 +1197,8 @@ export function useTerminal(sessionId) {
      */
     function detachTouchListeners() {
         stopAutoScroll()
+        stopTmuxAutoScroll()
+        resetTmuxScrollSelection()
         stopScrollInertia()
         if (touchAbortController) {
             touchAbortController.abort()
@@ -907,6 +1216,7 @@ export function useTerminal(sessionId) {
     function onDesktopMouseDown(e) {
         if (e.button !== 0) return  // only left button
         desktopDragActive = false
+        resetTmuxScrollSelection()
         const coords = screenToTerminalCoords(e.clientX, e.clientY)
         selectStartCol = coords.col
         selectStartRow = coords.row
@@ -925,12 +1235,23 @@ export function useTerminal(sessionId) {
         e.stopPropagation()
         e.preventDefault()
 
-        updateSelection(e.clientX, e.clientY)
+        // Store position for auto-scroll (reuses the same vars as touch)
+        autoScrollLastClientX = e.clientX
+        autoScrollLastClientY = e.clientY
+
+        if (tmuxScrollSel) {
+            updateTmuxInViewportSelection(e.clientX, e.clientY)
+        } else {
+            updateSelection(e.clientX, e.clientY)
+        }
+        handleAutoScroll(e.clientY)
     }
 
     function onDesktopMouseUp(e) {
         if (desktopDragActive) {
             desktopDragActive = false
+            stopAutoScroll()
+            stopTmuxAutoScroll()
             e.stopPropagation()
             e.preventDefault()
         }
@@ -945,6 +1266,13 @@ export function useTerminal(sessionId) {
     function onDesktopWheel(e) {
         e.preventDefault()
         e.stopPropagation()
+
+        // Scrolling after a selection cancels the selection
+        if (tmuxScrollSel || terminal?.getSelection()) {
+            terminal?.clearSelection()
+            hasSelection.value = false
+            resetTmuxScrollSelection()
+        }
 
         const cellHeight = getCellHeight()
         if (cellHeight <= 0) return
@@ -1074,14 +1402,30 @@ export function useTerminal(sessionId) {
                 }
             }
 
+            // Escape: cancel selection and scroll back to bottom
+            if (event.code === 'Escape') {
+                if (tmuxScrollSel || terminal.getSelection()) {
+                    cancelSelectionAndScrollToBottom()
+                    event.preventDefault()
+                    return false
+                }
+                // No selection: also scroll to bottom if scrolled up
+                if (canScrollDown.value) {
+                    scrollToEdge('bottom')
+                    event.preventDefault()
+                    return false
+                }
+            }
+
             // Intercept Ctrl+C when text is selected: copy to clipboard
             // instead of sending SIGINT to the terminal process.
             // Ctrl+Shift+C also copies (standard terminal emulator shortcut).
             if (event.ctrlKey && (event.code === 'KeyC')) {
-                const selection = terminal.getSelection()
+                const selection = getTmuxScrollSelectionText() || terminal.getSelection()
                 if (selection) {
                     navigator.clipboard.writeText(selection)
                     terminal.clearSelection()
+                    resetTmuxScrollSelection()
                     toast.success('Copied to clipboard', { duration: 2000 })
                     event.preventDefault()
                     return false
@@ -1185,11 +1529,12 @@ export function useTerminal(sessionId) {
      */
     function copySelection() {
         if (!terminal) return
-        const selection = terminal.getSelection()
+        const selection = getTmuxScrollSelectionText() || terminal.getSelection()
         if (!selection) return
         clipboardWrite(selection)
         terminal.clearSelection()
         hasSelection.value = false
+        resetTmuxScrollSelection()
         toast.success('Copied to clipboard', { duration: 2000 })
     }
 
