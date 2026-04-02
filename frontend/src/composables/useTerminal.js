@@ -118,17 +118,22 @@ const _SS3_KEYS = { F1: 'P', F2: 'Q', F3: 'R', F4: 'S' }
  * @param {boolean} [options.ignoreShift=false] - Ignore shiftKey in modifier
  *   calculation. On Android, soft keyboards often falsely report shiftKey=true
  *   for arrow keys and other special keys.
+ * @param {boolean} [options.applicationCursorMode=false] - When true, send
+ *   SS3 sequences (\x1bO{letter}) for unmodified cursor keys instead of CSI.
+ *   Programs like less, vim, and tmux enable DECCKM (application cursor mode).
  * @returns {string|null}
  */
-function imeKeyToAnsiSequence(event, { ignoreShift = false } = {}) {
+function imeKeyToAnsiSequence(event, { ignoreShift = false, applicationCursorMode = false } = {}) {
     // For CSI/SS3 sequences, use the modifier param (with optional shift ignore).
     // Shift is checked directly for Tab and Backspace below where it matters.
     const mod = _imeModifierParam(event, ignoreShift)
 
-    // CSI cursor keys
+    // CSI cursor keys — in application cursor mode (DECCKM), unmodified
+    // cursor keys use SS3 (\x1bO{letter}) instead of CSI (\x1b[{letter}).
     const cursorLetter = _CSI_CURSOR_KEYS[event.key]
     if (cursorLetter) {
-        return mod ? `\x1b[1;${mod}${cursorLetter}` : `\x1b[${cursorLetter}`
+        if (mod) return `\x1b[1;${mod}${cursorLetter}`
+        return applicationCursorMode ? `\x1bO${cursorLetter}` : `\x1b[${cursorLetter}`
     }
 
     // CSI tilde keys
@@ -197,6 +202,9 @@ export function useTerminal(sessionId) {
     // 'scroll' = normal scroll (default), 'select' = touch-drag selects text
     const touchMode = ref('scroll')
     const hasSelection = ref(false)
+
+    /** Whether the active tmux pane is in alternate screen (less, vim, etc.) */
+    const paneAlternate = ref(false)
 
     /** @type {Terminal | null} */
     let terminal = null
@@ -281,8 +289,21 @@ export function useTerminal(sessionId) {
         }
 
         ws.onmessage = (event) => {
-            // Server sends raw PTY output as text
-            terminal?.write(event.data)
+            const data = event.data
+            // Detect JSON control messages from the server
+            if (data.charAt(0) === '{') {
+                try {
+                    const msg = JSON.parse(data)
+                    if (msg.type === 'pane_state') {
+                        paneAlternate.value = msg.alternate_on
+                        return
+                    }
+                } catch {
+                    // Not valid JSON — fall through to terminal.write
+                }
+            }
+            // Raw PTY output
+            terminal?.write(data)
         }
 
         ws.onclose = (event) => {
@@ -404,7 +425,7 @@ export function useTerminal(sessionId) {
             const lines = Math.trunc(accumulator / cellHeight)
             if (lines !== 0) {
                 accumulator -= lines * cellHeight
-                terminal.scrollLines(lines)
+                scrollByLines(lines)
             }
             // Extend selection to current (clamped) finger position
             updateSelection(autoScrollLastClientX, autoScrollLastClientY)
@@ -472,10 +493,70 @@ export function useTerminal(sessionId) {
         stopAutoScroll()
     }
 
+    // ── Scroll dispatch ────────────────────────────────────────────────
+    // Four strategies depending on context:
+    //
+    // 1. Alternate screen app inside tmux (vim, less, htop…):
+    //    paneAlternate=true → send arrow keys (the app handles scrolling)
+    //
+    // 2. Shell prompt inside tmux (paneAlternate=false, tmux active):
+    //    Send SGR mouse wheel events → tmux enters copy-mode scrollback
+    //
+    // 3. Alternate screen app without tmux (less, vim run directly):
+    //    xterm.js detects alternate buffer → send arrow keys
+    //
+    // 4. Normal shell (no tmux, no alternate screen):
+    //    scroll xterm.js viewport buffer directly
+
+    function isAlternateScreen() {
+        return terminal?.buffer?.active?.type === 'alternate'
+    }
+
+    /**
+     * Scroll by the given number of lines, using the right strategy
+     * for the current screen mode.
+     * Positive = scroll down, negative = scroll up.
+     */
+    function scrollByLines(lines) {
+        if (!terminal || lines === 0) return
+
+        if (paneAlternate.value) {
+            // Alternate screen app inside tmux (vim, less, htop…):
+            // send arrow keys — the app handles scrolling.
+            // Use SS3 sequences when application cursor mode is active (DECCKM).
+            const appCursor = terminal?.modes?.applicationCursorKeysMode ?? false
+            const key = lines > 0
+                ? (appCursor ? '\x1bOB' : '\x1b[B')
+                : (appCursor ? '\x1bOA' : '\x1b[A')
+            wsSend({ type: 'input', data: key.repeat(Math.abs(lines)) })
+        } else if (shouldUseTmux()) {
+            // Shell prompt inside tmux: send SGR mouse wheel sequences.
+            // tmux copy-mode handles the scrollback.
+            // Button 64 = wheel up, 65 = wheel down.
+            const button = lines > 0 ? 65 : 64
+            const col = Math.floor(terminal.cols / 2)
+            const row = Math.floor(terminal.rows / 2)
+            const event = `\x1b[<${button};${col};${row}M`
+            wsSend({ type: 'input', data: event.repeat(Math.abs(lines)) })
+        } else if (isAlternateScreen()) {
+            // Alternate screen app without tmux (less, vim run directly):
+            // send arrow keys — the app handles scrolling.
+            const appCursor = terminal?.modes?.applicationCursorKeysMode ?? false
+            const key = lines > 0
+                ? (appCursor ? '\x1bOB' : '\x1b[B')
+                : (appCursor ? '\x1bOA' : '\x1b[A')
+            wsSend({ type: 'input', data: key.repeat(Math.abs(lines)) })
+        } else {
+            // Normal shell (no tmux, no alternate screen):
+            // scroll xterm.js viewport buffer.
+            terminal.scrollLines(lines)
+        }
+    }
+
     // ── Touch scroll handlers (mobile, scroll mode) ────────────────────
-    // Uses terminal.scrollLines() (the only reliable xterm.js scroll API)
-    // with pixel accumulation for 1:1 finger tracking and momentum inertia
-    // on touch release for a native-like feel.
+    // Pixel accumulation for 1:1 finger tracking and momentum inertia
+    // on touch release for a native-like feel. Delegates to scrollByLines()
+    // which picks the right strategy (buffer scroll vs arrow keys).
 
     const SCROLL_DECELERATION = 0.92   // friction per frame (~60fps)
     const SCROLL_MIN_VELOCITY = 0.3    // px/frame threshold to stop inertia
@@ -516,7 +597,7 @@ export function useTerminal(sessionId) {
             const lines = Math.trunc(scrollAccumulator / cellHeight)
             if (lines !== 0) {
                 scrollAccumulator -= lines * cellHeight
-                terminal.scrollLines(lines)
+                scrollByLines(lines)
             }
         }
 
@@ -551,7 +632,7 @@ export function useTerminal(sessionId) {
             const lines = Math.trunc(accumulator / cellHeight)
             if (lines !== 0) {
                 accumulator -= lines * cellHeight
-                terminal.scrollLines(lines)
+                scrollByLines(lines)
             }
             scrollInertiaId = requestAnimationFrame(inertiaStep)
         }
@@ -572,13 +653,13 @@ export function useTerminal(sessionId) {
         const signal = touchAbortController.signal
 
         if (touchMode.value === 'select') {
-            containerRef.value.addEventListener('touchstart', onTouchStart, { passive: true, signal })
-            containerRef.value.addEventListener('touchmove', onTouchMove, { passive: false, signal })
-            containerRef.value.addEventListener('touchend', onTouchEnd, { passive: true, signal })
+            containerRef.value.addEventListener('touchstart', onTouchStart, { passive: true, signal, capture: true })
+            containerRef.value.addEventListener('touchmove', onTouchMove, { passive: false, signal, capture: true })
+            containerRef.value.addEventListener('touchend', onTouchEnd, { passive: true, signal, capture: true })
         } else {
-            containerRef.value.addEventListener('touchstart', onScrollTouchStart, { passive: true, signal })
-            containerRef.value.addEventListener('touchmove', onScrollTouchMove, { passive: false, signal })
-            containerRef.value.addEventListener('touchend', onScrollTouchEnd, { passive: true, signal })
+            containerRef.value.addEventListener('touchstart', onScrollTouchStart, { passive: true, signal, capture: true })
+            containerRef.value.addEventListener('touchmove', onScrollTouchMove, { passive: false, signal, capture: true })
+            containerRef.value.addEventListener('touchend', onScrollTouchEnd, { passive: true, signal, capture: true })
         }
     }
 
@@ -669,7 +750,8 @@ export function useTerminal(sessionId) {
                         shiftKey: event.shiftKey || activeModifiers.shift,
                     }
                     : event
-                const sequence = imeKeyToAnsiSequence(mergedEvent, { ignoreShift: !activeModifiers.shift })
+                const appCursor = terminal?.modes?.applicationCursorKeysMode ?? false
+                const sequence = imeKeyToAnsiSequence(mergedEvent, { ignoreShift: !activeModifiers.shift, applicationCursorMode: appCursor })
                 if (sequence) {
                     event.preventDefault()
                     wsSend({ type: 'input', data: sequence })
@@ -849,7 +931,8 @@ export function useTerminal(sessionId) {
         }
 
         // Try ANSI sequence conversion (handles special keys, Ctrl+letter, Alt+letter)
-        const sequence = imeKeyToAnsiSequence(syntheticEvent, { ignoreShift: false })
+        const appCursor = terminal?.modes?.applicationCursorKeysMode ?? false
+        const sequence = imeKeyToAnsiSequence(syntheticEvent, { ignoreShift: false, applicationCursorMode: appCursor })
 
         if (sequence) {
             wsSend({ type: 'input', data: sequence })
@@ -897,7 +980,8 @@ export function useTerminal(sessionId) {
                 altKey: step.modifiers?.includes('alt') ?? false,
                 shiftKey: step.modifiers?.includes('shift') ?? false,
             }
-            const sequence = imeKeyToAnsiSequence(syntheticEvent, { ignoreShift: false })
+            const appCursor = terminal?.modes?.applicationCursorKeysMode ?? false
+            const sequence = imeKeyToAnsiSequence(syntheticEvent, { ignoreShift: false, applicationCursorMode: appCursor })
             if (sequence) {
                 wsSend({ type: 'input', data: sequence })
             } else {
