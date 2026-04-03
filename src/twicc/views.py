@@ -12,7 +12,8 @@ from django.utils import timezone
 import orjson
 
 from twicc import search
-from twicc.compute import get_message_content_list
+from twicc.compute import get_message_content, get_message_content_list
+from twicc.core.enums import ItemKind
 from twicc.core.models import AgentLink, DailyActivity, Project, Session, SessionItem, SessionType, SlashCommand, ToolResultLink, WeeklyActivity
 from twicc.core.serializers import (
     serialize_project,
@@ -249,6 +250,39 @@ def slash_commands(request, project_id):
             for cmd in commands
         ]
     })
+
+
+def user_messages(request, project_id, session_id):
+    """GET /api/projects/<id>/sessions/<session_id>/user-messages/ - User messages of a session.
+
+    Returns all user messages for the given session, most recent first.
+    Each entry includes line_num, timestamp, and the extracted text content.
+    """
+    try:
+        session = Session.objects.get(id=session_id, project_id=project_id)
+    except Session.DoesNotExist:
+        raise Http404("Session not found")
+
+    items = (
+        SessionItem.objects
+        .filter(session=session, kind=ItemKind.USER_MESSAGE)
+        .order_by("-line_num")
+        .values("line_num", "timestamp", "content")
+    )
+
+    messages = []
+    for item in items:
+        parsed = orjson.loads(item["content"])
+        content = get_message_content(parsed)
+        text = search.extract_indexable_text(content)
+        if text:
+            messages.append({
+                "line_num": item["line_num"],
+                "timestamp": item["timestamp"].isoformat() if item["timestamp"] else None,
+                "text": text,
+            })
+
+    return JsonResponse({"messages": messages})
 
 
 def project_sessions(request, project_id):

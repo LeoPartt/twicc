@@ -25,6 +25,7 @@ urlpatterns = [
     path("api/projects/<str:project_id>/directory-tree/", views.directory_tree),
     path("api/projects/<str:project_id>/file-search/", views.file_search),
     path("api/projects/<str:project_id>/file-content/", views.file_content),
+    path("api/projects/<str:project_id>/sessions/<str:session_id>/user-messages/", views.user_messages),
     path("api/projects/<str:project_id>/sessions/<str:session_id>/", views.session_detail),
     path("api/projects/<str:project_id>/sessions/<str:session_id>/items/", views.session_items),
     path("api/projects/<str:project_id>/sessions/<str:session_id>/items/metadata/", views.session_items_metadata),

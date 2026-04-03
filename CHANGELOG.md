@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Auto-restart sessions with active cron jobs when they die from API errors or crashes (infinite retry with exponential backoff, max 5 min between attempts)
 - Allow opening multiple terminal sessions simultaneously, with better presets handling
 - List main keyboard shortcuts in the settings panel (panel that was redesigned with a navigation sidebar)
+- Message history picker: type `!` at start of input or press PageUp on the first line to browse and reuse previous messages from the current session
 
 ### Changed
 

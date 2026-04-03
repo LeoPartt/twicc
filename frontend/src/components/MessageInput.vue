@@ -9,10 +9,12 @@ import { isSupportedMimeType, MAX_FILE_SIZE, SUPPORTED_IMAGE_TYPES, draftMediaTo
 import { toast } from '../composables/useToast'
 import { PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, MODEL, MODEL_LABELS, EFFORT, EFFORT_LABELS, EFFORT_DISPLAY_LABELS, THINKING_LABELS, THINKING_DISPLAY_LABELS, CLAUDE_IN_CHROME_LABELS, CLAUDE_IN_CHROME_DISPLAY_LABELS, CONTEXT_MAX, CONTEXT_MAX_LABELS } from '../constants'
 import { useCodeCommentsStore, formatAllComments } from '../stores/codeComments'
+import { getParsedContent } from '../utils/parsedContent'
 import MediaThumbnailGroup from './MediaThumbnailGroup.vue'
 import AppTooltip from './AppTooltip.vue'
 import FilePickerPopup from './FilePickerPopup.vue'
 import SlashCommandPickerPopup from './SlashCommandPickerPopup.vue'
+import MessageHistoryPickerPopup from './MessageHistoryPickerPopup.vue'
 
 const props = defineProps({
     sessionId: {
@@ -57,6 +59,29 @@ const fileMirroredLength = ref(0)   // length of filter text mirrored into texta
 const slashPickerRef = ref(null)
 const slashCursorPosition = ref(null)  // cursor position right after the '/' character
 const slashMirroredLength = ref(0)     // length of filter text mirrored into textarea after '/'
+
+// Message history picker popup state (! at start, or PageUp on first line)
+const historyPickerRef = ref(null)
+const histCursorPosition = ref(null)   // cursor position right after the '!' character (bang mode only)
+const histMirroredLength = ref(0)      // length of filter text mirrored into textarea after '!' (bang mode only)
+const histTriggerMode = ref(null)      // 'bang' (! trigger) or 'pageup' (PageUp on first line)
+const histInsertPosition = ref(null)   // cursor position for insertion (pageup mode only)
+
+// Extract the text from the optimistic user message (if any) to pass to the history picker
+const optimisticMessageText = computed(() => {
+    const optimistic = store.localState.optimisticMessages[props.sessionId]
+    if (!optimistic) return null
+    const parsed = getParsedContent(optimistic)
+    if (!parsed?.message?.content) return null
+    const content = parsed.message.content
+    // Content is either a string or an array of content blocks
+    if (typeof content === 'string') return content.trim() || null
+    if (Array.isArray(content)) {
+        const textBlock = content.findLast(block => block.type === 'text')
+        return textBlock?.text?.trim() || null
+    }
+    return null
+})
 
 // Attachments for this session
 const attachments = computed(() => store.getAttachments(props.sessionId))
@@ -225,7 +250,7 @@ const placeholderText = computed(() => {
         return 'You can send a message now. Claude will receive it as soon as possible (while working or after). Note: it will not appear in the conversation history.'
     }
     // user_turn, dead, or no process
-    let text = 'Type your message... Use / for commands, @ for file paths'
+    let text = 'Shortcuts: At start: / = commands, ! and PageUp = message history; Anywhere: @ = file paths'
     if (!settingsStore.isTouchDevice) {
         const keys = settingsStore.isMac ? '⌘↵ or Ctrl↵' : 'Ctrl↵ or Meta↵'
         text += `, ${keys} to send`
@@ -621,6 +646,15 @@ function onInput(event) {
             slashMirroredLength.value = 0
             nextTick(() => slashPickerRef.value?.open())
         }
+
+        // Detect '!' at position 0 (first character of the message) to trigger message history picker
+        if (!historyPickerRef.value?.isOpen && cursorPos === 1 && newText[0] === '!') {
+            histTriggerMode.value = 'bang'
+            histCursorPosition.value = cursorPos  // right after the '!'
+            histMirroredLength.value = 0
+            histInsertPosition.value = null
+            nextTick(() => historyPickerRef.value?.open())
+        }
     }
 
     messageText.value = newText
@@ -782,13 +816,132 @@ function onSlashCommandPickerClose() {
 }
 
 /**
+ * Handle filter text changes from the message history picker popup.
+ * In bang mode, mirrors the typed filter text into the textarea right after the '!'.
+ * In pageup mode, no mirroring is needed.
+ */
+function onHistoryPickerFilterChange(filterText) {
+    if (histTriggerMode.value === 'bang') {
+        mirrorFilterToTextarea(histCursorPosition.value, histMirroredLength, filterText)
+    }
+}
+
+/**
+ * Handle message selection from the message history picker popup.
+ *
+ * Bang mode ('!'): Replaces the '!' trigger character and any mirrored filter
+ * text with the selected message text. Preserves surrounding textarea content.
+ *
+ * PageUp mode: Inserts the selected message text at the cursor position
+ * where PageUp was pressed. No trigger character to remove.
+ */
+async function onHistoryMessageSelect(selectedText) {
+    const mode = histTriggerMode.value
+    const triggerPos = histCursorPosition.value
+    const mirrorLen = histMirroredLength.value
+    const insertPos = histInsertPosition.value
+
+    // Reset all state
+    histTriggerMode.value = null
+    histCursorPosition.value = null
+    histMirroredLength.value = 0
+    histInsertPosition.value = null
+
+    if (mode === 'bang' && triggerPos != null) {
+        const currentContent = messageText.value
+        // triggerPos is right after '!', so the '!' is at triggerPos-1
+        const before = currentContent.slice(0, triggerPos - 1)
+        const after = currentContent.slice(triggerPos + mirrorLen)
+        const newText = before + selectedText + after
+        const newCursorPos = before.length + selectedText.length
+
+        updateTextareaContent(newText)
+        await nextTick()
+
+        const inner = textareaRef.value?.shadowRoot?.querySelector('textarea')
+        if (inner) {
+            inner.setSelectionRange(newCursorPos, newCursorPos)
+        }
+    } else if (mode === 'pageup' && insertPos != null) {
+        const currentContent = messageText.value
+        const before = currentContent.slice(0, insertPos)
+        const after = currentContent.slice(insertPos)
+        const newText = before + selectedText + after
+        const newCursorPos = before.length + selectedText.length
+
+        updateTextareaContent(newText)
+        await nextTick()
+
+        const inner = textareaRef.value?.shadowRoot?.querySelector('textarea')
+        if (inner) {
+            inner.setSelectionRange(newCursorPos, newCursorPos)
+        }
+    }
+
+    await nextTick()
+    textareaRef.value?.focus()
+    adjustTextareaHeight()
+}
+
+/**
+ * Handle message history picker popup close (without selection).
+ * Returns focus to the textarea and restores the cursor position.
+ *
+ * Bang mode: positions cursor after '!' + any mirrored filter text.
+ * PageUp mode: restores cursor to original position.
+ */
+function onHistoryPickerClose() {
+    const mode = histTriggerMode.value
+    const pos = histCursorPosition.value
+    const mirrorLen = histMirroredLength.value
+    const insertPos = histInsertPosition.value
+
+    // Reset all state
+    histTriggerMode.value = null
+    histCursorPosition.value = null
+    histMirroredLength.value = 0
+    histInsertPosition.value = null
+
+    textareaRef.value?.focus()
+    const inner = textareaRef.value?.shadowRoot?.querySelector('textarea')
+    if (inner) {
+        if (mode === 'bang' && pos != null) {
+            const cursorTarget = pos + mirrorLen
+            inner.setSelectionRange(cursorTarget, cursorTarget)
+        } else if (mode === 'pageup' && insertPos != null) {
+            inner.setSelectionRange(insertPos, insertPos)
+        }
+    }
+}
+
+/**
  * Handle keyboard shortcuts in textarea.
  * Cmd/Ctrl+Enter submits the message.
+ * PageUp on first line opens message history picker.
  */
 function onKeydown(event) {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
         event.preventDefault()
         handleSend()
+        return
+    }
+
+    // PageUp on the first line → open message history picker
+    if (event.key === 'PageUp' && !historyPickerRef.value?.isOpen) {
+        const inner = textareaRef.value?.shadowRoot?.querySelector('textarea')
+        if (inner) {
+            const cursorPos = inner.selectionStart
+            const textBefore = inner.value.slice(0, cursorPos)
+            // Cursor is on the first line if there's no newline before it
+            if (!textBefore.includes('\n')) {
+                event.preventDefault()
+                histTriggerMode.value = 'pageup'
+                histInsertPosition.value = cursorPos
+                histCursorPosition.value = null
+                histMirroredLength.value = 0
+                nextTick(() => historyPickerRef.value?.open())
+            }
+        }
     }
 }
 
@@ -1170,6 +1323,18 @@ defineExpose({ insertTextAtCursor })
             @select="onSlashCommandSelect"
             @close="onSlashCommandPickerClose"
             @filter-change="onSlashPickerFilterChange"
+        />
+
+        <!-- Message history picker popup triggered by ! at start -->
+        <MessageHistoryPickerPopup
+            ref="historyPickerRef"
+            :project-id="projectId"
+            :session-id="sessionId"
+            :anchor-id="textareaAnchorId"
+            :synthetic-message-text="optimisticMessageText"
+            @select="onHistoryMessageSelect"
+            @close="onHistoryPickerClose"
+            @filter-change="onHistoryPickerFilterChange"
         />
 
         <div class="message-input-toolbar">

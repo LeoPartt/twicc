@@ -94,7 +94,9 @@ const shortcutGroups = computed(() => {
             shortcuts: [
                 { keys: [mod, '↵'], description: 'Send message' },
                 { keys: ['@'], description: 'Insert file path (after a space or at start)' },
-                { keys: ['/'], description: 'Slash commands (as first character)' },
+                { keys: ['/'], description: 'Slash commands (at start of input)' },
+                { keys: ['!'], description: 'Message history (at start of input)' },
+                { keys: ['PageUp'], description: 'Message history (cursor on first line)' },
             ]
         },
         {
