@@ -6,7 +6,7 @@ import { useDataStore } from '../stores/data'
 import ProjectBadge from './ProjectBadge.vue'
 import TerminalSnippetTextEditor from './TerminalSnippetTextEditor.vue'
 import { buildProjectTree, flattenProjectTree } from '../utils/projectTree'
-import { extractPlaceholders } from '../utils/terminalSnippetPlaceholders'
+import { extractPlaceholders } from '../utils/snippetPlaceholders'
 
 const props = defineProps({
     currentProjectId: {

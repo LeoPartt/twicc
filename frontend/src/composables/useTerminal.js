@@ -8,7 +8,7 @@ import { ClipboardAddon } from '@xterm/addon-clipboard'
 import { useSettingsStore } from '../stores/settings'
 import { useDataStore } from '../stores/data'
 import { toast } from '../composables/useToast'
-import { resolveSnippetText } from '../utils/terminalSnippetPlaceholders'
+import { resolveSnippetText } from '../utils/snippetPlaceholders'
 import '@xterm/xterm/css/xterm.css'
 
 // ── Terminal themes ──────────────────────────────────────────────────────

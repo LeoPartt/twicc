@@ -1,4 +1,4 @@
-// Placeholder definitions, extraction, resolution, and availability checks for terminal snippets.
+// Placeholder definitions, extraction, resolution, and availability checks for snippets.
 
 /**
  * Build a local ISO date/time from a Date object.

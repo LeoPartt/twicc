@@ -2,7 +2,7 @@
 // TerminalSnippetTextEditor.vue - Shared snippet text editing block (textarea, special chars, placeholders, options)
 // Used by TerminalSnippetsDialog (snippet CRUD) and TerminalSnippetSendDialog (one-shot edit-before-send).
 import { ref, nextTick } from 'vue'
-import { PLACEHOLDERS } from '../utils/terminalSnippetPlaceholders'
+import { PLACEHOLDERS } from '../utils/snippetPlaceholders'
 
 const props = defineProps({
     text: {

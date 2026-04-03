@@ -17,6 +17,8 @@ import SlashCommandPickerPopup from './SlashCommandPickerPopup.vue'
 import MessageHistoryPickerPopup from './MessageHistoryPickerPopup.vue'
 import MessageSnippetsBar from './MessageSnippetsBar.vue'
 import MessageSnippetsDialog from './MessageSnippetsDialog.vue'
+import { useMessageSnippetsStore } from '../stores/messageSnippets'
+import { getUnavailablePlaceholders, resolveSnippetText } from '../utils/snippetPlaceholders'
 
 const props = defineProps({
     sessionId: {
@@ -1271,8 +1273,43 @@ function addAllCommentsToMessage() {
 }
 
 // ── Message snippets ────────────────────────────────────────────────
+const messageSnippetsStore = useMessageSnippetsStore()
+
+/** Placeholder resolution context (same shape as terminal uses). */
+const placeholderContext = computed(() => {
+    const s = session.value
+    const pid = props.projectId
+    const project = pid ? store.getProject(pid) : null
+    const projectName = pid ? store.getProjectDisplayName(pid) : null
+    return { session: s, project, projectName }
+})
+
+/** Snippets for this project, enriched with _disabled / _disabledReason for unresolvable placeholders. */
+const snippetsForProject = computed(() => {
+    const raw = props.projectId ? messageSnippetsStore.getSnippetsForProject(props.projectId) : []
+    const ctx = placeholderContext.value
+
+    return raw.map(snippet => {
+        const placeholders = snippet.placeholders || []
+        if (placeholders.length === 0) return snippet
+        const unavailable = getUnavailablePlaceholders(placeholders, ctx)
+        if (unavailable.length === 0) return snippet
+        return {
+            ...snippet,
+            _disabled: true,
+            _disabledReason: `Not available: ${unavailable.map(p => p.label).join(', ')}`,
+        }
+    })
+})
+
 function handleSnippetPress(snippet) {
-    insertTextAtCursor(snippet.text)
+    const placeholders = snippet.placeholders || []
+    const resolved = resolveSnippetText(snippet.text, placeholders, placeholderContext.value)
+    insertTextAtCursor(resolved)
+}
+
+function handleSnippetDisabledPress(snippet) {
+    toast(snippet._disabledReason || 'Some placeholders are not available', { variant: 'warning' })
 }
 
 function openMessageSnippetsDialog() {
@@ -1356,8 +1393,9 @@ defineExpose({ insertTextAtCursor })
 
         <!-- Message snippets bar -->
         <MessageSnippetsBar
-            :project-id="projectId"
+            :snippets="snippetsForProject"
             @snippet-press="handleSnippetPress"
+            @snippet-disabled-press="handleSnippetDisabledPress"
             @manage-snippets="openMessageSnippetsDialog"
         />
 

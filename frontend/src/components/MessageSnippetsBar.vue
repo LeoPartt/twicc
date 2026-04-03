@@ -1,26 +1,20 @@
 <script setup>
 // MessageSnippetsBar.vue - Displays message snippets as compact buttons below the textarea
 // Visual style mirrors the snippets tab in TerminalExtraKeysBar.vue
-import { computed } from 'vue'
 import { useMessageSnippetsStore } from '../stores/messageSnippets'
+import AppTooltip from './AppTooltip.vue'
 
-const props = defineProps({
-    projectId: {
-        type: String,
-        default: null,
+defineProps({
+    /** Pre-enriched snippets (with _disabled / _disabledReason from parent). */
+    snippets: {
+        type: Array,
+        default: () => [],
     },
 })
 
-const emit = defineEmits(['snippet-press', 'manage-snippets'])
+const emit = defineEmits(['snippet-press', 'snippet-disabled-press', 'manage-snippets'])
 
 const messageSnippetsStore = useMessageSnippetsStore()
-
-const snippets = computed(() => {
-    if (!props.projectId) return messageSnippetsStore.snippets.global || []
-    return messageSnippetsStore.getSnippetsForProject(props.projectId)
-})
-
-const hasSnippets = computed(() => snippets.value.length > 0)
 
 /** Display text for a snippet: label if set, otherwise truncated text (10 chars + ellipsis). */
 function snippetDisplayText(snippet) {
@@ -31,20 +25,29 @@ function snippetDisplayText(snippet) {
 }
 
 function handleSnippetClick(snippet) {
-    emit('snippet-press', snippet)
+    if (snippet._disabled) {
+        emit('snippet-disabled-press', snippet)
+    } else {
+        emit('snippet-press', snippet)
+    }
 }
 </script>
 
 <template>
-    <div v-if="hasSnippets || messageSnippetsStore._initialized" class="message-snippets-bar">
-        <template v-if="hasSnippets">
-            <button
-                v-for="(snippet, i) in snippets"
-                :key="i"
-                class="snippet-btn"
-                :title="snippet.text"
-                @click="handleSnippetClick(snippet)"
-            >{{ snippetDisplayText(snippet) }}</button>
+    <div v-if="snippets.length > 0 || messageSnippetsStore._initialized" class="message-snippets-bar">
+        <template v-if="snippets.length > 0">
+            <template v-for="(snippet, i) in snippets" :key="i">
+                <button
+                    :id="snippet._disabled ? `disabled-msg-snippet-${i}` : undefined"
+                    class="snippet-btn"
+                    :class="{ 'snippet-disabled': snippet._disabled }"
+                    :title="snippet.text"
+                    @click="handleSnippetClick(snippet)"
+                >{{ snippetDisplayText(snippet) }}</button>
+                <AppTooltip v-if="snippet._disabled" :for="`disabled-msg-snippet-${i}`">
+                    {{ snippet._disabledReason }}
+                </AppTooltip>
+            </template>
         </template>
         <span v-else class="empty-text">No snippets</span>
         <button
@@ -158,6 +161,21 @@ button {
 .snippet-btn:active {
     background: color-mix(in srgb, var(--wa-color-surface-raised), var(--wa-color-mix-active));
     transform: scale(0.95);
+}
+
+/* ── Disabled snippets ────────────────────────────────────────────── */
+.snippet-btn.snippet-disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.snippet-btn.snippet-disabled:hover {
+    background: var(--wa-color-surface-raised);
+    transform: none;
+}
+
+.snippet-btn.snippet-disabled:active {
+    transform: none;
 }
 
 /* ── Empty text ──────────────────────────────────────────────────── */

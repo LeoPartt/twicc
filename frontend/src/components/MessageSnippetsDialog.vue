@@ -5,6 +5,7 @@ import { useMessageSnippetsStore } from '../stores/messageSnippets'
 import { useDataStore } from '../stores/data'
 import ProjectBadge from './ProjectBadge.vue'
 import { buildProjectTree, flattenProjectTree } from '../utils/projectTree'
+import { PLACEHOLDERS, extractPlaceholders } from '../utils/snippetPlaceholders'
 
 const props = defineProps({
     currentProjectId: {
@@ -133,6 +134,26 @@ function snippetDisplayLabel(snippet) {
     return snippet.label || null
 }
 
+// ── Textarea insertion helpers ──────────────────────────────────────
+function insertAtCursor(insertValue) {
+    const textarea = textareaRef.value?.shadowRoot?.querySelector('textarea')
+    const start = textarea?.selectionStart ?? formData.value.text.length
+    const end = textarea?.selectionEnd ?? formData.value.text.length
+    const current = formData.value.text
+    formData.value.text = current.slice(0, start) + insertValue + current.slice(end)
+    const newPos = start + insertValue.length
+    nextTick(() => {
+        if (textarea) {
+            textarea.focus()
+            textarea.setSelectionRange(newPos, newPos)
+        }
+    })
+}
+
+function insertPlaceholder(id) {
+    insertAtCursor(`{${id}}`)
+}
+
 // ── Validation & save ────────────────────────────────────────────────
 function handleSave() {
     errorMessage.value = ''
@@ -149,6 +170,7 @@ function handleSave() {
     const snippetData = {
         label: trimmedLabel,
         text: trimmedText,
+        placeholders: extractPlaceholders(trimmedText),
     }
 
     // Check for duplicate label in same scope (warn but allow save on second submit)
@@ -338,7 +360,21 @@ defineExpose({ open, close })
                     rows="4"
                     resize="auto"
                     size="small"
+                    class="message-textarea"
                 />
+
+                <!-- Placeholder picker -->
+                <p class="placeholder-hint">Insert placeholders to be resolved at insert time:</p>
+                <div class="placeholder-picker-row">
+                    <button
+                        v-for="p in PLACEHOLDERS"
+                        :key="p.id"
+                        type="button"
+                        class="picker-key placeholder-key"
+                        @click="insertPlaceholder(p.id)"
+                        :title="`Insert {${p.id}}`"
+                    >{{ p.label }}</button>
+                </div>
             </div>
 
             <!-- Scope select -->
@@ -585,6 +621,61 @@ defineExpose({ open, close })
 .form-optional {
     font-weight: normal;
     color: var(--wa-color-text-quiet);
+}
+
+.message-textarea::part(textarea) {
+    font-family: var(--wa-font-family-code);
+}
+
+/* ── Placeholder picker ──────────────────────────────────────────── */
+.placeholder-hint {
+    font-size: var(--wa-font-size-xs);
+    color: var(--wa-color-text-quiet);
+    margin: 0;
+}
+
+.placeholder-picker-row {
+    display: flex;
+    gap: var(--wa-space-2xs);
+    flex-wrap: wrap;
+}
+
+.picker-key {
+    background: var(--wa-color-surface-raised);
+    border: 1px solid var(--wa-color-surface-border);
+    color: var(--wa-color-text-normal);
+    font-size: var(--wa-font-size-s);
+    height: 1.75rem;
+    min-width: 2rem;
+    padding: 0 var(--wa-space-xs);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--wa-border-radius-s);
+    cursor: pointer;
+    transition: background-color 0.1s, border-color 0.1s;
+    user-select: none;
+}
+
+.picker-key:hover {
+    background: color-mix(in srgb, var(--wa-color-surface-raised), var(--wa-color-mix-hover));
+}
+
+.picker-key:active {
+    background: color-mix(in srgb, var(--wa-color-surface-raised), var(--wa-color-mix-active));
+    transform: scale(0.95);
+}
+
+.placeholder-key {
+    font-family: var(--wa-font-family-sans) !important;
+    font-size: var(--wa-font-size-s) !important;
+    padding: 0 var(--wa-space-xs) !important;
+    border-color: var(--wa-color-brand-border-quiet) !important;
+    color: var(--wa-color-brand-on-quiet) !important;
+}
+
+.placeholder-key:hover {
+    background: var(--wa-color-brand-fill-quiet) !important;
 }
 
 /* ── Scope select ─────────────────────────────────────────────────── */
