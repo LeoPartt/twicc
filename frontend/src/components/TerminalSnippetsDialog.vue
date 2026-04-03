@@ -1,12 +1,12 @@
 <script setup>
-// ManageSnippetsDialog.vue - Dialog for managing text snippets with scope grouping
+// TerminalSnippetsDialog.vue - Dialog for managing text snippets with scope grouping
 import { ref, computed, nextTick, useId } from 'vue'
 import { useTerminalConfigStore } from '../stores/terminalConfig'
 import { useDataStore } from '../stores/data'
 import ProjectBadge from './ProjectBadge.vue'
-import SnippetTextEditor from './SnippetTextEditor.vue'
+import TerminalSnippetTextEditor from './TerminalSnippetTextEditor.vue'
 import { buildProjectTree, flattenProjectTree } from '../utils/projectTree'
-import { extractPlaceholders } from '../utils/snippetPlaceholders'
+import { extractPlaceholders } from '../utils/terminalSnippetPlaceholders'
 
 const props = defineProps({
     currentProjectId: {
@@ -333,7 +333,7 @@ defineExpose({ open, close })
             </div>
 
             <!-- Snippet text + options (shared editor component) -->
-            <SnippetTextEditor
+            <TerminalSnippetTextEditor
                 v-model:text="formData.snippet"
                 v-model:append-enter="formData.appendEnter"
                 v-model:open-in-new-tab="formData.openInNewTab"
@@ -387,7 +387,7 @@ defineExpose({ open, close })
                         </wa-option>
                     </template>
                 </wa-select>
-            </SnippetTextEditor>
+            </TerminalSnippetTextEditor>
 
             <!-- Warning (duplicate label) -->
             <wa-callout v-if="warningMessage" variant="warning" size="small">
@@ -572,7 +572,7 @@ defineExpose({ open, close })
     color: var(--wa-color-danger-text);
 }
 
-/* ── Form (label field — snippet text/options are in SnippetTextEditor) ── */
+/* ── Form (label field — snippet text/options are in TerminalSnippetTextEditor) ── */
 .form-group {
     display: flex;
     flex-direction: column;
@@ -584,7 +584,7 @@ defineExpose({ open, close })
     font-weight: var(--wa-font-weight-semibold);
 }
 
-/* ── Scope select (slotted into SnippetTextEditor options row) ────── */
+/* ── Scope select (slotted into TerminalSnippetTextEditor options row) ── */
 
 .scope-select {
     margin-left: auto;

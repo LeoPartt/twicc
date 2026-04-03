@@ -6,14 +6,14 @@ import { useTerminalConfigStore } from '../stores/terminalConfig'
 import { useTerminalTabsStore } from '../stores/terminalTabs'
 import { sendWsMessage } from '../composables/useWebSocket'
 import { toast } from '../composables/useToast'
-import { getUnavailablePlaceholders } from '../utils/snippetPlaceholders'
+import { getUnavailablePlaceholders } from '../utils/terminalSnippetPlaceholders'
 import AppTooltip from './AppTooltip.vue'
 import TerminalInstance from './TerminalInstance.vue'
 import TerminalRenameDialog from './TerminalRenameDialog.vue'
-import ExtraKeysBar from './ExtraKeysBar.vue'
-import ManageCombosDialog from './ManageCombosDialog.vue'
-import ManageSnippetsDialog from './ManageSnippetsDialog.vue'
-import SnippetSendDialog from './SnippetSendDialog.vue'
+import TerminalExtraKeysBar from './TerminalExtraKeysBar.vue'
+import TerminalCombosDialog from './TerminalCombosDialog.vue'
+import TerminalSnippetsDialog from './TerminalSnippetsDialog.vue'
+import TerminalSnippetSendDialog from './TerminalSnippetSendDialog.vue'
 
 const props = defineProps({
     sessionId: {
@@ -630,7 +630,7 @@ onBeforeUnmount(() => {
             </div>
         </div>
 
-        <ExtraKeysBar
+        <TerminalExtraKeysBar
             :active-modifiers="activeApi?.activeModifiers ?? { ctrl: false, alt: false, shift: false }"
             :locked-modifiers="activeApi?.lockedModifiers ?? { ctrl: false, alt: false, shift: false }"
             :is-touch-device="settingsStore.isTouchDevice"
@@ -650,12 +650,12 @@ onBeforeUnmount(() => {
             @manage-snippets="manageSnippetsDialogRef?.open()"
         />
 
-        <ManageCombosDialog ref="manageCombosDialogRef" />
-        <ManageSnippetsDialog
+        <TerminalCombosDialog ref="manageCombosDialogRef" />
+        <TerminalSnippetsDialog
             ref="manageSnippetsDialogRef"
             :current-project-id="projectId"
         />
-        <SnippetSendDialog
+        <TerminalSnippetSendDialog
             ref="snippetSendDialogRef"
             :terminals="terminals"
             :active-terminal-index="activeIndex"

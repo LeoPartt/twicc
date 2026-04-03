@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { formatCombo } from '../utils/comboNotation'
+import { formatCombo } from '../utils/terminalComboNotation'
 import AppTooltip from './AppTooltip.vue'
 
 const props = defineProps({

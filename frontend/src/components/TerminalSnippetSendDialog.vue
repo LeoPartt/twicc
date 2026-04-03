@@ -1,9 +1,9 @@
 <script setup>
-// SnippetSendDialog.vue - One-shot dialog to edit a snippet's text before sending it to a terminal.
+// TerminalSnippetSendDialog.vue - One-shot dialog to edit a snippet's text before sending it to a terminal.
 // Nothing is persisted — the edited text is used for this single send only.
 import { ref, computed, nextTick } from 'vue'
-import SnippetTextEditor from './SnippetTextEditor.vue'
-import { extractPlaceholders, getUnavailablePlaceholders } from '../utils/snippetPlaceholders'
+import TerminalSnippetTextEditor from './TerminalSnippetTextEditor.vue'
+import { extractPlaceholders, getUnavailablePlaceholders } from '../utils/terminalSnippetPlaceholders'
 
 const props = defineProps({
     terminals: {
@@ -115,7 +115,7 @@ defineExpose({ open, close })
         @wa-hide="handleDialogHide"
     >
         <div v-if="formData" class="dialog-content">
-            <SnippetTextEditor
+            <TerminalSnippetTextEditor
                 ref="textEditorRef"
                 v-model:text="formData.text"
                 v-model:append-enter="formData.appendEnter"
