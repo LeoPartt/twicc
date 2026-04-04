@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Keyboard shortcuts for tab navigation: Alt+Shift+1-4 (Chat/Files/Git/Terminal), Alt+Shift+←/→ (Left tab/ Right tab), Alt+Shift+↑/↓ (last visited tab)
 - List main keyboard shortcuts in the settings panel
 - Add "View in Files tab" button for Read/Write/Edit tools
+- Display image files (PNG, JPG, GIF, WebP…) in the Files tab instead of "Binary file cannot be displayed", with SVG preview toggle
 
 ### Changed
 

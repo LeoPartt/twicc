@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed, nextTick, useId, inject } from 'vue'
+import { ref, watch, computed, nextTick, useId, inject, onBeforeUnmount } from 'vue'
 import { apiFetch } from '../utils/api'
 import { useSettingsStore } from '../stores/settings'
 import MarkdownContent from './MarkdownContent.vue'
@@ -55,6 +55,7 @@ const emit = defineEmits(['revert', 'update:wordWrap', 'update:sideBySide'])
 const prevChangeButtonId = useId()
 const nextChangeButtonId = useId()
 const markdownPreviewButtonId = useId()
+const svgPreviewButtonId = useId()
 const viewInFilesButtonId = useId()
 const searchButtonId = useId()
 
@@ -109,6 +110,7 @@ const switching = ref(false)     // true during file switch (editor stays visibl
 const error = ref(null)
 const isBinary = ref(false)
 const fileSize = ref(0)
+const imageSrc = ref(null)       // data URI for binary image files
 
 // Whether the editor has ever successfully displayed a file.
 // Used to distinguish "initial load" (show spinner, hide editor)
@@ -121,6 +123,32 @@ const isMarkdownFile = computed(() => {
     return /\.(?:md|markdown|mdown|mkd|mkdn)$/i.test(props.filePath)
 })
 const showMarkdownPreview = ref(false)
+
+// --- SVG preview state ---
+const isSvgFile = computed(() => {
+    if (!props.filePath) return false
+    return /\.svg$/i.test(props.filePath)
+})
+const showSvgPreview = ref(false)
+// Manually managed blob URL for SVG preview (revoked on change / unmount)
+let _svgBlobUrl = null
+const svgPreviewUrl = computed(() => {
+    // Revoke previous blob URL if any
+    if (_svgBlobUrl) {
+        URL.revokeObjectURL(_svgBlobUrl)
+        _svgBlobUrl = null
+    }
+    if (!showSvgPreview.value || !isSvgFile.value || !currentContent.value) return null
+    const blob = new Blob([currentContent.value], { type: 'image/svg+xml' })
+    _svgBlobUrl = URL.createObjectURL(blob)
+    return _svgBlobUrl
+})
+onBeforeUnmount(() => {
+    if (_svgBlobUrl) {
+        URL.revokeObjectURL(_svgBlobUrl)
+        _svgBlobUrl = null
+    }
+})
 
 // --- Edit mode state ---
 const isEditing = ref(false)
@@ -197,19 +225,28 @@ const showEditor = computed(() => {
     return true
 })
 
+// Whether an image should be displayed (binary image or SVG preview)
+const showImagePreview = computed(() => {
+    if (imageSrc.value) return true  // binary image with data URI
+    if (showSvgPreview.value && svgPreviewUrl.value) return true
+    return false
+})
+
 // Whether the header toolbar should be visible.
+// Hidden for binary images (no useful controls for them).
 const showHeader = computed(() => {
     if (props.diffMode) return !!props.filePath
+    if (isBinary.value) return false
     return !!props.filePath && hasLoadedOnce.value
 })
 
-// Whether a full-area placeholder should be shown (loading spinner, error, binary).
+// Whether a full-area placeholder should be shown (loading spinner, error, non-image binary).
 // These overlay on top of the editor area.
 const showOverlay = computed(() => {
     if (!props.filePath) return false
     if (loading.value) return true
     if (error.value) return true
-    if (isBinary.value) return true
+    if (isBinary.value && !imageSrc.value) return true  // non-image binary
     return false
 })
 
@@ -230,6 +267,7 @@ async function fetchFileContent(filePath, { isSwitch = false } = {}) {
     error.value = null
     saveError.value = null
     isBinary.value = false
+    imageSrc.value = null
 
     try {
         const res = await apiFetch(
@@ -246,7 +284,9 @@ async function fetchFileContent(filePath, { isSwitch = false } = {}) {
         if (data.binary) {
             isBinary.value = true
             fileSize.value = data.size
+            imageSrc.value = data.image_src || null
             currentContent.value = ''
+            if (imageSrc.value) hasLoadedOnce.value = true
             return
         }
 
@@ -275,14 +315,16 @@ watch(() => props.filePath, async (newPath) => {
         currentContent.value = ''
         error.value = null
         isBinary.value = false
+        imageSrc.value = null
         // Reset edit mode when file is deselected
         isEditing.value = false
         return
     }
 
-    // Reset edit mode and markdown preview when switching files
+    // Reset edit mode and preview modes when switching files
     isEditing.value = false
     showMarkdownPreview.value = false
+    showSvgPreview.value = false
 
     // In diff mode, content is passed via props — don't fetch.
     if (props.diffMode) {
@@ -310,6 +352,7 @@ function onEditToggle(event) {
     if (checked) {
         isEditing.value = true
         showMarkdownPreview.value = false  // exit preview when entering edit mode
+        showSvgPreview.value = false       // exit SVG preview when entering edit mode
         saveError.value = null
     } else {
         // Revert silently when leaving edit mode
@@ -320,6 +363,10 @@ function onEditToggle(event) {
 
 function toggleMarkdownPreview() {
     showMarkdownPreview.value = !showMarkdownPreview.value
+}
+
+function toggleSvgPreview() {
+    showSvgPreview.value = !showSvgPreview.value
 }
 
 async function save() {
@@ -464,7 +511,7 @@ function goToNextDiff() {
         <div v-if="showHeader" class="header">
             <div class="header-left">
                 <wa-button
-                    v-if="!showMarkdownPreview"
+                    v-if="!showMarkdownPreview && !showSvgPreview"
                     :id="searchButtonId"
                     size="small"
                     variant="neutral"
@@ -553,7 +600,7 @@ function goToNextDiff() {
             <div class="header-right">
                 <wa-spinner v-if="switching" class="header-spinner"></wa-spinner>
                 <wa-switch
-                    v-if="!showMarkdownPreview"
+                    v-if="!showMarkdownPreview && !showSvgPreview"
                     :checked="wordWrap"
                     size="small"
                     @change="onWordWrapToggle"
@@ -578,6 +625,19 @@ function goToNextDiff() {
                     <wa-icon name="eye"></wa-icon>
                 </wa-button>
                 <AppTooltip :for="markdownPreviewButtonId">Toggle markdown preview</AppTooltip>
+                <!-- SVG preview toggle: shown for .svg files when not editing -->
+                <wa-button
+                    v-if="isSvgFile && !isEditing"
+                    size="small"
+                    variant="neutral"
+                    :appearance="showSvgPreview ? 'filled' : 'outlined'"
+                    :id="svgPreviewButtonId"
+                    class="reduced-height"
+                    @click="toggleSvgPreview"
+                >
+                    <wa-icon name="eye"></wa-icon>
+                </wa-button>
+                <AppTooltip :for="svgPreviewButtonId">Toggle SVG preview</AppTooltip>
             </div>
         </div>
 
@@ -594,6 +654,15 @@ function goToNextDiff() {
             <div v-if="showMarkdownPreview && isMarkdownFile" class="markdown-preview-container">
                 <MarkdownContent
                     :source="diffMode ? (modifiedContent ?? '') : currentContent"
+                />
+            </div>
+
+            <!-- Image preview (binary images or SVG preview) -->
+            <div v-if="showImagePreview" class="image-preview-container">
+                <img
+                    :src="imageSrc || svgPreviewUrl"
+                    :alt="fileName"
+                    class="image-preview"
                 />
             </div>
 
@@ -617,7 +686,7 @@ function goToNextDiff() {
             <!-- CodeMirror editor — mounted once, never destroyed on file switch -->
             <CodeEditor
                 v-if="!diffMode"
-                v-show="showEditor && !showMarkdownPreview"
+                v-show="showEditor && !showMarkdownPreview && !showSvgPreview"
                 ref="codeEditorRef"
                 v-model="currentContent"
                 :file-path="filePath"
@@ -724,6 +793,22 @@ function goToNextDiff() {
     inset: 0;
     overflow-y: auto;
     padding: var(--wa-space-m) var(--wa-space-l);
+}
+
+.image-preview-container {
+    position: absolute;
+    inset: 0;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--wa-space-m);
+}
+
+.image-preview {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
 }
 
 .editor-overlay {
