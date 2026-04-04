@@ -20,6 +20,7 @@ import ProcessIndicator from './ProcessIndicator.vue'
 import ProcessDuration from './ProcessDuration.vue'
 import CostDisplay from './CostDisplay.vue'
 import AppTooltip from './AppTooltip.vue'
+import StopProcessConfirmDialog from './StopProcessConfirmDialog.vue'
 
 const props = defineProps({
     session: {
@@ -211,6 +212,9 @@ const canStop = computed(() => {
 // Track when a stop request has been sent and we're waiting for the process to die
 const stoppingProcess = ref(false)
 
+// Confirmation dialog for stopping a process with active crons
+const stopConfirmDialogRef = ref(null)
+
 // Reset stoppingProcess when the process actually dies (or becomes un-stoppable for any reason)
 watch(canStop, (value) => {
     if (!value) {
@@ -235,8 +239,12 @@ function handleMenuSelect(event) {
     if (action === 'rename') {
         openRenameDialog(session)
     } else if (action === 'stop') {
-        stoppingProcess.value = true
-        killProcess(session.id)
+        if (hasActiveCrons.value) {
+            stopConfirmDialogRef.value?.open({ mode: 'stop', cronCount: activeCronCount.value })
+        } else {
+            stoppingProcess.value = true
+            killProcess(session.id)
+        }
     } else if (action === 'delete-draft') {
         // If viewing this draft, deselect it first (navigate to project home)
         if (props.active) {
@@ -245,10 +253,14 @@ function handleMenuSelect(event) {
         store.deleteDraftSession(session.id)
     } else if (action === 'archive') {
         // Stop the process if running — archived and running are mutually exclusive
-        if (canStop.value) {
-            killProcess(session.id)
+        if (canStop.value && hasActiveCrons.value) {
+            stopConfirmDialogRef.value?.open({ mode: 'archive', cronCount: activeCronCount.value })
+        } else {
+            if (canStop.value) {
+                killProcess(session.id)
+            }
+            store.setSessionArchived(session.project_id, session.id, true)
         }
-        store.setSessionArchived(session.project_id, session.id, true)
     } else if (action === 'unarchive') {
         store.setSessionArchived(session.project_id, session.id, false)
     } else if (action === 'pin') {
@@ -267,6 +279,21 @@ function handleMenuSelect(event) {
         }
     } else if (action === 'mark-read') {
         markSessionReadState(session.id, false)
+    }
+}
+
+/**
+ * Handle confirmation from the stop-process dialog.
+ * Executes the deferred stop (or stop+archive) action.
+ * @param {Object} payload
+ * @param {'stop'|'archive'} payload.mode
+ */
+function handleStopConfirm({ mode }) {
+    const session = props.session
+    stoppingProcess.value = true
+    killProcess(session.id)
+    if (mode === 'archive') {
+        store.setSessionArchived(session.project_id, session.id, true)
     }
 }
 </script>
@@ -488,6 +515,8 @@ function handleMenuSelect(event) {
             </template>
         </wa-dropdown>
         <AppTooltip :for="`session-menu-trigger-${session.id}`">Session actions</AppTooltip>
+        <!-- Confirmation dialog for stopping a process with active crons -->
+        <StopProcessConfirmDialog ref="stopConfirmDialogRef" @confirm="handleStopConfirm" />
     </div>
 </template>
 

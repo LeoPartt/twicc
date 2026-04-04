@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Allow pining session settings (model, effort level, thinking style...) to the session regardless of default and "always apply" settings
 - Inline code comments: click a line number to annotate code, then send formatted comments to Claude via the message input
 - Auto-restart sessions with active cron jobs when they die from API errors or crashes (infinite retry with exponential backoff, max 5 min between attempts)
+- Confirmation dialog when stopping or archiving a session that has active cron jobs, warning that crons will be lost
 - Allow opening multiple terminal sessions simultaneously, with better presets handling
 - Terminal extra keys bar on mobile: tabbed bar (Essentials / More / F-keys) with modifiers (tap = one-shot, double-tap = lock), arrow keys, special characters, paste, and function keys
 - Custom combos & snippets (with placeholders) for terminal: user-defined key combos/sequences (mobile) and text global or project-scoped snippets (mobile & desktop)
