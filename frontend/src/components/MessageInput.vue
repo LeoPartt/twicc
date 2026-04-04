@@ -260,7 +260,12 @@ const placeholderText = computed(() => {
         return 'You can send a message now. Claude will receive it as soon as possible (while working or after). Note: it will not appear in the conversation history.'
     }
     // user_turn, dead, or no process
-    let text = 'Shortcuts: At start: / = commands, ! and PageUp = message history; Anywhere: @ = file paths'
+    const historyHint = isDraft.value
+        ? ''
+        : settingsStore.isTouchDevice
+            ? ', ! = message history'
+            : ', ! and PageUp = message history'
+    let text = `Shortcuts: At start: / = commands${historyHint}; Anywhere: @ = file paths`
     if (!settingsStore.isTouchDevice) {
         const keys = settingsStore.isMac ? '⌘↵ or Ctrl↵' : 'Ctrl↵ or Meta↵'
         text += `, ${keys} to send`
@@ -733,7 +738,8 @@ function onInput(event) {
         }
 
         // Detect '!' at position 0 (first character of the message) to trigger message history picker
-        if (!historyPickerRef.value?.isOpen && cursorPos === 1 && newText[0] === '!') {
+        // Skip on draft sessions — no message history to show
+        if (!isDraft.value && !historyPickerRef.value?.isOpen && cursorPos === 1 && newText[0] === '!') {
             histTriggerMode.value = 'bang'
             histCursorPosition.value = cursorPos  // right after the '!'
             histMirroredLength.value = 0
@@ -1012,7 +1018,8 @@ function onKeydown(event) {
     }
 
     // PageUp on the first line → open message history picker
-    if (event.key === 'PageUp' && !historyPickerRef.value?.isOpen) {
+    // Skip on draft sessions — no message history to show
+    if (!isDraft.value && event.key === 'PageUp' && !historyPickerRef.value?.isOpen) {
         const inner = textareaRef.value?.shadowRoot?.querySelector('textarea')
         if (inner) {
             const cursorPos = inner.selectionStart
