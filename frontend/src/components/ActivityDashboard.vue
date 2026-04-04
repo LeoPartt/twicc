@@ -4,11 +4,16 @@
 // Supports two modes:
 //   - 'messages': main metric = user message count, sub-metrics = total cost + cost per message
 //   - 'sessions': main metric = session count, sub-metrics = avg messages/session + avg cost/session
+// Cost-related sub-metrics are hidden when the "show costs" setting is disabled.
 // Pure presentation component: receives pre-fetched daily activity data via props.
 
 import { computed } from 'vue'
+import { useSettingsStore } from '../stores/settings'
 import AppTooltip from './AppTooltip.vue'
 import CostDisplay from './CostDisplay.vue'
+
+const settingsStore = useSettingsStore()
+const showCosts = computed(() => settingsStore.areCostsShown)
 
 const props = defineProps({
     /** Daily activity data: array of { date: "YYYY-MM-DD", user_message_count: N, session_count: N, cost: "X.XX" } */
@@ -266,71 +271,77 @@ const periods = computed(() => {
                             <span class="wa-caption-s kpi-label">{{ isSessionsMode ? 'sessions created' : 'message turns' }}</span>
                         </div>
 
-                        <wa-divider></wa-divider>
+                        <!-- Sub metric 1: total cost (messages mode) or avg turns/session (sessions mode) -->
+                        <template v-if="isSessionsMode || showCosts">
+                            <wa-divider></wa-divider>
 
-                        <!-- Sub metric 1 -->
-                        <div class="wa-stack wa-gap-xs">
-                            <div class="wa-cluster wa-gap-m sub-metric">
-                                <!-- Cost display for messages mode, plain number for sessions mode -->
-                                <div class="wa-stack wa-gap-2xs wa-align-items-center">
-                                    <template v-if="isSessionsMode">
-                                        <span v-if="period.sub1Trend && period.sub1Trend.direction !== 'up'" class="wa-caption-xs prev-value">{{ formatAvg(period.prevSub1Value) }}</span>
-                                        <span class="wa-heading-l">{{ formatAvg(period.sub1Value) }}</span>
-                                        <span v-if="period.sub1Trend && period.sub1Trend.direction === 'up'" class="wa-caption-xs prev-value">{{ formatAvg(period.prevSub1Value) }}</span>
-                                    </template>
-                                    <template v-else>
-                                        <CostDisplay v-if="period.sub1Trend && period.sub1Trend.direction !== 'up'" :cost="period.prevSub1Value" :icon="false" class="wa-caption-s prev-value" />
-                                        <CostDisplay :cost="period.sub1Value" class="wa-heading-l" />
-                                        <CostDisplay v-if="period.sub1Trend && period.sub1Trend.direction === 'up'" :cost="period.prevSub1Value" :icon="false" class="wa-caption-xs prev-value" />
+                            <div class="wa-stack wa-gap-xs">
+                                <div class="wa-cluster wa-gap-m sub-metric">
+                                    <!-- Cost display for messages mode, plain number for sessions mode -->
+                                    <div class="wa-stack wa-gap-2xs wa-align-items-center">
+                                        <template v-if="isSessionsMode">
+                                            <span v-if="period.sub1Trend && period.sub1Trend.direction !== 'up'" class="wa-caption-xs prev-value">{{ formatAvg(period.prevSub1Value) }}</span>
+                                            <span class="wa-heading-l">{{ formatAvg(period.sub1Value) }}</span>
+                                            <span v-if="period.sub1Trend && period.sub1Trend.direction === 'up'" class="wa-caption-xs prev-value">{{ formatAvg(period.prevSub1Value) }}</span>
+                                        </template>
+                                        <template v-else>
+                                            <CostDisplay v-if="period.sub1Trend && period.sub1Trend.direction !== 'up'" :cost="period.prevSub1Value" :icon="false" class="wa-caption-s prev-value" />
+                                            <CostDisplay :cost="period.sub1Value" class="wa-heading-l" />
+                                            <CostDisplay v-if="period.sub1Trend && period.sub1Trend.direction === 'up'" :cost="period.prevSub1Value" :icon="false" class="wa-caption-xs prev-value" />
+                                        </template>
+                                    </div>
+                                    <wa-tag
+                                        v-if="period.sub1Trend"
+                                        :variant="period.sub1Trend.variant"
+                                        appearance="outlined"
+                                        size="small"
+                                    >
+                                        <wa-icon
+                                            :name="period.sub1Trend.direction === 'up' ? 'arrow-up' : 'arrow-down'"
+                                            :label="period.sub1Trend.direction === 'up' ? 'Up' : 'Down'"
+                                        ></wa-icon>
+                                        {{ period.sub1Trend.value }}%
+                                    </wa-tag>
+                                    <template v-if="!period.isTotal">
+                                        <wa-tag v-if="!period.sub1Trend" :id="`na-sub1-${mode}-${period.key}`" variant="neutral" appearance="outlined" size="small">N/A</wa-tag>
+                                        <AppTooltip v-if="!period.sub1Trend" :for="`na-sub1-${mode}-${period.key}`">No data for {{ period.previousLabel }}</AppTooltip>
                                     </template>
                                 </div>
-                                <wa-tag
-                                    v-if="period.sub1Trend"
-                                    :variant="period.sub1Trend.variant"
-                                    appearance="outlined"
-                                    size="small"
-                                >
-                                    <wa-icon
-                                        :name="period.sub1Trend.direction === 'up' ? 'arrow-up' : 'arrow-down'"
-                                        :label="period.sub1Trend.direction === 'up' ? 'Up' : 'Down'"
-                                    ></wa-icon>
-                                    {{ period.sub1Trend.value }}%
-                                </wa-tag>
-                                <template v-if="!period.isTotal">
-                                    <wa-tag v-if="!period.sub1Trend" :id="`na-sub1-${mode}-${period.key}`" variant="neutral" appearance="outlined" size="small">N/A</wa-tag>
-                                    <AppTooltip v-if="!period.sub1Trend" :for="`na-sub1-${mode}-${period.key}`">No data for {{ period.previousLabel }}</AppTooltip>
-                                </template>
+                                <span class="wa-caption-xs kpi-label">{{ isSessionsMode ? 'avg. turns per session' : 'total cost' }}</span>
                             </div>
-                            <span class="wa-caption-xs kpi-label">{{ isSessionsMode ? 'avg. turns per session' : 'total cost' }}</span>
-                        </div>
+                        </template>
 
-                        <!-- Sub metric 2 -->
-                        <div class="wa-stack wa-gap-xs">
-                            <div class="wa-cluster wa-gap-m sub-metric">
-                                <div class="wa-stack wa-gap-2xs wa-align-items-center">
-                                    <CostDisplay v-if="period.sub2Trend && period.sub2Trend.direction !== 'up'" :cost="period.prevSub2Value" :icon="false" class="wa-caption-xs prev-value" />
-                                    <CostDisplay :cost="period.sub2Value" class="wa-heading-l" />
-                                    <CostDisplay v-if="period.sub2Trend && period.sub2Trend.direction === 'up'" :cost="period.prevSub2Value" :icon="false" class="wa-caption-xs prev-value" />
+                        <!-- Sub metric 2: always cost-related (avg cost/session or avg cost/turn) -->
+                        <template v-if="showCosts">
+                            <wa-divider></wa-divider>
+
+                            <div class="wa-stack wa-gap-xs">
+                                <div class="wa-cluster wa-gap-m sub-metric">
+                                    <div class="wa-stack wa-gap-2xs wa-align-items-center">
+                                        <CostDisplay v-if="period.sub2Trend && period.sub2Trend.direction !== 'up'" :cost="period.prevSub2Value" :icon="false" class="wa-caption-xs prev-value" />
+                                        <CostDisplay :cost="period.sub2Value" class="wa-heading-l" />
+                                        <CostDisplay v-if="period.sub2Trend && period.sub2Trend.direction === 'up'" :cost="period.prevSub2Value" :icon="false" class="wa-caption-xs prev-value" />
+                                    </div>
+                                    <wa-tag
+                                        v-if="period.sub2Trend"
+                                        :variant="period.sub2Trend.variant"
+                                        appearance="outlined"
+                                        size="small"
+                                    >
+                                        <wa-icon
+                                            :name="period.sub2Trend.direction === 'up' ? 'arrow-up' : 'arrow-down'"
+                                            :label="period.sub2Trend.direction === 'up' ? 'Up' : 'Down'"
+                                        ></wa-icon>
+                                        {{ period.sub2Trend.value }}%
+                                    </wa-tag>
+                                    <template v-if="!period.isTotal">
+                                        <wa-tag v-if="!period.sub2Trend" :id="`na-sub2-${mode}-${period.key}`" variant="neutral" appearance="outlined" size="small">N/A</wa-tag>
+                                        <AppTooltip v-if="!period.sub2Trend" :for="`na-sub2-${mode}-${period.key}`">No data for {{ period.previousLabel }}</AppTooltip>
+                                    </template>
                                 </div>
-                                <wa-tag
-                                    v-if="period.sub2Trend"
-                                    :variant="period.sub2Trend.variant"
-                                    appearance="outlined"
-                                    size="small"
-                                >
-                                    <wa-icon
-                                        :name="period.sub2Trend.direction === 'up' ? 'arrow-up' : 'arrow-down'"
-                                        :label="period.sub2Trend.direction === 'up' ? 'Up' : 'Down'"
-                                    ></wa-icon>
-                                    {{ period.sub2Trend.value }}%
-                                </wa-tag>
-                                <template v-if="!period.isTotal">
-                                    <wa-tag v-if="!period.sub2Trend" :id="`na-sub2-${mode}-${period.key}`" variant="neutral" appearance="outlined" size="small">N/A</wa-tag>
-                                    <AppTooltip v-if="!period.sub2Trend" :for="`na-sub2-${mode}-${period.key}`">No data for {{ period.previousLabel }}</AppTooltip>
-                                </template>
+                                <span class="wa-caption-xs kpi-label">{{ isSessionsMode ? 'avg. cost per session' : 'avg. cost per turn' }}</span>
                             </div>
-                            <span class="wa-caption-xs kpi-label">{{ isSessionsMode ? 'avg. cost per session' : 'avg. cost per turn' }}</span>
-                        </div>
+                        </template>
                     </div>
                 </div>
             </wa-card>

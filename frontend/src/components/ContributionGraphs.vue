@@ -6,10 +6,14 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { apiFetch } from '../utils/api'
 import { ALL_PROJECTS_ID } from '../stores/data'
+import { useSettingsStore } from '../stores/settings'
 import { useStartupPolling } from '../composables/useStartupPolling'
 import ActivityDashboard from './ActivityDashboard.vue'
 import ContributionGraph from './ContributionGraph.vue'
 import ContributionSparklines from './ContributionSparklines.vue'
+
+const settingsStore = useSettingsStore()
+const showCosts = computed(() => settingsStore.areCostsShown)
 
 const props = defineProps({
     /** Project ID or ALL_PROJECTS_ID for global view */
@@ -213,7 +217,7 @@ useStartupPolling(fetchDailyActivity)
     <template v-if="viewMode === 'heatmap'">
         <ContributionGraph :daily-activity="dailyActivity" mode="sessions" />
         <ContributionGraph :daily-activity="dailyActivity" mode="messages" />
-        <ContributionGraph :daily-activity="dailyActivity" mode="cost" />
+        <ContributionGraph v-if="showCosts" :daily-activity="dailyActivity" mode="cost" />
     </template>
 
     <!-- Sparkline view -->

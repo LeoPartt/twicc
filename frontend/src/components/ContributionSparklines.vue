@@ -11,6 +11,7 @@ import { useSettingsStore } from '../stores/settings'
 
 const settingsStore = useSettingsStore()
 const isTouchDevice = computed(() => settingsStore.isTouchDevice)
+const showCosts = computed(() => settingsStore.areCostsShown)
 
 const props = defineProps({
     /** Daily activity data: array of { date, user_message_count, session_count, cost } */
@@ -319,61 +320,76 @@ const sessionsPoints = computed(() => buildPolylinePoints(sessionsValues.value, 
 const messagesPoints = computed(() => buildPolylinePoints(messagesValues.value, messagesMax.value, GRAPH_HEIGHT))
 const costPoints = computed(() => buildPolylinePoints(costValues.value, costMax.value, GRAPH_HEIGHT))
 
-// Separate curves config (one SVG per metric, each with its own color)
-const separateCurves = computed(() => [
+// All separate curves (one SVG per metric, each with its own color)
+const allSeparateCurves = [
     {
         key: 'sessions',
-        label: `Sessions created ${periodLabel.value}`,
-        points: sessionsPoints.value,
+        label: () => `Sessions created ${periodLabel.value}`,
+        points: () => sessionsPoints.value,
         gradientId: 'sparkline-contrib-sessions-gradient',
         maskId: 'sparkline-contrib-sessions-mask',
         colorPrefix: 'blue',
     },
     {
         key: 'messages',
-        label: `Message turns ${periodLabel.value}`,
-        points: messagesPoints.value,
+        label: () => `Message turns ${periodLabel.value}`,
+        points: () => messagesPoints.value,
         gradientId: 'sparkline-contrib-messages-gradient',
         maskId: 'sparkline-contrib-messages-mask',
         colorPrefix: 'green',
     },
     {
         key: 'cost',
-        label: `Cost ${periodLabel.value}`,
-        points: costPoints.value,
+        label: () => `Cost ${periodLabel.value}`,
+        points: () => costPoints.value,
         gradientId: 'sparkline-contrib-cost-gradient',
         maskId: 'sparkline-contrib-cost-mask',
         colorPrefix: 'red',
+        isCost: true,
     },
-])
+]
 
-// Combined curves config (all three overlaid in one SVG, distinct colors)
-const combinedCurves = computed(() => [
+// All combined curves (all overlaid in one SVG, distinct colors)
+const allCombinedCurves = [
     {
         key: 'sessions',
-        label: 'Sessions',
-        points: sessionsPoints.value,
+        label: () => 'Sessions',
+        points: () => sessionsPoints.value,
         gradientId: 'sparkline-combined-sessions-gradient',
         maskId: 'sparkline-combined-sessions-mask',
         colorPrefix: 'blue',
     },
     {
         key: 'messages',
-        label: 'Message turns',
-        points: messagesPoints.value,
+        label: () => 'Message turns',
+        points: () => messagesPoints.value,
         gradientId: 'sparkline-combined-messages-gradient',
         maskId: 'sparkline-combined-messages-mask',
         colorPrefix: 'green',
     },
     {
         key: 'cost',
-        label: 'Cost',
-        points: costPoints.value,
+        label: () => 'Cost',
+        points: () => costPoints.value,
         gradientId: 'sparkline-combined-cost-gradient',
         maskId: 'sparkline-combined-cost-mask',
         colorPrefix: 'red',
+        isCost: true,
     },
-])
+]
+
+// Filtered curves that exclude cost when showCosts is disabled.
+// Each entry resolves the label/points getters into plain values for the template.
+const separateCurves = computed(() =>
+    allSeparateCurves
+        .filter(c => !c.isCost || showCosts.value)
+        .map(c => ({ ...c, label: c.label(), points: c.points() }))
+)
+const combinedCurves = computed(() =>
+    allCombinedCurves
+        .filter(c => !c.isCost || showCosts.value)
+        .map(c => ({ ...c, label: c.label(), points: c.points() }))
+)
 
 /**
  * Return CSS variable names for gradient stops and stroke based on color prefix.
@@ -566,8 +582,8 @@ function formatAverage(value, isCost) {
                         </div>
                         <div class="sparkline-tooltip-separator"></div>
                         <div class="sparkline-tooltip-avg">Avg. turns/session: {{ formatAverage(hoveredAverages.avgTurnsPerSession, false) }}</div>
-                        <div class="sparkline-tooltip-avg">Avg. cost/session: {{ formatAverage(hoveredAverages.avgCostPerSession, true) }}</div>
-                        <div class="sparkline-tooltip-avg">Avg. cost/turn: {{ formatAverage(hoveredAverages.avgCostPerTurn, true) }}</div>
+                        <div v-if="showCosts" class="sparkline-tooltip-avg">Avg. cost/session: {{ formatAverage(hoveredAverages.avgCostPerSession, true) }}</div>
+                        <div v-if="showCosts" class="sparkline-tooltip-avg">Avg. cost/turn: {{ formatAverage(hoveredAverages.avgCostPerTurn, true) }}</div>
                         <div class="sparkline-tooltip-date">{{ hoveredData.dateLabel }}</div>
                     </div>
                 </div>
@@ -648,11 +664,11 @@ function formatAverage(value, isCost) {
                         <div class="sparkline-tooltip-separator"></div>
                         <template v-if="curve.key === 'sessions'">
                             <div class="sparkline-tooltip-avg">Avg. turns/session: {{ formatAverage(hoveredAverages.avgTurnsPerSession, false) }}</div>
-                            <div class="sparkline-tooltip-avg">Avg. cost/session: {{ formatAverage(hoveredAverages.avgCostPerSession, true) }}</div>
+                            <div v-if="showCosts" class="sparkline-tooltip-avg">Avg. cost/session: {{ formatAverage(hoveredAverages.avgCostPerSession, true) }}</div>
                         </template>
                         <template v-else-if="curve.key === 'messages'">
                             <div class="sparkline-tooltip-avg">Avg. turns/session: {{ formatAverage(hoveredAverages.avgTurnsPerSession, false) }}</div>
-                            <div class="sparkline-tooltip-avg">Avg. cost/turn: {{ formatAverage(hoveredAverages.avgCostPerTurn, true) }}</div>
+                            <div v-if="showCosts" class="sparkline-tooltip-avg">Avg. cost/turn: {{ formatAverage(hoveredAverages.avgCostPerTurn, true) }}</div>
                         </template>
                         <template v-else-if="curve.key === 'cost'">
                             <div class="sparkline-tooltip-avg">Avg. cost/session: {{ formatAverage(hoveredAverages.avgCostPerSession, true) }}</div>
