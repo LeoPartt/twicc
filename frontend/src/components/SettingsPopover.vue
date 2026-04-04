@@ -692,7 +692,11 @@ function onPopoverShow() {
                         <span class="setting-group-hint">Only applies to new sessions.</span>
                     </div>
                     <div>
-                        <span class="setting-group-hint">* Override the per-session saved value with the default one.</span>
+                        <span class="setting-group-hint">
+                            * Override the per-session saved value with the default one.
+                            <br>
+                            You'll still be able to pin different settings on a per session basis.
+                        </span>
                     </div>
                 </section>
 

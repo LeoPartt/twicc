@@ -69,6 +69,7 @@ def _collect_restart_data(session_id: str) -> dict | None:
         "thinking_enabled": session.thinking_enabled,
         "claude_in_chrome": session.claude_in_chrome,
         "context_max": session.context_max,
+        "keep_settings": session.keep_settings,
     }
 
 

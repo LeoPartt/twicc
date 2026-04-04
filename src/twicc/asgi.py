@@ -274,6 +274,35 @@ async def update_session_context_max(session_id: str, context_max: int) -> None:
     logger.info(f"Session {session_id} updated with context_max {context_max}")
 
 
+async def update_session_keep_settings(session_id: str, keep_settings: bool) -> None:
+    """Update the keep_settings flag for an existing session and broadcast the change.
+
+    Skips the DB update and broadcast if the value is already the same.
+    """
+    from twicc.core.models import Session
+    from twicc.core.serializers import serialize_session
+
+    rows = await sync_to_async(
+        Session.objects.filter(id=session_id).exclude(keep_settings=keep_settings).update
+    )(keep_settings=keep_settings)
+    if not rows:
+        return
+
+    session = await sync_to_async(Session.objects.filter(id=session_id).first)()
+    channel_layer = get_channel_layer()
+    await channel_layer.group_send(
+        "updates",
+        {
+            "type": "broadcast",
+            "data": {
+                "type": "session_updated",
+                "session": serialize_session(session),
+            },
+        },
+    )
+    logger.info(f"Session {session_id} updated with keep_settings {keep_settings}")
+
+
 def _get_project_display_name(project) -> str:
     """Compute a human-readable display name for a project.
 
@@ -562,6 +591,7 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         - mark_session_read_state: explicitly mark a session as read or unread
         - list_terminals: list active tmux terminal indices for a session
         - kill_terminal: kill a secondary terminal's tmux session and broadcast
+        - update_keep_settings: toggle the keep_settings flag for a session (immediate persist)
         """
         msg_type = content.get("type")
 
@@ -611,6 +641,9 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         elif msg_type == "rename_terminal":
             await self._handle_rename_terminal(content)
 
+        elif msg_type == "update_keep_settings":
+            await self._handle_update_keep_settings(content)
+
     async def send_json(self, content, close=False):
         try:
             await super().send_json(content, close=close)
@@ -656,6 +689,7 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         thinking_enabled = content.get("thinking_enabled")  # Optional: bool
         claude_in_chrome = content.get("claude_in_chrome", False)  # bool, defaults to False
         context_max = content.get("context_max", 200_000)  # int: 200_000 (default) or 1_000_000
+        keep_settings = content.get("keep_settings", False)  # bool: pin settings for this session
 
         # Validate required fields (text is allowed to be empty for settings-only updates)
         if not session_id or not project_id:
@@ -724,6 +758,7 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
                     await update_session_thinking_enabled(session_id, thinking_enabled)
                 await update_session_claude_in_chrome(session_id, claude_in_chrome)
                 await update_session_context_max(session_id, context_max)
+                await update_session_keep_settings(session_id, keep_settings)
                 # Session exists: send message to it
                 await manager.send_to_session(
                     session_id, project_id, cwd, text,
@@ -764,6 +799,7 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
                     pending_kwargs["thinking_enabled"] = thinking_enabled
                 pending_kwargs["claude_in_chrome"] = claude_in_chrome
                 pending_kwargs["context_max"] = context_max
+                pending_kwargs["keep_settings"] = keep_settings
                 set_pending(session_id, **pending_kwargs)
 
                 await manager.create_session(
@@ -1174,6 +1210,24 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
                     },
                 },
             )
+
+    async def _handle_update_keep_settings(self, content: dict) -> None:
+        """Handle update_keep_settings request from client.
+
+        Expected content format:
+        {
+            "type": "update_keep_settings",
+            "session_id": "claude-conv-xxx",
+            "keep_settings": true/false
+        }
+
+        Immediately persists the keep_settings flag and broadcasts the update.
+        """
+        session_id = content.get("session_id")
+        keep_settings = content.get("keep_settings")
+        if not session_id or keep_settings is None:
+            return
+        await update_session_keep_settings(session_id, keep_settings)
 
     async def _handle_list_terminals(self, data):
         """Handle list_terminals request: return active tmux terminal indices (with labels) for a session."""

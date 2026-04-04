@@ -4,7 +4,7 @@ import { ref, computed, watch, nextTick, useId } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useDataStore } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
-import { sendWsMessage, notifyUserDraftUpdated } from '../composables/useWebSocket'
+import { sendWsMessage, notifyUserDraftUpdated, updateKeepSettings } from '../composables/useWebSocket'
 import { isSupportedMimeType, MAX_FILE_SIZE, SUPPORTED_IMAGE_TYPES, draftMediaToMediaItem } from '../utils/fileUtils'
 import { toast } from '../composables/useToast'
 import { PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, MODEL, MODEL_LABELS, EFFORT, EFFORT_LABELS, EFFORT_DISPLAY_LABELS, THINKING_LABELS, THINKING_DISPLAY_LABELS, CLAUDE_IN_CHROME_LABELS, CLAUDE_IN_CHROME_DISPLAY_LABELS, CONTEXT_MAX, CONTEXT_MAX_LABELS } from '../constants'
@@ -185,6 +185,9 @@ const selectedClaudeInChrome = ref(true)
 // Selected context max for the current session
 const selectedContextMax = ref(200_000)
 
+// Whether settings are pinned for this session (bypass "always apply" defaults)
+const selectedKeepSettings = ref(false)
+
 // Get process state for this session
 const processState = computed(() => store.getProcessState(props.sessionId))
 
@@ -292,6 +295,24 @@ const hasDropdownsChanged = computed(() =>
     selectedContextMax.value !== activeContextMax.value
 )
 
+// Whether the session has stored settings that differ from the current dropdowns.
+// Only relevant for existing (non-draft) sessions with a stopped process: when
+// "always apply" defaults have overridden the session's last-used settings,
+// this lets the user restore them with a single click.
+const canRestoreSessionSettings = computed(() => {
+    if (isDraft.value || processIsActive.value) return false
+    const sess = session.value
+    if (!sess) return false
+    return (
+        (sess.permission_mode && selectedPermissionMode.value !== sess.permission_mode) ||
+        (sess.selected_model && selectedModel.value !== sess.selected_model) ||
+        (sess.effort && selectedEffort.value !== sess.effort) ||
+        (sess.thinking_enabled != null && selectedThinking.value !== sess.thinking_enabled) ||
+        (sess.claude_in_chrome != null && selectedClaudeInChrome.value !== sess.claude_in_chrome) ||
+        (sess.context_max != null && selectedContextMax.value !== sess.context_max)
+    )
+})
+
 // Detect dropdown changes on an active process (used for Send button "Update" mode).
 // Only meaningful when a process is running, since updating settings via SDK
 // requires an active process.
@@ -303,51 +324,66 @@ const hasPermissionChanged = computed(() =>
 )
 const hasSettingsChanged = computed(() => hasModelChanged.value || hasPermissionChanged.value)
 
-// Determine the effective permission mode for the current session.
-// If "always apply default" is on, the settings default wins regardless of DB value.
-// Otherwise, use the DB value if present, or fall back to settings default.
+// Determine the effective value for a session setting.
+// "Always apply" defaults are bypassed (session's stored value is used) when:
+//   1. The session has an active process — the user chose these settings when
+//      starting/resuming, and continuing to chat should not silently overwrite them.
+//   2. The session's keep_settings flag is on — the user explicitly pinned settings.
+// Otherwise, "always apply" defaults kick in (new sessions, resumes without pin).
 function resolvePermissionMode(sess) {
+    if ((processIsActive.value || sess?.keep_settings) && sess?.permission_mode) {
+        return sess.permission_mode
+    }
     if (settingsStore.isAlwaysApplyDefaultPermissionMode) {
         return settingsStore.getDefaultPermissionMode
     }
     return sess?.permission_mode || settingsStore.getDefaultPermissionMode
 }
 
-// Determine the effective model for the current session.
-// Same logic as permission mode: "always apply" overrides, otherwise DB or settings default.
 function resolveModel(sess) {
+    if ((processIsActive.value || sess?.keep_settings) && sess?.selected_model) {
+        return sess.selected_model
+    }
     if (settingsStore.isAlwaysApplyDefaultModel) {
         return settingsStore.getDefaultModel
     }
     return sess?.selected_model || settingsStore.getDefaultModel
 }
 
-// Determine the effective effort for the current session.
 function resolveEffort(sess) {
+    if ((processIsActive.value || sess?.keep_settings) && sess?.effort) {
+        return sess.effort
+    }
     if (settingsStore.isAlwaysApplyDefaultEffort) {
         return settingsStore.getDefaultEffort
     }
     return sess?.effort || settingsStore.getDefaultEffort
 }
 
-// Determine the effective thinking mode for the current session.
 function resolveThinking(sess) {
+    if ((processIsActive.value || sess?.keep_settings) && sess?.thinking_enabled != null) {
+        return sess.thinking_enabled
+    }
     if (settingsStore.isAlwaysApplyDefaultThinking) {
         return settingsStore.getDefaultThinking
     }
     return sess?.thinking_enabled ?? settingsStore.getDefaultThinking
 }
 
-// Determine the effective Claude in Chrome mode for the current session.
 function resolveClaudeInChrome(sess) {
+    if ((processIsActive.value || sess?.keep_settings) && sess?.claude_in_chrome != null) {
+        return sess.claude_in_chrome
+    }
     if (settingsStore.isAlwaysApplyDefaultClaudeInChrome) {
         return settingsStore.getDefaultClaudeInChrome
     }
     return sess?.claude_in_chrome ?? settingsStore.getDefaultClaudeInChrome
 }
 
-// Determine the effective context max for the current session.
 function resolveContextMax(sess) {
+    if ((processIsActive.value || sess?.keep_settings) && sess?.context_max != null) {
+        return sess.context_max
+    }
     if (settingsStore.isAlwaysApplyDefaultContextMax) {
         return settingsStore.getDefaultContextMax
     }
@@ -377,17 +413,19 @@ watch(() => props.sessionId, (newId) => {
     activeThinking.value = sess?.thinking_enabled ?? resolvedThinking
     activeClaudeInChrome.value = sess?.claude_in_chrome ?? resolvedClaudeInChrome
     activeContextMax.value = sess?.context_max ?? resolvedContextMax
+    selectedKeepSettings.value = sess?.keep_settings ?? false
 }, { immediate: true })
 
 // When the default permission mode setting changes, or the "always apply" toggle
 // changes, update the dropdown for sessions that should follow the default.
-// Don't overwrite user's selection when a process is active (they may be changing it intentionally).
+// Don't overwrite when a process is active or settings are pinned.
 // Also update the active reference value so Reset detection stays in sync.
 watch(
     () => [settingsStore.getDefaultPermissionMode, settingsStore.isAlwaysApplyDefaultPermissionMode],
     () => {
         if (processIsActive.value) return
         const sess = store.getSession(props.sessionId)
+        if (sess?.keep_settings) return
         const resolved = resolvePermissionMode(sess)
         selectedPermissionMode.value = resolved
         activePermissionMode.value = resolved
@@ -396,13 +434,14 @@ watch(
 
 // When the default model setting changes, or the "always apply" toggle
 // changes, update the dropdown for sessions that should follow the default.
-// Don't overwrite user's selection when a process is active (they may be changing it intentionally).
+// Don't overwrite when a process is active or settings are pinned.
 // Also update the active reference value so Reset detection stays in sync.
 watch(
     () => [settingsStore.getDefaultModel, settingsStore.isAlwaysApplyDefaultModel],
     () => {
         if (processIsActive.value) return
         const sess = store.getSession(props.sessionId)
+        if (sess?.keep_settings) return
         const resolved = resolveModel(sess)
         selectedModel.value = resolved
         activeModel.value = resolved
@@ -415,6 +454,7 @@ watch(
     () => {
         if (processIsActive.value) return
         const sess = store.getSession(props.sessionId)
+        if (sess?.keep_settings) return
         const resolved = resolveEffort(sess)
         selectedEffort.value = resolved
         activeEffort.value = resolved
@@ -427,6 +467,7 @@ watch(
     () => {
         if (processIsActive.value) return
         const sess = store.getSession(props.sessionId)
+        if (sess?.keep_settings) return
         const resolved = resolveThinking(sess)
         selectedThinking.value = resolved
         activeThinking.value = resolved
@@ -439,6 +480,7 @@ watch(
     () => {
         if (processIsActive.value) return
         const sess = store.getSession(props.sessionId)
+        if (sess?.keep_settings) return
         const resolved = resolveClaudeInChrome(sess)
         selectedClaudeInChrome.value = resolved
         activeClaudeInChrome.value = resolved
@@ -451,6 +493,7 @@ watch(
     () => {
         if (processIsActive.value) return
         const sess = store.getSession(props.sessionId)
+        if (sess?.keep_settings) return
         const resolved = resolveContextMax(sess)
         selectedContextMax.value = resolved
         activeContextMax.value = resolved
@@ -535,6 +578,41 @@ watch(
             if (!processIsActive.value) {
                 selectedContextMax.value = newValue
             }
+        }
+    }
+)
+
+// React when keep_settings data arrives from backend.
+// When turned off on a stopped session, re-resolve all settings so that
+// "always apply" defaults take effect immediately.
+watch(
+    () => store.getSession(props.sessionId)?.keep_settings,
+    (newValue, oldValue) => {
+        if (newValue != null) {
+            selectedKeepSettings.value = newValue
+        }
+        if (oldValue === true && newValue === false && !processIsActive.value) {
+            const sess = store.getSession(props.sessionId)
+            const resolved = {
+                permission: resolvePermissionMode(sess),
+                model: resolveModel(sess),
+                effort: resolveEffort(sess),
+                thinking: resolveThinking(sess),
+                claudeInChrome: resolveClaudeInChrome(sess),
+                contextMax: resolveContextMax(sess),
+            }
+            selectedPermissionMode.value = resolved.permission
+            selectedModel.value = resolved.model
+            selectedEffort.value = resolved.effort
+            selectedThinking.value = resolved.thinking
+            selectedClaudeInChrome.value = resolved.claudeInChrome
+            selectedContextMax.value = resolved.contextMax
+            activePermissionMode.value = resolved.permission
+            activeModel.value = resolved.model
+            activeEffort.value = resolved.effort
+            activeThinking.value = resolved.thinking
+            activeClaudeInChrome.value = resolved.claudeInChrome
+            activeContextMax.value = resolved.contextMax
         }
     }
 )
@@ -1075,6 +1153,7 @@ async function handleSend() {
         thinking_enabled: selectedThinking.value,
         claude_in_chrome: selectedClaudeInChrome.value,
         context_max: selectedContextMax.value,
+        keep_settings: selectedKeepSettings.value,
     }
 
     // For draft sessions with a title, include it
@@ -1182,6 +1261,55 @@ function handleCancel() {
         router.push({ name: 'projects-all' })
     } else {
         router.push({ name: 'project', params: { projectId: props.projectId } })
+    }
+}
+
+/**
+ * Restore all dropdowns to the session's last-used settings stored in the database.
+ * Counteracts "always apply" defaults when the user wants to resume with the
+ * same settings the session was previously using.
+ * Also updates active reference values so Reset detection stays in sync.
+ */
+function restoreSessionSettings() {
+    const sess = session.value
+    if (!sess) return
+    if (sess.permission_mode) {
+        selectedPermissionMode.value = sess.permission_mode
+        activePermissionMode.value = sess.permission_mode
+    }
+    if (sess.selected_model) {
+        selectedModel.value = sess.selected_model
+        activeModel.value = sess.selected_model
+    }
+    if (sess.effort) {
+        selectedEffort.value = sess.effort
+        activeEffort.value = sess.effort
+    }
+    if (sess.thinking_enabled != null) {
+        selectedThinking.value = sess.thinking_enabled
+        activeThinking.value = sess.thinking_enabled
+    }
+    if (sess.claude_in_chrome != null) {
+        selectedClaudeInChrome.value = sess.claude_in_chrome
+        activeClaudeInChrome.value = sess.claude_in_chrome
+    }
+    if (sess.context_max != null) {
+        selectedContextMax.value = sess.context_max
+        activeContextMax.value = sess.context_max
+    }
+}
+
+/**
+ * Handle the "Pin settings" checkbox toggle.
+ * For existing sessions: immediately persists via WebSocket.
+ * For draft sessions: just updates the local ref (will be sent with send_message).
+ */
+function onKeepSettingsToggle(event) {
+    const checked = event.target.checked
+    selectedKeepSettings.value = checked
+    // Only send WS update for existing (non-draft) sessions
+    if (!isDraft.value) {
+        updateKeepSettings(props.sessionId, checked)
     }
 }
 
@@ -1490,6 +1618,30 @@ defineExpose({ insertTextAtCursor })
                     class="settings-popover"
                 >
                     <div class="settings-panel">
+                        <!-- Restore button: shown when "always apply" defaults have
+                             overridden the session's last-used settings on a stopped session -->
+                        <wa-button
+                            v-if="canRestoreSessionSettings"
+                            variant="neutral"
+                            appearance="outlined"
+                            size="small"
+                            class="restore-settings-button"
+                            @click="restoreSessionSettings"
+                        >
+                            <wa-icon name="arrow-rotate-left" slot="prefix"></wa-icon>
+                            Restore last settings
+                        </wa-button>
+                        <!-- Pin settings checkbox: always visible, persists immediately -->
+                        <div class="pin-settings-row">
+                            <wa-checkbox
+                                :checked.prop="selectedKeepSettings"
+                                @change="onKeepSettingsToggle"
+                                size="small"
+                            >
+                                Pin settings for this session
+                            </wa-checkbox>
+                            <span class="setting-help">These settings will always be applied to this session, regardless of default values and "always apply" in global settings.</span>
+                        </div>
                         <div class="setting-row">
                             <label class="setting-label">Model</label>
                             <wa-select
@@ -1684,16 +1836,30 @@ body.sidebar-closed .message-input-toolbar {
 }
 
 .settings-popover {
-    --max-width: 95vw;
+    --max-width: min(30rem, 100vw);
     --arrow-size: 12px;
+    &::part(body) {
+        max-height: 60dvh;
+        overflow-y: auto;
+    }
 }
 
 .settings-panel {
     display: flex;
     flex-direction: column;
     gap: var(--wa-space-m);
-    max-height: 60dvh;
-    overflow-y: auto;
+}
+
+.restore-settings-button {
+    align-self: center;
+}
+
+.pin-settings-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--wa-space-2xs);
+    padding-bottom: var(--wa-space-xs);
+    border-bottom: 1px solid var(--wa-color-border);
 }
 
 .setting-row {
