@@ -24,7 +24,7 @@ export const DISPLAY_MODE = {
     CONVERSATION: 'conversation',
 }
 
-export const DEFAULT_DISPLAY_MODE = DISPLAY_MODE.SIMPLIFIED
+export const DEFAULT_DISPLAY_MODE = DISPLAY_MODE.NORMAL
 
 /**
  * Theme mode values.
@@ -227,7 +227,7 @@ export const EFFORT = {
     LOW: 'low',
 }
 
-export const DEFAULT_EFFORT = EFFORT.HIGH
+export const DEFAULT_EFFORT = EFFORT.MEDIUM
 
 /**
  * Human-friendly labels for each effort level.
