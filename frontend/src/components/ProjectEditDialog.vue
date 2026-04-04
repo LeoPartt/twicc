@@ -273,10 +273,6 @@ defineExpose({
 
             <!-- Edit mode: read-only info -->
             <template v-else>
-                <div class="info-group">
-                    <label class="info-label">ID</label>
-                    <div class="info-value">{{ project.id }}</div>
-                </div>
                 <div v-if="project.directory" class="info-group">
                     <label class="info-label">Directory</label>
                     <div class="info-value">{{ project.directory }}</div>
@@ -297,8 +293,9 @@ defineExpose({
                 ></wa-input>
                 <div class="form-hint">
                     Optional display name (max 25 characters)
+                    — Named projects will always be displayed above unnamed ones.
                     <template v-if="!isCreateMode && localName.trim()">
-                        — <a href="#" class="clear-name-link" @click.prevent="localName = ''">Remove name</a> (will keep project out of the named section)
+                        — <a href="#" class="clear-name-link" @click.prevent="localName = ''">Remove name</a>
                     </template>
                 </div>
             </div>
