@@ -13,6 +13,7 @@ urlpatterns = [
     path("api/daily-activity/", views.daily_activity),  # Global daily activity
     path("api/sessions/", views.all_sessions),
     path("api/search/", views.search_sessions),
+    path("api/usage-history/", views.usage_history),
     # Standalone filesystem endpoints (for directory picker, no project required)
     path("api/directory-tree/", views.standalone_directory_tree),
     path("api/home-directory/", views.home_directory),

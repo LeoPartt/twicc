@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta
 
 from asgiref.sync import sync_to_async
 from channels.layers import get_channel_layer
@@ -47,6 +48,91 @@ def _get_latest_usage_snapshot() -> UsageSnapshot | None:
     return UsageSnapshot.objects.first()  # ordered by -fetched_at
 
 
+def _build_reference_snapshots(snapshot: UsageSnapshot) -> dict | None:
+    """
+    Query and serialize reference snapshots for recent burn rate computation.
+
+    Looks up historical snapshots at four lookback targets:
+    - ~1 hour and ~30 minutes ago (for computing recent rates on the 5-hour window)
+    - ~24 hours and ~12 hours ago (for computing recent rates on all 7-day windows)
+
+    References are constrained to the **current quota window** (after its start
+    time) to avoid crossing a reset boundary, which would make the utilization
+    delta meaningless.
+
+    Returns a dict with ``one_hour``, ``thirty_min``, ``one_day``, and/or
+    ``twelve_hour`` keys, each containing the reference snapshot's ``fetched_at``
+    and relevant utilization values. Returns None if no references are available.
+    """
+    if not snapshot or not snapshot.fetched_at:
+        return None
+
+    now = snapshot.fetched_at
+    refs: dict = {}
+
+    def _fmt_dt(dt):
+        return dt.isoformat() if dt else None
+
+    def _find_ref(target_delta: timedelta, window_start: datetime | None) -> UsageSnapshot | None:
+        """Find the oldest snapshot within the lookback target and current window.
+
+        The floor is the later of (now - target_delta) and window_start,
+        so the delta never exceeds the target and never crosses a reset.
+        """
+        floor = now - target_delta
+        if window_start and window_start > floor:
+            floor = window_start
+        return (
+            UsageSnapshot.objects
+            .exclude(pk=snapshot.pk)
+            .filter(fetched_at__gte=floor)
+            .order_by("fetched_at")
+            .first()
+        )
+
+    # 5h window start (from resets_at - 5h)
+    fh_window_start = (
+        snapshot.five_hour_resets_at - timedelta(hours=5)
+        if snapshot.five_hour_resets_at
+        else None
+    )
+
+    # 7d window start (from resets_at - 7d)
+    sd_window_start = (
+        snapshot.seven_day_resets_at - timedelta(days=7)
+        if snapshot.seven_day_resets_at
+        else None
+    )
+
+    def _serialize_fh_ref(key: str, ref: UsageSnapshot | None) -> None:
+        if ref:
+            refs[key] = {
+                "fetched_at": _fmt_dt(ref.fetched_at),
+                "five_hour_utilization": ref.five_hour_utilization,
+            }
+
+    def _serialize_sd_ref(key: str, ref: UsageSnapshot | None) -> None:
+        if ref:
+            refs[key] = {
+                "fetched_at": _fmt_dt(ref.fetched_at),
+                "seven_day_utilization": ref.seven_day_utilization,
+                "seven_day_opus_utilization": ref.seven_day_opus_utilization,
+                "seven_day_sonnet_utilization": ref.seven_day_sonnet_utilization,
+                "seven_day_oauth_apps_utilization": ref.seven_day_oauth_apps_utilization,
+                "seven_day_cowork_utilization": ref.seven_day_cowork_utilization,
+            }
+
+    # References for 5h window: 1h and 30min lookbacks
+    _serialize_fh_ref("one_hour", _find_ref(timedelta(hours=1), fh_window_start))
+    _serialize_fh_ref("thirty_min", _find_ref(timedelta(minutes=30), fh_window_start))
+
+    # References for 7d windows: 24h and 12h lookbacks
+    _serialize_sd_ref("one_day", _find_ref(timedelta(hours=24), sd_window_start))
+    _serialize_sd_ref("twelve_hour", _find_ref(timedelta(hours=12), sd_window_start))
+
+    return refs if refs else None
+
+
 def _build_usage_message(
     success: bool, reason: str, has_oauth: bool, snapshot: UsageSnapshot | None
 ) -> dict:
@@ -61,7 +147,8 @@ def _build_usage_message(
     """
     if has_oauth and snapshot:
         period_costs = compute_period_costs(snapshot)
-        usage = serialize_usage_snapshot(snapshot, period_costs=period_costs)
+        references = _build_reference_snapshots(snapshot)
+        usage = serialize_usage_snapshot(snapshot, period_costs=period_costs, references=references)
     else:
         usage = None
 

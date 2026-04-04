@@ -13,10 +13,11 @@ import ProjectSelectOptions from '../components/ProjectSelectOptions.vue'
 import ProjectDetailPanel from '../components/ProjectDetailPanel.vue'
 import SessionRenameDialog from '../components/SessionRenameDialog.vue'
 import ProjectEditDialog from '../components/ProjectEditDialog.vue'
-import { getUsageRingColor } from '../utils/usage'
+import { getUsageRingColor, formatRecentDelta } from '../utils/usage'
 import { buildProjectTree, flattenProjectTree } from '../utils/projectTree'
 import CostDisplay from '../components/CostDisplay.vue'
 import AppTooltip from '../components/AppTooltip.vue'
+import UsageGraphDialog from '../components/UsageGraphDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -127,6 +128,16 @@ const quotaLastUpdateFormatted = computed(() => {
     })
 })
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Usage Graph Dialog
+// ════════════════════════════════════���══════════════════════════════════════
+
+const usageGraphDialogRef = ref(null)
+
+function openUsageGraph(period) {
+    usageGraphDialogRef.value?.open(period)
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Shared Rename Dialog (single instance for both sidebar and session header)
@@ -1008,6 +1019,9 @@ function updateSidebarClosedClass(closed) {
                             <div class="quota-tooltip-row" v-if="quotaFiveHour.burnRate != null"><span class="quota-tooltip-label">Burn rate</span><span>{{ (quotaFiveHour.burnRate * 100).toFixed(0) }}%</span></div>
                             <div class="quota-tooltip-row quota-tooltip-row-danger" v-if="quotaFiveHourCost?.cutoffAt"><span class="quota-tooltip-label"><wa-icon name="triangle-exclamation"></wa-icon> Cutoff</span><span>{{ formatResetTime(quotaFiveHourCost.cutoffAt) }}</span></div>
                             <div class="quota-tooltip-note quota-tooltip-row-danger" v-if="quotaFiveHourCost?.cutoffAt"><wa-icon name="triangle-exclamation"></wa-icon> Quota will be exhausted at current pace</div>
+                            <div class="quota-tooltip-row" v-if="quotaFiveHour.smoothedBurnRate != null"><span class="quota-tooltip-label">Smoothed rate (1h)</span><span>{{ (quotaFiveHour.smoothedBurnRate * 100).toFixed(0) }}%</span></div>
+                            <div class="quota-tooltip-row" v-if="quotaFiveHour.recentLong.rate != null"><span class="quota-tooltip-label">Recent rate ({{ formatRecentDelta(quotaFiveHour.recentLong.deltaMs, false) }})</span><span>{{ (quotaFiveHour.recentLong.rate * 100).toFixed(0) }}%</span></div>
+                            <div class="quota-tooltip-row" v-if="quotaFiveHour.recentShort.rate != null"><span class="quota-tooltip-label">Recent rate ({{ formatRecentDelta(quotaFiveHour.recentShort.deltaMs, false) }})</span><span>{{ (quotaFiveHour.recentShort.rate * 100).toFixed(0) }}%</span></div>
                             <div class="quota-tooltip-row" v-if="quotaFiveHour.resetsAt"><span class="quota-tooltip-label">Reset</span><span>{{ formatResetTime(quotaFiveHour.resetsAt) }}</span></div>
                             <template v-if="showCosts && quotaFiveHourCost && quotaFiveHourCost.spent != null">
                                 <wa-divider class="quota-tooltip-divider"></wa-divider>
@@ -1017,7 +1031,10 @@ function updateSidebarClosedClass(closed) {
                                 <div class="quota-tooltip-row" v-if="quotaFiveHourCost.estimatedMonthly != null"><span class="quota-tooltip-label">Est. 30 days</span><CostDisplay :cost="quotaFiveHourCost.estimatedMonthly" /></div>
                                 <div class="quota-tooltip-note quota-tooltip-row-danger" v-if="quotaFiveHourCost.capped"><wa-icon name="triangle-exclamation"></wa-icon> Based on capped 5h estimate</div>
                             </template>
-                            <wa-button size="small" variant="brand" appearance="outlined" href="https://claude.ai/settings/usage" target="_blank" rel="noopener" class="quota-stale-button">View on claude.ai</wa-button>
+                            <div class="quota-tooltip-buttons">
+                                <wa-button size="small" variant="brand" appearance="outlined" href="https://claude.ai/settings/usage" target="_blank" rel="noopener">View on claude.ai</wa-button>
+                                <wa-button size="small" variant="brand" appearance="outlined" @click="openUsageGraph('five-hour')"><wa-icon slot="prefix" name="chart-line"></wa-icon>View graph</wa-button>
+                            </div>
                         </div>
                     </AppTooltip>
                     <div id="quota-seven-day" class="usage-quota" v-if="quotaSevenDay">
@@ -1039,6 +1056,9 @@ function updateSidebarClosedClass(closed) {
                             <div class="quota-tooltip-row" v-if="quotaSevenDay.burnRate != null"><span class="quota-tooltip-label">Burn rate</span><span>{{ (quotaSevenDay.burnRate * 100).toFixed(0) }}%</span></div>
                             <div class="quota-tooltip-row quota-tooltip-row-danger" v-if="quotaSevenDayCost?.cutoffAt"><span class="quota-tooltip-label"><wa-icon name="triangle-exclamation"></wa-icon> Cutoff</span><span>{{ formatResetTime(quotaSevenDayCost.cutoffAt) }}</span></div>
                             <div class="quota-tooltip-note quota-tooltip-row-danger" v-if="quotaSevenDayCost?.cutoffAt"><wa-icon name="triangle-exclamation"></wa-icon> Quota will be exhausted at current pace</div>
+                            <div class="quota-tooltip-row" v-if="quotaSevenDay.smoothedBurnRate != null"><span class="quota-tooltip-label">Smoothed rate (24h)</span><span>{{ (quotaSevenDay.smoothedBurnRate * 100).toFixed(0) }}%</span></div>
+                            <div class="quota-tooltip-row" v-if="quotaSevenDay.recentLong.rate != null"><span class="quota-tooltip-label">Recent rate ({{ formatRecentDelta(quotaSevenDay.recentLong.deltaMs, true) }})</span><span>{{ (quotaSevenDay.recentLong.rate * 100).toFixed(0) }}%</span></div>
+                            <div class="quota-tooltip-row" v-if="quotaSevenDay.recentShort.rate != null"><span class="quota-tooltip-label">Recent rate ({{ formatRecentDelta(quotaSevenDay.recentShort.deltaMs, true) }})</span><span>{{ (quotaSevenDay.recentShort.rate * 100).toFixed(0) }}%</span></div>
                             <div class="quota-tooltip-row" v-if="quotaSevenDay.resetsAt"><span class="quota-tooltip-label">Reset</span><span>{{ formatResetTime(quotaSevenDay.resetsAt) }}</span></div>
                             <template v-if="showCosts && quotaSevenDayCost && quotaSevenDayCost.spent != null">
                                 <wa-divider class="quota-tooltip-divider"></wa-divider>
@@ -1048,7 +1068,10 @@ function updateSidebarClosedClass(closed) {
                                 <div class="quota-tooltip-row" v-if="quotaSevenDayCost.estimatedMonthly != null"><span class="quota-tooltip-label">Est. 30 days</span><CostDisplay :cost="quotaSevenDayCost.estimatedMonthly" /></div>
                                 <div class="quota-tooltip-note quota-tooltip-row-danger" v-if="quotaSevenDayCost.capped"><wa-icon name="triangle-exclamation"></wa-icon> Based on capped 7d estimate</div>
                             </template>
-                            <wa-button size="small" variant="brand" appearance="outlined" href="https://claude.ai/settings/usage" target="_blank" rel="noopener" class="quota-stale-button">View on claude.ai</wa-button>
+                            <div class="quota-tooltip-buttons">
+                                <wa-button size="small" variant="brand" appearance="outlined" href="https://claude.ai/settings/usage" target="_blank" rel="noopener">View on claude.ai</wa-button>
+                                <wa-button size="small" variant="brand" appearance="outlined" @click="openUsageGraph('seven-day')"><wa-icon slot="prefix" name="chart-line"></wa-icon>View graph</wa-button>
+                            </div>
                         </div>
                     </AppTooltip>
                     <div id="quota-extra-usage" class="usage-quota" v-if="quotaExtraUsage">
@@ -1123,6 +1146,9 @@ function updateSidebarClosedClass(closed) {
 
     <!-- Create project dialog (opened from "New session" dropdown) -->
     <ProjectEditDialog ref="createProjectDialogRef" @saved="handleProjectCreated" />
+
+    <!-- Usage graph dialog -->
+    <UsageGraphDialog ref="usageGraphDialogRef" />
     </div>
 </template>
 
@@ -1493,6 +1519,16 @@ wa-split-panel::part(divider) {
 
 .quota-stale-button {
     align-self: stretch;
+}
+
+.quota-tooltip-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: var(--wa-space-xs);
+}
+
+.quota-tooltip-buttons wa-button {
+    width: 100%;
 }
 
 .sidebar-footer-buttons {

@@ -295,6 +295,34 @@ body {
     --sparkline-red-gradient-color-4: #8b1a1a;
     --sparkline-red-stroke-color: #f77070;
 
+    /* Sparkline graph colors — green (temporal) */
+    --sparkline-green-gradient-color-1: #aceebb;
+    --sparkline-green-gradient-color-2: #4ac26b;
+    --sparkline-green-gradient-color-3: #2da44e;
+    --sparkline-green-gradient-color-4: #116329;
+    --sparkline-green-stroke-color: #8cc665;
+
+    /* Sparkline graph colors — orange (smoothed burn rate) */
+    --sparkline-orange-gradient-color-1: #ffe6b3;
+    --sparkline-orange-gradient-color-2: #f5a623;
+    --sparkline-orange-gradient-color-3: #d4760a;
+    --sparkline-orange-gradient-color-4: #8a4d0f;
+    --sparkline-orange-stroke-color: #e89d3f;
+
+    /* Sparkline graph colors — purple (recent rate long) */
+    --sparkline-purple-gradient-color-1: #e8d5f5;
+    --sparkline-purple-gradient-color-2: #a855f7;
+    --sparkline-purple-gradient-color-3: #7c3aed;
+    --sparkline-purple-gradient-color-4: #4c1d95;
+    --sparkline-purple-stroke-color: #b07ce8;
+
+    /* Sparkline graph colors — pink (recent rate short) */
+    --sparkline-pink-gradient-color-1: #fce4ec;
+    --sparkline-pink-gradient-color-2: #f06292;
+    --sparkline-pink-gradient-color-3: #d81b60;
+    --sparkline-pink-gradient-color-4: #880e4f;
+    --sparkline-pink-stroke-color: #e57399;
+
     /* Diff editor colors (light mode) */
     --diff-removedLineBackground: #FEF1F1;
     --diff-removedTextBackground: #FFC4C3;
@@ -335,6 +363,34 @@ body {
     --sparkline-red-gradient-color-3: #d44040;
     --sparkline-red-gradient-color-4: #f77070;
     --sparkline-red-stroke-color: #f77070;
+
+    /* Sparkline graph colors — green (temporal, dark mode) */
+    --sparkline-green-gradient-color-1: #033a16;
+    --sparkline-green-gradient-color-2: #196c2e;
+    --sparkline-green-gradient-color-3: #2ea043;
+    --sparkline-green-gradient-color-4: #56d364;
+    --sparkline-green-stroke-color: #8cc665;
+
+    /* Sparkline graph colors — orange (smoothed burn rate, dark mode) */
+    --sparkline-orange-gradient-color-1: #3d1e00;
+    --sparkline-orange-gradient-color-2: #7a3c00;
+    --sparkline-orange-gradient-color-3: #d4760a;
+    --sparkline-orange-gradient-color-4: #f5a623;
+    --sparkline-orange-stroke-color: #e89d3f;
+
+    /* Sparkline graph colors — purple (recent rate long, dark mode) */
+    --sparkline-purple-gradient-color-1: #2e1065;
+    --sparkline-purple-gradient-color-2: #5b21b6;
+    --sparkline-purple-gradient-color-3: #8b5cf6;
+    --sparkline-purple-gradient-color-4: #c084fc;
+    --sparkline-purple-stroke-color: #b07ce8;
+
+    /* Sparkline graph colors — pink (recent rate short, dark mode) */
+    --sparkline-pink-gradient-color-1: #4a0e2a;
+    --sparkline-pink-gradient-color-2: #9d174d;
+    --sparkline-pink-gradient-color-3: #ec4899;
+    --sparkline-pink-gradient-color-4: #f9a8d4;
+    --sparkline-pink-stroke-color: #e57399;
 
     /* Diff editor colors (dark mode) */
     --diff-removedLineBackground: #451B1B;

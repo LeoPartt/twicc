@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Hover over a session or the Chat tab while dragging files/text for 1s to auto-switch, then drop to attach
 - Terminal Ctrl+C copies selected text to clipboard, ESC cancels selection and returns to bottom
 - Keyboard shortcuts for tab navigation: Alt+Shift+1-4 (Chat/Files/Git/Terminal), Alt+Shift+←/→ (Left tab/ Right tab), Alt+Shift+↑/↓ (last visited tab)
+- Usage history graphs: "View graph" button in quota tooltips opens a dialog with time-series charts of utilization and burn rate for 5h and 7d quotas
 - List main keyboard shortcuts in the settings panel
 - Add "View in Files tab" button for Read/Write/Edit tools
 - Display image files (PNG, JPG, GIF, WebP…) in the Files tab instead of "Binary file cannot be displayed", with SVG preview toggle

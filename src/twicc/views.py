@@ -2,6 +2,7 @@
 
 import os
 import re
+from bisect import bisect_left
 from datetime import datetime, timedelta
 
 from django.conf import settings
@@ -14,7 +15,7 @@ import orjson
 from twicc import search
 from twicc.compute import get_message_content, get_message_content_list
 from twicc.core.enums import ItemKind
-from twicc.core.models import AgentLink, DailyActivity, Project, Session, SessionItem, SessionType, SlashCommand, ToolResultLink, WeeklyActivity
+from twicc.core.models import AgentLink, DailyActivity, Project, Session, SessionItem, SessionType, SlashCommand, ToolResultLink, UsageSnapshot, WeeklyActivity
 from twicc.core.serializers import (
     serialize_project,
     serialize_session,
@@ -1307,6 +1308,202 @@ def search_sessions(request):
             for sr in results.results
         ],
     })
+
+
+def usage_history(request):
+    """GET /api/usage-history/?range_days=30&bucket_minutes=60&before=...
+
+    Returns historical usage snapshots for charting utilization and burn rate over time.
+    Both five_hour and seven_day data are returned in a single response.
+
+    Parameters:
+        range_days: Number of days to look back (default 30, 1–1825).
+        bucket_minutes: Aggregation bucket size in minutes (default 0 = raw data).
+            Allowed: 0, 30, 60, 300, 720, 1440.
+            When > 0, snapshots are grouped into time buckets and the max value
+            of each metric is kept per bucket.
+        before: Optional ISO datetime. When present, the range ends at this time
+            instead of now. Used for panning the usage history chart into the past.
+    """
+    ALLOWED_BUCKETS = {0, 30, 60, 300, 720, 1440}
+
+    try:
+        range_days = int(request.GET.get("range_days", "30"))
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "range_days must be an integer."}, status=400)
+    if range_days < 1 or range_days > 1825:
+        return JsonResponse({"error": "range_days must be between 1 and 1825."}, status=400)
+
+    try:
+        bucket_minutes = int(request.GET.get("bucket_minutes", "0"))
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "bucket_minutes must be an integer."}, status=400)
+    if bucket_minutes not in ALLOWED_BUCKETS:
+        return JsonResponse({"error": f"bucket_minutes must be one of {sorted(ALLOWED_BUCKETS)}."}, status=400)
+
+    before_str = request.GET.get("before")
+    if before_str:
+        try:
+            end = datetime.fromisoformat(before_str)
+            if end.tzinfo is None:
+                end = timezone.make_aware(end)
+        except (ValueError, TypeError):
+            return JsonResponse({"error": "Invalid 'before' datetime format."}, status=400)
+    else:
+        end = timezone.now()
+
+    cutoff = end - timedelta(days=range_days)
+
+    snapshots = list(UsageSnapshot.objects.filter(fetched_at__gte=cutoff, fetched_at__lte=end).order_by("fetched_at"))
+
+    # Smoothed burn rate: rounds elapsed time up to the next period boundary
+    # so the rate changes in discrete steps (staircase) instead of every second.
+    # Mirrors the frontend smoothedBurnRate() in utils/usage.js.
+    def _smoothed_burn_rate(utilization, fetched_at, resets_at, window_seconds, smoothing_seconds):
+        if utilization is None or resets_at is None or fetched_at is None:
+            return None
+        elapsed = (fetched_at - resets_at + timedelta(seconds=window_seconds)).total_seconds()
+        if elapsed <= 0:
+            return None
+        periods = int(elapsed // smoothing_seconds) + 1
+        smoothed_time_pct = min(100.0, (periods * smoothing_seconds) / window_seconds * 100)
+        if smoothed_time_pct <= 0:
+            return None
+        return utilization / smoothed_time_pct
+
+    FIVE_HOURS_S = 5 * 3600
+    ONE_HOUR_S = 3600
+    THIRTY_MIN_S = 1800
+    SEVEN_DAYS_S = 7 * 86400
+    ONE_DAY_S = 86400
+    TWELVE_HOURS_S = 12 * 3600
+
+    # Recent burn rate: compares current utilization with a reference snapshot
+    # from ~lookback_seconds ago, measuring consumption rate over that recent interval.
+    # Mirrors the frontend recentBurnRate() in utils/usage.js.
+    # Formula: (delta_utilization) / ((delta_time / window) * 100)
+    def _compute_recent_rates(snaps, epochs, lookback_seconds, window_seconds, util_field):
+        n = len(snaps)
+        rates = [None] * n
+        for i in range(n):
+            target = epochs[i] - lookback_seconds
+            # Binary search for closest snapshot to target, only looking before i
+            pos = bisect_left(epochs, target, 0, i)
+            best_idx = None
+            best_dist = float("inf")
+            for candidate in (pos - 1, pos):
+                if 0 <= candidate < i:
+                    dist = abs(epochs[candidate] - target)
+                    if dist < best_dist:
+                        best_idx = candidate
+                        best_dist = dist
+            if best_idx is None or best_dist > lookback_seconds:
+                continue
+            current_util = getattr(snaps[i], util_field)
+            ref_util = getattr(snaps[best_idx], util_field)
+            if current_util is None or ref_util is None:
+                continue
+            delta_util = current_util - ref_util
+            if delta_util < 0:
+                continue  # reset happened between snapshots
+            delta_seconds = epochs[i] - epochs[best_idx]
+            if delta_seconds <= 0:
+                continue
+            delta_time_pct = (delta_seconds / window_seconds) * 100
+            if delta_time_pct <= 0:
+                continue
+            rates[i] = delta_util / delta_time_pct
+        return rates
+
+    # Precompute epoch timestamps and recent rates for all 4 intervals
+    epochs = [s.fetched_at.timestamp() for s in snapshots]
+    fh_recent_long_rates = _compute_recent_rates(snapshots, epochs, ONE_HOUR_S, FIVE_HOURS_S, "five_hour_utilization")
+    fh_recent_short_rates = _compute_recent_rates(snapshots, epochs, THIRTY_MIN_S, FIVE_HOURS_S, "five_hour_utilization")
+    sd_recent_long_rates = _compute_recent_rates(snapshots, epochs, ONE_DAY_S, SEVEN_DAYS_S, "seven_day_utilization")
+    sd_recent_short_rates = _compute_recent_rates(snapshots, epochs, TWELVE_HOURS_S, SEVEN_DAYS_S, "seven_day_utilization")
+
+    # When the quota window is younger than the lookback interval, the recent rate
+    # either can't be computed (no reference far enough back) or produces an inflated
+    # value. In that case, use the burn rate directly — it already measures consumption
+    # over the full elapsed time, which IS the "recent" period when elapsed < lookback.
+    def _cap_recent(recent_rate, burn_rate, fetched_at, resets_at, window_seconds, lookback_seconds):
+        if burn_rate is None or resets_at is None:
+            return recent_rate
+        elapsed = (fetched_at - resets_at + timedelta(seconds=window_seconds)).total_seconds()
+        if elapsed < lookback_seconds:
+            return burn_rate
+        return recent_rate
+
+    # Extract raw data points with both periods
+    raw = []
+    for i, s in enumerate(snapshots):
+        fh_burn = s.five_hour_burn_rate
+        sd_burn = s.seven_day_burn_rate
+        fh_smoothed = _smoothed_burn_rate(s.five_hour_utilization, s.fetched_at, s.five_hour_resets_at, FIVE_HOURS_S, ONE_HOUR_S)
+        sd_smoothed = _smoothed_burn_rate(s.seven_day_utilization, s.fetched_at, s.seven_day_resets_at, SEVEN_DAYS_S, ONE_DAY_S)
+        fh_rl = _cap_recent(fh_recent_long_rates[i], fh_burn, s.fetched_at, s.five_hour_resets_at, FIVE_HOURS_S, ONE_HOUR_S)
+        fh_rs = _cap_recent(fh_recent_short_rates[i], fh_burn, s.fetched_at, s.five_hour_resets_at, FIVE_HOURS_S, THIRTY_MIN_S)
+        sd_rl = _cap_recent(sd_recent_long_rates[i], sd_burn, s.fetched_at, s.seven_day_resets_at, SEVEN_DAYS_S, ONE_DAY_S)
+        sd_rs = _cap_recent(sd_recent_short_rates[i], sd_burn, s.fetched_at, s.seven_day_resets_at, SEVEN_DAYS_S, TWELVE_HOURS_S)
+        raw.append({
+            "fetched_at": s.fetched_at,
+            "fh_utilization": s.five_hour_utilization,
+            "fh_burn_rate": round(fh_burn * 100, 1) if fh_burn is not None else None,
+            "fh_smoothed_burn_rate": round(fh_smoothed * 100, 1) if fh_smoothed is not None else None,
+            "fh_recent_long": round(fh_rl * 100, 1) if fh_rl is not None else None,
+            "fh_recent_short": round(fh_rs * 100, 1) if fh_rs is not None else None,
+            "fh_temporal_pct": round(s.five_hour_temporal_pct, 1) if s.five_hour_temporal_pct is not None else None,
+            "sd_utilization": s.seven_day_utilization,
+            "sd_burn_rate": round(sd_burn * 100, 1) if sd_burn is not None else None,
+            "sd_smoothed_burn_rate": round(sd_smoothed * 100, 1) if sd_smoothed is not None else None,
+            "sd_recent_long": round(sd_rl * 100, 1) if sd_rl is not None else None,
+            "sd_recent_short": round(sd_rs * 100, 1) if sd_rs is not None else None,
+            "sd_temporal_pct": round(s.seven_day_temporal_pct, 1) if s.seven_day_temporal_pct is not None else None,
+        })
+
+    # All metric keys (used for bucket aggregation and serialization)
+    _METRIC_KEYS = (
+        "fh_utilization", "fh_burn_rate", "fh_smoothed_burn_rate",
+        "fh_recent_long", "fh_recent_short", "fh_temporal_pct",
+        "sd_utilization", "sd_burn_rate", "sd_smoothed_burn_rate",
+        "sd_recent_long", "sd_recent_short", "sd_temporal_pct",
+    )
+
+    # Aggregate into buckets if requested
+    if bucket_minutes > 0 and raw:
+        bucket_seconds = bucket_minutes * 60
+        buckets = {}  # bucket_start_epoch -> aggregated values
+        for point in raw:
+            epoch = point["fetched_at"].timestamp()
+            bucket_key = int(epoch // bucket_seconds) * bucket_seconds
+            if bucket_key not in buckets:
+                buckets[bucket_key] = {"epoch": bucket_key, **{k: point[k] for k in _METRIC_KEYS}}
+            else:
+                b = buckets[bucket_key]
+                # Keep max of each metric (treating None as absent)
+                for key in _METRIC_KEYS:
+                    old_val = b[key]
+                    new_val = point[key]
+                    if new_val is not None:
+                        b[key] = max(old_val, new_val) if old_val is not None else new_val
+
+        # Convert back to sorted list with datetime
+        aggregated = []
+        for bucket_key in sorted(buckets):
+            b = buckets[bucket_key]
+            entry = {"fetched_at": datetime.fromtimestamp(b["epoch"], tz=timezone.get_current_timezone())}
+            entry.update({k: b[k] for k in _METRIC_KEYS})
+            aggregated.append(entry)
+        raw = aggregated
+
+    # Serialize
+    data = []
+    for point in raw:
+        entry = {"fetched_at": point["fetched_at"].isoformat()}
+        entry.update({k: point[k] for k in _METRIC_KEYS})
+        data.append(entry)
+
+    return JsonResponse({"snapshots": data})
 
 
 def spa_index(request):

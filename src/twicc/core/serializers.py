@@ -113,7 +113,7 @@ def _serialize_model(model: str | None) -> dict | None:
     }
 
 
-def serialize_usage_snapshot(snapshot, period_costs=None):
+def serialize_usage_snapshot(snapshot, period_costs=None, references=None):
     """
     Serialize a UsageSnapshot model to a dictionary.
 
@@ -125,6 +125,8 @@ def serialize_usage_snapshot(snapshot, period_costs=None):
         period_costs: Optional dict with "five_hour" and "seven_day" cost data
             from compute_period_costs(). Each contains spent, estimated_period,
             estimated_monthly.
+        references: Optional dict with historical reference snapshots for
+            recent burn rate computation (keys: "one_hour", "one_day").
     """
     def _fmt_dt(dt):
         return dt.isoformat() if dt else None
@@ -157,6 +159,10 @@ def serialize_usage_snapshot(snapshot, period_costs=None):
     # Period cost data (spent, estimated_period, estimated_monthly)
     if period_costs:
         data["period_costs"] = period_costs
+
+    # Reference snapshots for recent burn rate computation
+    if references:
+        data["references"] = references
 
     return data
 
