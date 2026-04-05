@@ -12,6 +12,7 @@ from urllib.parse import parse_qs
 
 from asgiref.sync import sync_to_async
 from blacknoise import BlackNoise
+from packaging.version import InvalidVersion, Version
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.layers import get_channel_layer
 from channels.routing import ProtocolTypeRouter, URLRouter
@@ -446,6 +447,44 @@ async def broadcast_process_state(info: ProcessInfo) -> None:
     )
 
 
+def _get_changelog_version_to_show() -> str | None:
+    """Determine if the changelog should be shown for the current version.
+
+    Returns the version string to show, or None if no changelog should be displayed.
+
+    Rules:
+    - No settings.json or empty file → first install → save current version, don't show
+    - lastChangelogVersionSeen missing → existing user updating → show current version
+    - lastChangelogVersionSeen < APP_VERSION → update → show current version
+    - lastChangelogVersionSeen >= APP_VERSION → already seen or downgrade → don't show
+    """
+    from twicc.synced_settings import read_synced_settings, write_synced_settings
+
+    all_settings = read_synced_settings()
+    last_seen = all_settings.get("lastChangelogVersionSeen")
+
+    if last_seen is None:
+        if not all_settings:
+            # Empty or missing settings.json → first install
+            # Save current version so future updates can detect the upgrade
+            all_settings["lastChangelogVersionSeen"] = settings.APP_VERSION
+            write_synced_settings(all_settings)
+            return None
+        else:
+            # Settings exist but no lastChangelogVersionSeen → existing user, first update
+            # Don't save yet — wait for frontend acknowledgment
+            return settings.APP_VERSION
+
+    # Compare versions using packaging
+    try:
+        if Version(settings.APP_VERSION) > Version(last_seen):
+            return settings.APP_VERSION
+    except InvalidVersion:
+        pass
+
+    return None
+
+
 class UpdatesConsumer(AsyncJsonWebsocketConsumer):
     """
     WebSocket consumer for broadcasting real-time updates.
@@ -507,7 +546,11 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
         # Send server version to the client (used for auto-reload on version change)
         if self._should_send("server_version"):
-            await self.send_json({"type": "server_version", "version": settings.APP_VERSION})
+            msg = {"type": "server_version", "version": settings.APP_VERSION}
+            changelog_version = await sync_to_async(_get_changelog_version_to_show)()
+            if changelog_version:
+                msg["show_changelog_for_version"] = changelog_version
+            await self.send_json(msg)
 
         # Set up broadcast callback on ProcessManager (idempotent, safe to call multiple times)
         manager = get_process_manager()
@@ -592,6 +635,7 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         - list_terminals: list active tmux terminal indices for a session
         - kill_terminal: kill a secondary terminal's tmux session and broadcast
         - update_keep_settings: toggle the keep_settings flag for a session (immediate persist)
+        - changelog_seen: acknowledge that the user has seen the changelog for a version
         """
         msg_type = content.get("type")
 
@@ -643,6 +687,9 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
         elif msg_type == "update_keep_settings":
             await self._handle_update_keep_settings(content)
+
+        elif msg_type == "changelog_seen":
+            await self._handle_changelog_seen(content)
 
     async def send_json(self, content, close=False):
         try:
@@ -1059,7 +1106,14 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         if not isinstance(synced_settings, dict):
             return
 
-        await sync_to_async(write_synced_settings)(synced_settings)
+        def _merge_and_write():
+            # Merge with existing settings to preserve backend-only keys
+            # (e.g., lastChangelogVersionSeen) that the frontend doesn't know about.
+            existing = read_synced_settings()
+            existing.update(synced_settings)
+            write_synced_settings(existing)
+
+        await sync_to_async(_merge_and_write)()
 
         # Broadcast to all clients (including the sender — harmless, same values)
         await self.channel_layer.group_send(
@@ -1228,6 +1282,21 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         if not session_id or keep_settings is None:
             return
         await update_session_keep_settings(session_id, keep_settings)
+
+    async def _handle_changelog_seen(self, content: dict) -> None:
+        """Persist that the user has seen the changelog for the given version."""
+        version = content.get("version")
+        if not version:
+            return
+
+        def _persist():
+            from twicc.synced_settings import read_synced_settings, write_synced_settings
+
+            all_settings = read_synced_settings()
+            all_settings["lastChangelogVersionSeen"] = version
+            write_synced_settings(all_settings)
+
+        await sync_to_async(_persist)()
 
     async def _handle_list_terminals(self, data):
         """Handle list_terminals request: return active tmux terminal indices (with labels) for a session."""

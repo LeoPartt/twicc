@@ -286,6 +286,18 @@ export function sendMessageSnippetsConfig(config) {
 }
 
 /**
+ * Acknowledge that the user has seen the forced changelog for a version.
+ * @param {string} version - The version that was displayed
+ * @returns {boolean} - True if message was sent
+ */
+export function sendChangelogSeen(version) {
+    return sendWsMessage({
+        type: 'changelog_seen',
+        version
+    })
+}
+
+/**
  * Build a notification body string from the enriched WebSocket message.
  * Format: "Project: <name>\nSession: <title>" (both truncated).
  *
@@ -572,6 +584,10 @@ export function useWebSocket() {
             case 'server_version':
                 console.log(`[TwiCC] Server version: ${msg.version}`)
                 store.setCurrentVersion(msg.version)
+                // Auto-show changelog on version update (backend decides when)
+                if (msg.show_changelog_for_version) {
+                    store.setPendingChangelogVersion(msg.show_changelog_for_version)
+                }
                 if (__hmrState.serverVersion === null) {
                     // First connection — store the version
                     __hmrState.serverVersion = msg.version

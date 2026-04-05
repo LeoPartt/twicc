@@ -4,6 +4,8 @@ import { useDataStore } from '../stores/data.js'
 import { fetchChangelog, resolveImageLocalUrl, resolveImageGitHubUrl } from '../utils/changelog.js'
 import { renderMarkdown } from '../utils/markdown.js'
 
+const emit = defineEmits(['close'])
+
 const store = useDataStore()
 
 const dialogRef = ref(null)
@@ -136,6 +138,10 @@ function onKeydown(event) {
     }
 }
 
+function onDialogHide() {
+    emit('close')
+}
+
 defineExpose({ open, close })
 </script>
 
@@ -145,6 +151,7 @@ defineExpose({ open, close })
         :label="dialogLabel"
         class="changelog-dialog"
         @keydown="onKeydown"
+        @wa-after-hide="onDialogHide"
     >
         <!-- Loading -->
         <div v-if="loading" class="changelog-loading">

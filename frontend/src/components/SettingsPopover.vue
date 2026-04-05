@@ -1,6 +1,6 @@
 <script setup>
 // SettingsPopover.vue - Settings button with popover panel
-import { computed, nextTick, ref, useId } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSettingsStore } from '../stores/settings'
 import { useDataStore } from '../stores/data'
@@ -9,6 +9,7 @@ import { DISPLAY_MODE, THEME_MODE, SESSION_TIME_FORMAT, DEFAULT_TITLE_SYSTEM_PRO
 import NotificationSettings from './NotificationSettings.vue'
 import AppTooltip from './AppTooltip.vue'
 import ChangelogDialog from './ChangelogDialog.vue'
+import { sendChangelogSeen } from '../composables/useWebSocket'
 
 const router = useRouter()
 const store = useSettingsStore()
@@ -135,6 +136,7 @@ const sessionTimeFormatOptions = [
 
 const notificationSettingsRef = ref(null)
 const changelogDialogRef = ref(null)
+const forcedChangelogOpen = ref(false)
 
 // Settings from store
 const displayMode = computed(() => store.getDisplayMode)
@@ -466,6 +468,24 @@ function onPopoverShow() {
 
 function openChangelog() {
     changelogDialogRef.value?.open()
+}
+
+watch(() => dataStore.pendingChangelogVersion, (version) => {
+    if (version) {
+        forcedChangelogOpen.value = true
+        changelogDialogRef.value?.open()
+    }
+})
+
+function onChangelogClose() {
+    if (forcedChangelogOpen.value) {
+        forcedChangelogOpen.value = false
+        const version = dataStore.pendingChangelogVersion
+        if (version) {
+            sendChangelogSeen(version)
+        }
+        dataStore.clearPendingChangelogVersion()
+    }
 }
 </script>
 
@@ -932,7 +952,7 @@ function openChangelog() {
             </wa-button>
         </footer>
     </wa-popover>
-    <ChangelogDialog ref="changelogDialogRef" />
+    <ChangelogDialog ref="changelogDialogRef" @close="onChangelogClose" />
 </template>
 
 <style scoped>
