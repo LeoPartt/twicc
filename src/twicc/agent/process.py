@@ -742,6 +742,10 @@ class ClaudeProcess:
                 sdk_model = f"{sdk_model}[1m]"
 
             options = ClaudeAgentOptions(
+                system_prompt={
+                    "type": "preset",
+                    "preset": "claude_code",  # Use Claude Code's system prompt
+                },
                 cwd=self.cwd,
                 permission_mode=self.permission_mode,
                 model=sdk_model,
