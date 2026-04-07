@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Add permanent install instructions (`uv tool install twicc`) to the README alongside the existing `uvx` quick start
 - Auto-focus the terminal when switching to the terminal tab, and auto-focus the message input when switching to the chat tab via keyboard navigation
 
 ### Fixed

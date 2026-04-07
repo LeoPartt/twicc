@@ -37,6 +37,26 @@ Then open http://localhost:3500.
 > ```
 > If you prefer using `pip install twicc` in your own virtualenv, that works too.
 
+### Permanent install
+
+If you use TWICC regularly, you can install it as a persistent tool:
+
+```bash
+uv tool install twicc
+```
+
+Then simply run:
+
+```bash
+twicc
+```
+
+To update to the latest version:
+
+```bash
+uv tool upgrade twicc
+```
+
 ## Features
 
 - **Projects & sessions:** browse all your Claude Code projects and sessions
