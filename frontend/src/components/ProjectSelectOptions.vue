@@ -40,6 +40,11 @@ const props = defineProps({
         type: String,
         default: null,
     },
+    /** Color for the workspace icon shown in the priority section header. */
+    priorityColor: {
+        type: String,
+        default: null,
+    },
 })
 
 const store = useDataStore()
@@ -73,6 +78,7 @@ const flatTree = computed(() => {
     <!-- Priority projects (workspace) — shown first when priorityProjectIds is provided -->
     <template v-if="hasPriority">
         <wa-option v-if="priorityLabel && prioritySplit.prioritized.length" disabled class="section-header-option">
+            <wa-icon name="layer-group" auto-width class="ws-header-icon" :style="priorityColor ? { color: priorityColor } : null"></wa-icon>
             {{ priorityLabel }}
         </wa-option>
         <wa-option
@@ -179,5 +185,11 @@ wa-divider {
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--wa-color-text-quiet);
+}
+
+.ws-header-icon {
+    font-size: var(--wa-font-size-s);
+    color: var(--wa-color-text-normal);
+    margin-inline: 0.2em;
 }
 </style>

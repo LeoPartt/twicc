@@ -1176,7 +1176,7 @@ function updateSidebarClosedClass(closed) {
                         <!-- Workspace projects first (when workspace active) -->
                         <template v-if="splitNamedProjects.prioritized.length || splitFlatTree.prioritized.length">
                             <wa-divider></wa-divider>
-                            <wa-dropdown-item v-if="activeWsLabel" disabled class="section-header-item">{{ activeWsLabel }}</wa-dropdown-item>
+                            <wa-dropdown-item v-if="activeWsLabel" disabled class="section-header-item"><wa-icon name="layer-group" auto-width :style="activeWorkspace?.color ? { color: activeWorkspace.color } : null"></wa-icon> {{ activeWsLabel }}</wa-dropdown-item>
                         </template>
                         <wa-dropdown-item
                             v-for="p in splitNamedProjects.prioritized"
@@ -1275,7 +1275,7 @@ function updateSidebarClosedClass(closed) {
                     <!-- Workspace projects first (when workspace active) -->
                     <template v-if="splitNamedProjects.prioritized.length || splitFlatTree.prioritized.length">
                         <wa-divider></wa-divider>
-                        <wa-dropdown-item v-if="activeWsLabel" disabled class="section-header-item">{{ activeWsLabel }}</wa-dropdown-item>
+                        <wa-dropdown-item v-if="activeWsLabel" disabled class="section-header-item"><wa-icon name="layer-group" auto-width :style="activeWorkspace?.color ? { color: activeWorkspace.color } : null"></wa-icon> {{ activeWsLabel }}</wa-dropdown-item>
                     </template>
                     <wa-dropdown-item
                         v-for="p in splitNamedProjects.prioritized"
@@ -1680,7 +1680,8 @@ wa-split-panel::part(divider) {
     color: var(--wa-color-text-quiet);
     wa-icon {
         font-size: var(--wa-font-size-s);
-        color: var(--wa-color-text-normal)
+        color: var(--wa-color-text-normal);
+        margin-inline: 0.2em;
     }
 }
 

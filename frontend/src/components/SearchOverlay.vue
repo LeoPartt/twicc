@@ -193,12 +193,13 @@ const activeWsProjectIds = computed(() => {
     return wsId ? workspacesStore.getVisibleProjectIds(wsId) : null
 })
 
-const activeWsLabel = computed(() => {
+const activeWs = computed(() => {
     const wsId = route.query.workspace
-    if (!wsId) return null
-    const ws = workspacesStore.getWorkspaceById(wsId)
-    return ws ? `${ws.name} projects` : null
+    return wsId ? workspacesStore.getWorkspaceById(wsId) : null
 })
+
+const activeWsLabel = computed(() => activeWs.value ? `${activeWs.value.name} projects` : null)
+const activeWsColor = computed(() => activeWs.value?.color || null)
 
 /** Selectable workspaces for the filter dropdown */
 const selectableWorkspaces = computed(() => workspacesStore.getSelectableWorkspaces)
@@ -507,7 +508,7 @@ defineExpose({ open })
                             <wa-option v-if="!activeWsProjectIds" disabled class="section-header-option">Projects</wa-option>
                         </template>
                         <!-- Projects -->
-                        <ProjectSelectOptions :projects="projects" :priority-project-ids="activeWsProjectIds" :priority-label="activeWsLabel" />
+                        <ProjectSelectOptions :projects="projects" :priority-project-ids="activeWsProjectIds" :priority-label="activeWsLabel" :priority-color="activeWsColor" />
                     </wa-select>
 
                     <wa-select

@@ -70,12 +70,13 @@ const activeWsProjectIds = computed(() => {
     return wsId ? workspacesStore.getVisibleProjectIds(wsId) : null
 })
 
-const activeWsLabel = computed(() => {
+const activeWs = computed(() => {
     const wsId = route.query.workspace
-    if (!wsId) return null
-    const ws = workspacesStore.getWorkspaceById(wsId)
-    return ws ? `${ws.name} projects` : null
+    return wsId ? workspacesStore.getWorkspaceById(wsId) : null
 })
+
+const activeWsLabel = computed(() => activeWs.value ? `${activeWs.value.name} projects` : null)
+const activeWsColor = computed(() => activeWs.value?.color || null)
 
 /** When a workspace is active, split named projects into prioritized and others. */
 const namedSplit = computed(() =>
@@ -145,6 +146,13 @@ const selectedScopeProjectColor = computed(() => {
     const pid = scope.slice('project:'.length)
     const project = dataStore.getProject(pid)
     return project?.color || null
+})
+
+/** Whether the current scope is a workspace, and its color. */
+const isScopeWorkspace = computed(() => formData.value?.scope?.startsWith('workspace:') || false)
+const selectedScopeWorkspaceColor = computed(() => {
+    if (!isScopeWorkspace.value) return null
+    return workspaceColorFromScope(formData.value.scope)
 })
 
 // ── Form helpers ─────────────────────────────────────────────────────
@@ -491,8 +499,14 @@ defineExpose({ open, close })
                     size="small"
                     class="scope-select"
                 >
+                    <wa-icon
+                        v-if="isScopeWorkspace"
+                        slot="start"
+                        name="layer-group"
+                        :style="selectedScopeWorkspaceColor ? { color: selectedScopeWorkspaceColor } : null"
+                    ></wa-icon>
                     <span
-                        v-if="formData.scope !== 'global'"
+                        v-else-if="formData.scope !== 'global'"
                         slot="start"
                         class="selected-project-dot"
                         :style="selectedScopeProjectColor ? { '--dot-color': selectedScopeProjectColor } : null"
@@ -523,7 +537,7 @@ defineExpose({ open, close })
                     <!-- Workspace-prioritized projects (only when workspace is active) -->
                     <template v-if="namedSplit.prioritized.length || prioritizedUnnamedFlatTree.length">
                         <wa-divider></wa-divider>
-                        <wa-option disabled class="section-header-option">{{ activeWsLabel }}</wa-option>
+                        <wa-option disabled class="section-header-option"><wa-icon name="layer-group" auto-width class="ws-header-icon" :style="activeWsColor ? { color: activeWsColor } : null"></wa-icon> {{ activeWsLabel }}</wa-option>
                     </template>
                     <wa-option
                         v-for="p in namedSplit.prioritized"
@@ -880,6 +894,12 @@ defineExpose({ open, close })
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--wa-color-text-quiet);
+}
+
+.ws-header-icon {
+    font-size: var(--wa-font-size-s);
+    color: var(--wa-color-text-normal);
+    margin-inline: 0.2em;
 }
 
 /* ── Footer ───────────────────────────────────────────────────────── */
