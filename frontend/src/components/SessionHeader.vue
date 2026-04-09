@@ -382,7 +382,9 @@ defineExpose({
                 <h2 :id="`session-header-${sessionId}-title`">{{ displayName }}</h2>
                 <AppTooltip :for="`session-header-${sessionId}-title`">{{ displayName }}</AppTooltip>
 
-                <ProjectBadge v-if="session.project_id" :project-id="session.project_id" class="session-project" />
+                <router-link v-if="session.project_id" :to="{ name: 'project', params: { projectId: session.project_id } }" class="session-project" @click.stop>
+                    <ProjectBadge :project-id="session.project_id" />
+                </router-link>
 
                 <!-- Context usage ring duplicate for compact mode (visible only on small viewports when not expanded) -->
                 <wa-progress-ring
@@ -638,12 +640,16 @@ defineExpose({
     margin-left: auto;
     font-size: var(--wa-font-size-xs);
     color: var(--wa-color-text-quiet);
+    text-decoration: none;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     width: 25%;
     min-width: 3rem;
     max-width: max-content;
+}
+.session-project:hover {
+    color: var(--wa-color-text);
 }
 
 /* Clickable zone for compact toggle: wraps title, project badge, context ring, and chevron */
