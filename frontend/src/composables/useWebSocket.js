@@ -684,6 +684,19 @@ export function useWebSocket() {
             case 'process_state': {
                 // Capture previous state before updating (needed for transition detection)
                 const previousProcessState = store.processStates[msg.session_id] || null
+                // When leaving assistant_turn, optimistically set last_new_content_at
+                // to ensure the session appears unread immediately. The process_state
+                // message (from SDK) and session_updated (from file watcher) travel
+                // independent async paths — process_state can arrive first, before the
+                // store has the updated last_new_content_at. This optimistic value will
+                // be overwritten by the watcher's session_updated with the real JSONL
+                // timestamp, which is also after last_viewed_at, so the session stays unread.
+                if (previousProcessState?.state === 'assistant_turn' && msg.state !== 'assistant_turn') {
+                    const session = store.getSession(msg.session_id)
+                    if (session) {
+                        store.updateSession({ ...session, last_new_content_at: new Date().toISOString() })
+                    }
+                }
                 // Update process state for a session
                 store.setProcessState(msg.session_id, msg.project_id, msg.state, {
                     started_at: msg.started_at,
