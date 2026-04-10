@@ -3,8 +3,8 @@
 import { ref, computed, watch, nextTick, useId } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useDataStore } from '../stores/data'
-import { useSettingsStore } from '../stores/settings'
-import { sendWsMessage, notifyUserDraftUpdated, updateKeepSettings } from '../composables/useWebSocket'
+import { useSettingsStore, classifyClaudeSettingsChanges } from '../stores/settings'
+import { sendWsMessage, notifyUserDraftUpdated } from '../composables/useWebSocket'
 import { isSupportedMimeType, MAX_FILE_SIZE, SUPPORTED_IMAGE_TYPES, draftMediaToMediaItem } from '../utils/fileUtils'
 import { toast } from '../composables/useToast'
 import { PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, MODEL, MODEL_LABELS, EFFORT, EFFORT_LABELS, EFFORT_DISPLAY_LABELS, THINKING_LABELS, THINKING_DISPLAY_LABELS, CLAUDE_IN_CHROME_LABELS, CLAUDE_IN_CHROME_DISPLAY_LABELS, CONTEXT_MAX, CONTEXT_MAX_LABELS } from '../constants'
@@ -115,6 +115,10 @@ watch(attachmentCount, (newCount, oldCount) => {
 // Convert DraftMedia objects to normalized MediaItem format for the thumbnail group
 const mediaItems = computed(() => attachments.value.map(a => draftMediaToMediaItem(a)))
 
+// Sentinel value for the "use default" option in wa-select dropdowns.
+// When selected, the corresponding ref is set to null (= follow global default).
+const DEFAULT_SENTINEL = '__default__'
+
 // Permission mode options for the dropdown
 const permissionModeOptions = Object.values(PERMISSION_MODE).map(value => ({
     value,
@@ -152,42 +156,81 @@ const contextMaxOptions = Object.values(CONTEXT_MAX).map(value => ({
     label: CONTEXT_MAX_LABELS[value],
 }))
 
-// Summary text for the settings button (labels joined with middle dot)
-// Model shows as "Opus" for 200K (default) or "Opus[1m]" for extended context
-const settingsSummary = computed(() => {
-    const modelLabel = MODEL_LABELS[selectedModel.value]
-    const modelDisplay = selectedContextMax.value === CONTEXT_MAX.EXTENDED
+// Default labels for the "Default: xxx" option in each dropdown
+const defaultModelLabel = computed(() => MODEL_LABELS[settingsStore.getDefaultModel])
+const defaultContextMaxLabel = computed(() => CONTEXT_MAX_LABELS[settingsStore.getDefaultContextMax])
+const defaultEffortLabel = computed(() => EFFORT_LABELS[settingsStore.getDefaultEffort])
+const defaultThinkingLabel = computed(() => THINKING_LABELS[settingsStore.getDefaultThinking])
+const defaultChromeLabel = computed(() => CLAUDE_IN_CHROME_LABELS[settingsStore.getDefaultClaudeInChrome])
+const defaultPermissionLabel = computed(() => PERMISSION_MODE_LABELS[settingsStore.getDefaultPermissionMode])
+
+// Whether any session setting is explicitly forced (non-null)
+const anySettingForced = computed(() =>
+    selectedPermissionMode.value !== null ||
+    selectedModel.value !== null ||
+    selectedEffort.value !== null ||
+    selectedThinking.value !== null ||
+    selectedClaudeInChrome.value !== null ||
+    selectedContextMax.value !== null
+)
+
+// Reset all settings to defaults (null = follow global default)
+function resetAllToDefaults() {
+    selectedPermissionMode.value = null
+    selectedModel.value = null
+    selectedEffort.value = null
+    selectedThinking.value = null
+    selectedClaudeInChrome.value = null
+    selectedContextMax.value = null
+}
+
+// Restore dropdowns to their active (saved) values, discarding unsaved changes
+function restoreSettings() {
+    selectedModel.value = activeModel.value
+    selectedPermissionMode.value = activePermissionMode.value
+    selectedEffort.value = activeEffort.value
+    selectedThinking.value = activeThinking.value
+    selectedClaudeInChrome.value = activeClaudeInChrome.value
+    selectedContextMax.value = activeContextMax.value
+}
+
+// Summary parts for the settings button.
+// Each entry is { text, forced } where forced=true means the effective value
+// differs from the global default (and the setting is explicitly set, not null).
+// Model is also marked forced when context_max is explicitly forced to a non-default value.
+const settingsSummaryParts = computed(() => {
+    const effectiveModel = selectedModel.value ?? settingsStore.getDefaultModel
+    const effectiveContextMax = selectedContextMax.value ?? settingsStore.getDefaultContextMax
+    const effectiveEffort = selectedEffort.value ?? settingsStore.getDefaultEffort
+    const effectiveThinking = selectedThinking.value ?? settingsStore.getDefaultThinking
+    const effectiveChrome = selectedClaudeInChrome.value ?? settingsStore.getDefaultClaudeInChrome
+    const effectivePermission = selectedPermissionMode.value ?? settingsStore.getDefaultPermissionMode
+
+    const modelLabel = MODEL_LABELS[effectiveModel]
+    const modelDisplay = effectiveContextMax === CONTEXT_MAX.EXTENDED
         ? `${modelLabel}[1m]`
         : modelLabel
+    // Model part is forced if model or context_max is explicitly set to a non-default value
+    const modelForced = (selectedModel.value !== null && selectedModel.value !== settingsStore.getDefaultModel)
+        || (selectedContextMax.value !== null && selectedContextMax.value !== settingsStore.getDefaultContextMax)
+
     return [
-        modelDisplay,
-        EFFORT_DISPLAY_LABELS[selectedEffort.value],
-        THINKING_DISPLAY_LABELS[selectedThinking.value],
-        CLAUDE_IN_CHROME_DISPLAY_LABELS[selectedClaudeInChrome.value],
-        PERMISSION_MODE_LABELS[selectedPermissionMode.value],
-    ].join(' · ')
+        { text: modelDisplay, forced: modelForced },
+        { text: EFFORT_DISPLAY_LABELS[effectiveEffort], forced: selectedEffort.value !== null && selectedEffort.value !== settingsStore.getDefaultEffort },
+        { text: THINKING_DISPLAY_LABELS[effectiveThinking], forced: selectedThinking.value !== null && selectedThinking.value !== settingsStore.getDefaultThinking },
+        { text: CLAUDE_IN_CHROME_DISPLAY_LABELS[effectiveChrome], forced: selectedClaudeInChrome.value !== null && selectedClaudeInChrome.value !== settingsStore.getDefaultClaudeInChrome },
+        { text: PERMISSION_MODE_LABELS[effectivePermission], forced: selectedPermissionMode.value !== null && selectedPermissionMode.value !== settingsStore.getDefaultPermissionMode },
+    ]
 })
 
-// Selected permission mode for the current session
-const selectedPermissionMode = ref('default')
-
-// Selected model for the current session
-const selectedModel = ref('opus')
-
-// Selected effort level for the current session
-const selectedEffort = ref('medium')
-
-// Selected thinking mode for the current session
-const selectedThinking = ref(true)
-
-// Selected Claude in Chrome mode for the current session
-const selectedClaudeInChrome = ref(true)
-
-// Selected context max for the current session
-const selectedContextMax = ref(200_000)
-
-// Whether settings are pinned for this session (bypass "always apply" defaults)
-const selectedKeepSettings = ref(false)
+// Selected settings for the current session.
+// null = "use default" (follow global default), explicit value = "forced" for this session.
+const selectedPermissionMode = ref(null)
+const selectedModel = ref(null)
+const selectedEffort = ref(null)
+const selectedThinking = ref(null)
+const selectedClaudeInChrome = ref(null)
+const selectedContextMax = ref(null)
 
 // Get process state for this session
 const processState = computed(() => store.getProcessState(props.sessionId))
@@ -197,35 +240,18 @@ const isProcessingFiles = computed(() => store.isProcessingAttachments(props.ses
 
 // Determine if input/button should be disabled
 const isDisabled = computed(() => {
-    // Cannot send without a WebSocket connection
     if (!store.wsConnected) return true
-    // Cannot send while the initial sync is running (sessions not available yet)
     if (store.isInitialSyncInProgress) return true
-    // Cannot send while files are being processed (encoding, resizing)
     if (isProcessingFiles.value) return true
-    // Disabled during process startup - we allow sending during assistant_turn
-    // (Claude Agent SDK supports receiving messages while responding)
     const state = processState.value?.state
     return state === 'starting'
 })
 
-// Model dropdown is disabled during starting and assistant_turn.
-// The SDK's set_model() does not work on a live process, so model can only
-// be changed during user_turn (sent with the next message) or when no process runs.
-const isModelDisabled = computed(() => {
-    const state = processState.value?.state
-    return state === 'starting' || state === 'assistant_turn'
-})
-
-// Effort and thinking dropdowns are disabled whenever a process is running.
-// These cannot be changed on a live SDK client — they are only set at process creation.
-const isEffortThinkingDisabled = computed(() => {
-    const state = processState.value?.state
-    return state === 'starting' || state === 'assistant_turn' || state === 'user_turn'
-})
+// All dropdowns disabled only during starting
+const isStarting = computed(() => processState.value?.state === 'starting')
 
 // Force 1M context when session usage exceeds 85% of the 200K window.
-// Only applies when no process is active — prevents starting with a nearly-full 200K window.
+// Only applies when no process is active.
 const isContextMaxForced = computed(() => {
     if (processIsActive.value) return false
     const sess = store.getSession(props.sessionId)
@@ -233,30 +259,17 @@ const isContextMaxForced = computed(() => {
     return sess.context_usage > CONTEXT_MAX.DEFAULT * 0.85
 })
 
-// Button label based on process state and whether this is a settings-only update
+// Button label based on process state and settings changes
 const buttonLabel = computed(() => {
     const state = processState.value?.state
-    if (state === 'starting') {
-        return 'Starting...'
-    }
-    // When settings changed and no text, show what will be updated
-    if (hasSettingsChanged.value && !messageText.value.trim()) {
-        if (hasModelChanged.value && hasPermissionChanged.value) {
-            return 'Update model & permissions'
-        }
-        if (hasModelChanged.value) {
-            return 'Update model'
-        }
-        return 'Update permissions'
-    }
+    if (state === 'starting') return 'Starting...'
+    if (hasSettingsChanged.value && !messageText.value.trim()) return 'Apply settings'
     return 'Send'
 })
 
-// Button icon changes based on mode (settings-only update vs regular send)
+// Button icon changes based on mode
 const buttonIcon = computed(() => {
-    if (hasSettingsChanged.value && !messageText.value.trim()) {
-        return 'arrows-rotate'
-    }
+    if (hasSettingsChanged.value && !messageText.value.trim()) return 'arrows-rotate'
     return 'paper-plane'
 })
 
@@ -269,7 +282,6 @@ const placeholderText = computed(() => {
     if (state === 'assistant_turn') {
         return 'You can send a message now. Claude will receive it as soon as possible (while working or after). Note: it will not appear in the conversation history.'
     }
-    // user_turn, dead, or no process
     const historyHint = isDraft.value
         ? ''
         : settingsStore.isTouchDevice
@@ -289,9 +301,8 @@ const processIsActive = computed(() => {
     return state === 'assistant_turn' || state === 'user_turn'
 })
 
-// Track the "active" values currently applied on the live SDK process.
-// Also serve as reference values for Reset: initialized to resolved defaults
-// so that dropdown change detection works even when no process is active.
+// Track the "active" values currently applied on the live SDK process (or from DB when no process).
+// null means the setting uses the global default.
 const activeModel = ref(null)
 const activePermissionMode = ref(null)
 const activeEffort = ref(null)
@@ -299,8 +310,7 @@ const activeThinking = ref(null)
 const activeClaudeInChrome = ref(null)
 const activeContextMax = ref(null)
 
-// Detect whether the user has changed the dropdowns from their reference values.
-// This works regardless of process state (used for Reset button visibility).
+// Detect whether the user has changed any dropdown from its reference value
 const hasDropdownsChanged = computed(() =>
     selectedModel.value !== activeModel.value ||
     selectedPermissionMode.value !== activePermissionMode.value ||
@@ -310,341 +320,118 @@ const hasDropdownsChanged = computed(() =>
     selectedContextMax.value !== activeContextMax.value
 )
 
-// Whether the session has stored settings that differ from the current dropdowns.
-// Only relevant for existing (non-draft) sessions with a stopped process: when
-// "always apply" defaults have overridden the session's last-used settings,
-// this lets the user restore them with a single click.
-const canRestoreSessionSettings = computed(() => {
-    if (isDraft.value || processIsActive.value) return false
-    const sess = session.value
-    if (!sess) return false
-    return (
-        (sess.permission_mode && selectedPermissionMode.value !== sess.permission_mode) ||
-        (sess.selected_model && selectedModel.value !== sess.selected_model) ||
-        (sess.effort && selectedEffort.value !== sess.effort) ||
-        (sess.thinking_enabled != null && selectedThinking.value !== sess.thinking_enabled) ||
-        (sess.claude_in_chrome != null && selectedClaudeInChrome.value !== sess.claude_in_chrome) ||
-        (sess.context_max != null && selectedContextMax.value !== sess.context_max)
-    )
+// Whether any setting has changed from the active/DB value (used for button label)
+const hasSettingsChanged = computed(() => hasDropdownsChanged.value)
+
+// Resolve null → global default for a settings dict (so classify compares concrete values).
+function resolveSettingsDefaults(settings) {
+    return {
+        permission_mode: settings.permission_mode ?? settingsStore.getDefaultPermissionMode,
+        selected_model: settings.selected_model ?? settingsStore.getDefaultModel,
+        effort: settings.effort ?? settingsStore.getDefaultEffort,
+        thinking_enabled: settings.thinking_enabled ?? settingsStore.getDefaultThinking,
+        claude_in_chrome: settings.claude_in_chrome ?? settingsStore.getDefaultClaudeInChrome,
+        context_max: settings.context_max ?? settingsStore.getDefaultContextMax,
+    }
+}
+
+// Warning message when startup settings changed on an active process (will cause stop/restart).
+// Returns null if no warning needed. Compares concrete (resolved) values, not raw null vs explicit.
+const startupSettingsWarning = computed(() => {
+    const _processActive = processIsActive.value
+    const _dropdownsChanged = hasDropdownsChanged.value
+    if (!_processActive || !_dropdownsChanged) {
+        console.debug('[startupWarning] early exit:', { processIsActive: _processActive, hasDropdownsChanged: _dropdownsChanged, processState: processState.value?.state, sessionId: props.sessionId })
+        return null
+    }
+
+    const current = resolveSettingsDefaults({
+        permission_mode: activePermissionMode.value,
+        selected_model: activeModel.value,
+        effort: activeEffort.value,
+        thinking_enabled: activeThinking.value,
+        claude_in_chrome: activeClaudeInChrome.value,
+        context_max: activeContextMax.value,
+    })
+    const requested = resolveSettingsDefaults({
+        permission_mode: selectedPermissionMode.value,
+        selected_model: selectedModel.value,
+        effort: selectedEffort.value,
+        thinking_enabled: selectedThinking.value,
+        claude_in_chrome: selectedClaudeInChrome.value,
+        context_max: selectedContextMax.value,
+    })
+    const changes = classifyClaudeSettingsChanges(current, requested)
+    if (!changes.startup.length) return null
+
+    const state = processState.value?.state
+    const hasCrons = processState.value?.active_crons?.length > 0
+    const prefix = state === 'assistant_turn'
+        ? 'Once Claude finishes its current work, the'
+        : 'The'
+
+    const hasText = messageText.value.trim()
+    if (hasCrons) {
+        const suffix = hasText
+            ? ', after which your message will be sent.'
+            : '.'
+        return `${prefix} Claude Code process will be stopped to apply these settings, then resumed to restart the current cron jobs${suffix}`
+    }
+    const suffix = hasText
+        ? 'Your message will be sent after the process restarts.'
+        : 'Your next message will resume the session.'
+    return `${prefix} Claude Code process will be stopped to apply these settings. ${suffix}`
 })
 
-// Detect dropdown changes on an active process (used for Send button "Update" mode).
-// Only meaningful when a process is running, since updating settings via SDK
-// requires an active process.
-const hasModelChanged = computed(() =>
-    processIsActive.value && selectedModel.value !== activeModel.value
-)
-const hasPermissionChanged = computed(() =>
-    processIsActive.value && selectedPermissionMode.value !== activePermissionMode.value
-)
-const hasSettingsChanged = computed(() => hasModelChanged.value || hasPermissionChanged.value)
-
-// Determine the effective value for a session setting.
-// "Always apply" defaults are bypassed (session's stored value is used) when:
-//   1. The session has an active process — the user chose these settings when
-//      starting/resuming, and continuing to chat should not silently overwrite them.
-//   2. The session's keep_settings flag is on — the user explicitly pinned settings.
-// Otherwise, "always apply" defaults kick in (new sessions, resumes without pin).
-function resolvePermissionMode(sess) {
-    if ((processIsActive.value || sess?.keep_settings) && sess?.permission_mode) {
-        return sess.permission_mode
-    }
-    if (settingsStore.isAlwaysApplyDefaultPermissionMode) {
-        return settingsStore.getDefaultPermissionMode
-    }
-    return sess?.permission_mode || settingsStore.getDefaultPermissionMode
-}
-
-function resolveModel(sess) {
-    if ((processIsActive.value || sess?.keep_settings) && sess?.selected_model) {
-        return sess.selected_model
-    }
-    if (settingsStore.isAlwaysApplyDefaultModel) {
-        return settingsStore.getDefaultModel
-    }
-    return sess?.selected_model || settingsStore.getDefaultModel
-}
-
-function resolveEffort(sess) {
-    if ((processIsActive.value || sess?.keep_settings) && sess?.effort) {
-        return sess.effort
-    }
-    if (settingsStore.isAlwaysApplyDefaultEffort) {
-        return settingsStore.getDefaultEffort
-    }
-    return sess?.effort || settingsStore.getDefaultEffort
-}
-
-function resolveThinking(sess) {
-    if ((processIsActive.value || sess?.keep_settings) && sess?.thinking_enabled != null) {
-        return sess.thinking_enabled
-    }
-    if (settingsStore.isAlwaysApplyDefaultThinking) {
-        return settingsStore.getDefaultThinking
-    }
-    return sess?.thinking_enabled ?? settingsStore.getDefaultThinking
-}
-
-function resolveClaudeInChrome(sess) {
-    if ((processIsActive.value || sess?.keep_settings) && sess?.claude_in_chrome != null) {
-        return sess.claude_in_chrome
-    }
-    if (settingsStore.isAlwaysApplyDefaultClaudeInChrome) {
-        return settingsStore.getDefaultClaudeInChrome
-    }
-    return sess?.claude_in_chrome ?? settingsStore.getDefaultClaudeInChrome
-}
-
-function resolveContextMax(sess) {
-    // Force 1M if context usage exceeds 85% of the 200K window
-    if (sess?.context_usage > CONTEXT_MAX.DEFAULT * 0.85) {
-        return CONTEXT_MAX.EXTENDED
-    }
-    if ((processIsActive.value || sess?.keep_settings) && sess?.context_max != null) {
-        return sess.context_max
-    }
-    if (settingsStore.isAlwaysApplyDefaultContextMax) {
-        return settingsStore.getDefaultContextMax
-    }
-    return sess?.context_max ?? settingsStore.getDefaultContextMax
-}
-
-// Sync permission mode and model when session changes
+// Sync all settings when session changes
 watch(() => props.sessionId, (newId) => {
     const sess = store.getSession(newId)
-    const resolvedPermission = resolvePermissionMode(sess)
-    const resolvedModel = resolveModel(sess)
-    const resolvedEffort = resolveEffort(sess)
-    const resolvedThinking = resolveThinking(sess)
-    const resolvedClaudeInChrome = resolveClaudeInChrome(sess)
-    const resolvedContextMax = resolveContextMax(sess)
-    selectedPermissionMode.value = resolvedPermission
-    selectedModel.value = resolvedModel
-    selectedEffort.value = resolvedEffort
-    selectedThinking.value = resolvedThinking
-    selectedClaudeInChrome.value = resolvedClaudeInChrome
-    selectedContextMax.value = resolvedContextMax
-    // Initialize active values from the session, falling back to resolved defaults
-    // so that dropdown change detection works even when no process is active.
-    activePermissionMode.value = sess?.permission_mode || resolvedPermission
-    activeModel.value = sess?.selected_model || resolvedModel
-    activeEffort.value = sess?.effort || resolvedEffort
-    activeThinking.value = sess?.thinking_enabled ?? resolvedThinking
-    activeClaudeInChrome.value = sess?.claude_in_chrome ?? resolvedClaudeInChrome
-    activeContextMax.value = sess?.context_max ?? resolvedContextMax
-    selectedKeepSettings.value = sess?.keep_settings ?? false
+    // Session DB values (null = default, explicit = forced)
+    selectedPermissionMode.value = sess?.permission_mode ?? null
+    selectedModel.value = sess?.selected_model ?? null
+    selectedEffort.value = sess?.effort ?? null
+    selectedThinking.value = sess?.thinking_enabled ?? null
+    selectedClaudeInChrome.value = sess?.claude_in_chrome ?? null
+    selectedContextMax.value = sess?.context_max ?? null
+    // Initialize active values to match
+    activePermissionMode.value = selectedPermissionMode.value
+    activeModel.value = selectedModel.value
+    activeEffort.value = selectedEffort.value
+    activeThinking.value = selectedThinking.value
+    activeClaudeInChrome.value = selectedClaudeInChrome.value
+    activeContextMax.value = selectedContextMax.value
 }, { immediate: true })
 
-// When the default permission mode setting changes, or the "always apply" toggle
-// changes, update the dropdown for sessions that should follow the default.
-// Don't overwrite when a process is active or settings are pinned.
-// Also update the active reference value so Reset detection stays in sync.
-watch(
-    () => [settingsStore.getDefaultPermissionMode, settingsStore.isAlwaysApplyDefaultPermissionMode],
-    () => {
-        if (processIsActive.value) return
-        const sess = store.getSession(props.sessionId)
-        if (sess?.keep_settings) return
-        const resolved = resolvePermissionMode(sess)
-        selectedPermissionMode.value = resolved
-        activePermissionMode.value = resolved
-    }
-)
+// When global defaults change and this session uses them (null setting),
+// the display updates automatically via the default label computeds.
+// No watcher needed — the computed that reads the default getter re-evaluates.
 
-// When the default model setting changes, or the "always apply" toggle
-// changes, update the dropdown for sessions that should follow the default.
-// Don't overwrite when a process is active or settings are pinned.
-// Also update the active reference value so Reset detection stays in sync.
-watch(
-    () => [settingsStore.getDefaultModel, settingsStore.isAlwaysApplyDefaultModel],
-    () => {
-        if (processIsActive.value) return
-        const sess = store.getSession(props.sessionId)
-        if (sess?.keep_settings) return
-        const resolved = resolveModel(sess)
-        selectedModel.value = resolved
-        activeModel.value = resolved
-    }
-)
+// React when session data arrives from backend (e.g., after save or watcher creates the row).
+// Update active values to track what's in DB. Don't overwrite user's selection when process is active.
+const SESSION_SETTING_FIELDS = ['permission_mode', 'selected_model', 'effort', 'thinking_enabled', 'claude_in_chrome', 'context_max']
+const SELECTED_REFS = { permission_mode: selectedPermissionMode, selected_model: selectedModel, effort: selectedEffort, thinking_enabled: selectedThinking, claude_in_chrome: selectedClaudeInChrome, context_max: selectedContextMax }
+const ACTIVE_REFS = { permission_mode: activePermissionMode, selected_model: activeModel, effort: activeEffort, thinking_enabled: activeThinking, claude_in_chrome: activeClaudeInChrome, context_max: activeContextMax }
 
-// When the default effort setting changes, update the dropdown for sessions that should follow the default.
-watch(
-    () => [settingsStore.getDefaultEffort, settingsStore.isAlwaysApplyDefaultEffort],
-    () => {
-        if (processIsActive.value) return
-        const sess = store.getSession(props.sessionId)
-        if (sess?.keep_settings) return
-        const resolved = resolveEffort(sess)
-        selectedEffort.value = resolved
-        activeEffort.value = resolved
-    }
-)
-
-// When the default thinking setting changes, update the dropdown for sessions that should follow the default.
-watch(
-    () => [settingsStore.getDefaultThinking, settingsStore.isAlwaysApplyDefaultThinking],
-    () => {
-        if (processIsActive.value) return
-        const sess = store.getSession(props.sessionId)
-        if (sess?.keep_settings) return
-        const resolved = resolveThinking(sess)
-        selectedThinking.value = resolved
-        activeThinking.value = resolved
-    }
-)
-
-// When the default Claude in Chrome setting changes, update the dropdown for sessions that should follow the default.
-watch(
-    () => [settingsStore.getDefaultClaudeInChrome, settingsStore.isAlwaysApplyDefaultClaudeInChrome],
-    () => {
-        if (processIsActive.value) return
-        const sess = store.getSession(props.sessionId)
-        if (sess?.keep_settings) return
-        const resolved = resolveClaudeInChrome(sess)
-        selectedClaudeInChrome.value = resolved
-        activeClaudeInChrome.value = resolved
-    }
-)
-
-// When the default context max setting changes, update the dropdown for sessions that should follow the default.
-watch(
-    () => [settingsStore.getDefaultContextMax, settingsStore.isAlwaysApplyDefaultContextMax],
-    () => {
-        if (processIsActive.value) return
-        if (isContextMaxForced.value) return
-        const sess = store.getSession(props.sessionId)
-        if (sess?.keep_settings) return
-        const resolved = resolveContextMax(sess)
-        selectedContextMax.value = resolved
-        activeContextMax.value = resolved
-    }
-)
-
-// Also react when session data arrives from backend (e.g., after watcher creates the row).
-// Don't overwrite user's selection when a process is active.
-// Always update the active values to track what the process is currently using.
-watch(
-    () => store.getSession(props.sessionId)?.permission_mode,
-    (newMode) => {
-        if (newMode) {
-            activePermissionMode.value = newMode
+for (const field of SESSION_SETTING_FIELDS) {
+    watch(
+        () => store.getSession(props.sessionId)?.[field],
+        (newValue) => {
+            if (newValue === undefined) return
+            ACTIVE_REFS[field].value = newValue
             if (!processIsActive.value) {
-                selectedPermissionMode.value = newMode
+                SELECTED_REFS[field].value = newValue
             }
         }
-    }
-)
-
-// React when selected_model data arrives from backend.
-// Don't overwrite user's selection when a process is active.
-// Always update the active values to track what the process is currently using.
-watch(
-    () => store.getSession(props.sessionId)?.selected_model,
-    (newModel) => {
-        if (newModel) {
-            activeModel.value = newModel
-            if (!processIsActive.value) {
-                selectedModel.value = newModel
-            }
-        }
-    }
-)
-
-// React when effort data arrives from backend.
-watch(
-    () => store.getSession(props.sessionId)?.effort,
-    (newEffort) => {
-        if (newEffort) {
-            activeEffort.value = newEffort
-            if (!processIsActive.value) {
-                selectedEffort.value = newEffort
-            }
-        }
-    }
-)
-
-// React when thinking_enabled data arrives from backend.
-watch(
-    () => store.getSession(props.sessionId)?.thinking_enabled,
-    (newThinking) => {
-        if (newThinking != null) {
-            activeThinking.value = newThinking
-            if (!processIsActive.value) {
-                selectedThinking.value = newThinking
-            }
-        }
-    }
-)
-
-// React when claude_in_chrome data arrives from backend.
-watch(
-    () => store.getSession(props.sessionId)?.claude_in_chrome,
-    (newValue) => {
-        if (newValue != null) {
-            activeClaudeInChrome.value = newValue
-            if (!processIsActive.value) {
-                selectedClaudeInChrome.value = newValue
-            }
-        }
-    }
-)
-
-// React when context_max data arrives from backend.
-watch(
-    () => store.getSession(props.sessionId)?.context_max,
-    (newValue) => {
-        if (newValue != null) {
-            activeContextMax.value = newValue
-            if (!processIsActive.value && !isContextMaxForced.value) {
-                selectedContextMax.value = newValue
-            }
-        }
-    }
-)
+    )
+}
 
 // Force 1M context when context_usage crosses the 85% threshold of 200K.
-// This handles the case where the session's usage grows while viewing it.
 watch(isContextMaxForced, (forced) => {
     if (forced) {
         selectedContextMax.value = CONTEXT_MAX.EXTENDED
         activeContextMax.value = CONTEXT_MAX.EXTENDED
     }
 })
-
-// React when keep_settings data arrives from backend.
-// When turned off on a stopped session, re-resolve all settings so that
-// "always apply" defaults take effect immediately.
-watch(
-    () => store.getSession(props.sessionId)?.keep_settings,
-    (newValue, oldValue) => {
-        if (newValue != null) {
-            selectedKeepSettings.value = newValue
-        }
-        if (oldValue === true && newValue === false && !processIsActive.value) {
-            const sess = store.getSession(props.sessionId)
-            const resolved = {
-                permission: resolvePermissionMode(sess),
-                model: resolveModel(sess),
-                effort: resolveEffort(sess),
-                thinking: resolveThinking(sess),
-                claudeInChrome: resolveClaudeInChrome(sess),
-                contextMax: resolveContextMax(sess),
-            }
-            selectedPermissionMode.value = resolved.permission
-            selectedModel.value = resolved.model
-            selectedEffort.value = resolved.effort
-            selectedThinking.value = resolved.thinking
-            selectedClaudeInChrome.value = resolved.claudeInChrome
-            selectedContextMax.value = resolved.contextMax
-            activePermissionMode.value = resolved.permission
-            activeModel.value = resolved.model
-            activeEffort.value = resolved.effort
-            activeThinking.value = resolved.thinking
-            activeClaudeInChrome.value = resolved.claudeInChrome
-            activeContextMax.value = resolved.contextMax
-        }
-    }
-)
 
 // Restore draft message when session changes
 watch(() => props.sessionId, async (newId) => {
@@ -1178,13 +965,13 @@ async function handleSend() {
         session_id: props.sessionId,
         project_id: props.projectId,
         text: text,
+        // Settings: null = use global default, explicit value = forced for this session
         permission_mode: selectedPermissionMode.value,
         selected_model: selectedModel.value,
         effort: selectedEffort.value,
         thinking_enabled: selectedThinking.value,
         claude_in_chrome: selectedClaudeInChrome.value,
         context_max: selectedContextMax.value,
-        keep_settings: selectedKeepSettings.value,
     }
 
     // For draft sessions with a title, include it
@@ -1296,55 +1083,6 @@ function handleCancel() {
 }
 
 /**
- * Restore all dropdowns to the session's last-used settings stored in the database.
- * Counteracts "always apply" defaults when the user wants to resume with the
- * same settings the session was previously using.
- * Also updates active reference values so Reset detection stays in sync.
- */
-function restoreSessionSettings() {
-    const sess = session.value
-    if (!sess) return
-    if (sess.permission_mode) {
-        selectedPermissionMode.value = sess.permission_mode
-        activePermissionMode.value = sess.permission_mode
-    }
-    if (sess.selected_model) {
-        selectedModel.value = sess.selected_model
-        activeModel.value = sess.selected_model
-    }
-    if (sess.effort) {
-        selectedEffort.value = sess.effort
-        activeEffort.value = sess.effort
-    }
-    if (sess.thinking_enabled != null) {
-        selectedThinking.value = sess.thinking_enabled
-        activeThinking.value = sess.thinking_enabled
-    }
-    if (sess.claude_in_chrome != null) {
-        selectedClaudeInChrome.value = sess.claude_in_chrome
-        activeClaudeInChrome.value = sess.claude_in_chrome
-    }
-    if (sess.context_max != null && !isContextMaxForced.value) {
-        selectedContextMax.value = sess.context_max
-        activeContextMax.value = sess.context_max
-    }
-}
-
-/**
- * Handle the "Pin settings" checkbox toggle.
- * For existing sessions: immediately persists via WebSocket.
- * For draft sessions: just updates the local ref (will be sent with send_message).
- */
-function onKeepSettingsToggle(event) {
-    const checked = event.target.checked
-    selectedKeepSettings.value = checked
-    // Only send WS update for existing (non-draft) sessions
-    if (!isDraft.value) {
-        updateKeepSettings(props.sessionId, checked)
-    }
-}
-
-/**
  * Reset the form to its initial state: clear textarea text and
  * restore dropdowns to their active (server-side) values.
  */
@@ -1361,26 +1099,9 @@ async function handleReset() {
             adjustTextareaHeight()
         }
     }
-    // Reset dropdowns to their reference values (active process or resolved defaults)
+    // Reset dropdowns to their reference values (active process or DB, including null)
     if (hasDropdownsChanged.value) {
-        if (activeModel.value !== null) {
-            selectedModel.value = activeModel.value
-        }
-        if (activePermissionMode.value !== null) {
-            selectedPermissionMode.value = activePermissionMode.value
-        }
-        if (activeEffort.value !== null) {
-            selectedEffort.value = activeEffort.value
-        }
-        if (activeThinking.value !== null) {
-            selectedThinking.value = activeThinking.value
-        }
-        if (activeClaudeInChrome.value !== null) {
-            selectedClaudeInChrome.value = activeClaudeInChrome.value
-        }
-        if (activeContextMax.value !== null) {
-            selectedContextMax.value = activeContextMax.value
-        }
+        restoreSettings()
     }
 }
 
@@ -1650,126 +1371,145 @@ defineExpose({ insertTextAtCursor })
                     size="small"
                     class="settings-button"
                 >
-                    <wa-icon name="gear"></wa-icon><span>{{ settingsSummary }}</span>
+                    <wa-icon name="gear"></wa-icon><span class="settings-summary"><template v-for="(part, i) in settingsSummaryParts" :key="i"><span v-if="i"> · </span><span v-if="part.forced" class="setting-forced">{{ part.text }}</span><template v-else>{{ part.text }}</template></template></span>
                 </wa-button>
                 <wa-popover
                     :for="settingsButtonId"
                     placement="top"
                     class="settings-popover"
                 >
-                    <div class="settings-panel">
-                        <!-- Restore button: shown when "always apply" defaults have
-                             overridden the session's last-used settings on a stopped session -->
-                        <wa-button
-                            v-if="canRestoreSessionSettings"
-                            variant="neutral"
-                            appearance="outlined"
-                            size="small"
-                            class="restore-settings-button"
-                            @click="restoreSessionSettings"
-                        >
-                            <wa-icon name="arrow-rotate-left" slot="prefix"></wa-icon>
-                            Restore last settings
-                        </wa-button>
-                        <!-- Pin settings checkbox: always visible, persists immediately -->
-                        <div class="pin-settings-row">
-                            <wa-checkbox
-                                :checked.prop="selectedKeepSettings"
-                                @change="onKeepSettingsToggle"
-                                size="small"
-                            >
-                                Pin settings for this session
-                            </wa-checkbox>
-                            <span class="setting-help">These settings will always be applied to this session, regardless of default values and "always apply" in global settings.</span>
+                    <!-- Actions & callouts (non-scrollable) -->
+                    <div v-if="anySettingForced || hasDropdownsChanged || startupSettingsWarning" class="settings-panel-actions">
+                        <div v-if="anySettingForced || hasDropdownsChanged" class="settings-panel-links">
+                            <a v-if="anySettingForced" class="settings-action-link" @click.prevent="resetAllToDefaults">
+                                <wa-icon name="arrow-rotate-left"></wa-icon>
+                                Reset all to defaults
+                            </a>
+                            <a v-if="hasDropdownsChanged" class="settings-action-link" @click.prevent="restoreSettings">
+                                <wa-icon name="xmark"></wa-icon>
+                                Discard unsaved changes
+                            </a>
                         </div>
+                        <wa-callout v-if="hasDropdownsChanged" variant="brand" class="settings-info-callout">
+                            <wa-icon name="circle-info" slot="icon"></wa-icon>
+                            Click "{{ buttonLabel }}" to apply your changes.
+                        </wa-callout>
+                        <wa-callout v-if="startupSettingsWarning" variant="warning" class="startup-warning-callout">
+                            <wa-icon name="triangle-exclamation" slot="icon"></wa-icon>
+                            {{ startupSettingsWarning }}
+                        </wa-callout>
+                    </div>
+
+                    <!-- Settings dropdowns (scrollable) -->
+                    <div class="settings-panel">
+                        <!-- Model -->
                         <div class="setting-row">
                             <label class="setting-label">Model</label>
                             <wa-select
-                                :value.prop="selectedModel"
-                                @change="selectedModel = $event.target.value"
+                                :value.prop="selectedModel === null ? DEFAULT_SENTINEL : selectedModel"
+                                @change="selectedModel = $event.target.value === DEFAULT_SENTINEL ? null : $event.target.value"
                                 size="small"
-                                :disabled="isModelDisabled"
+                                :disabled="isStarting"
                             >
+                                <wa-option :value="DEFAULT_SENTINEL">Default: {{ defaultModelLabel }}</wa-option>
+                                <small class="select-group-label">Force to:</small>
                                 <wa-option v-for="option in modelOptions" :key="option.value" :value="option.value">
                                     {{ option.label }}
                                 </wa-option>
                             </wa-select>
-                            <span class="setting-help">Can only be changed on your turn.</span>
+                            <a v-if="selectedModel !== null" class="reset-setting-link" @click.prevent="selectedModel = null">Reset to default: {{ defaultModelLabel }}</a>
                         </div>
+
+                        <!-- Context -->
                         <div class="setting-row">
                             <label class="setting-label">Context</label>
                             <wa-select
-                                :value.prop="String(selectedContextMax)"
-                                @change="selectedContextMax = Number($event.target.value)"
+                                :value.prop="selectedContextMax === null ? DEFAULT_SENTINEL : String(selectedContextMax)"
+                                @change="selectedContextMax = $event.target.value === DEFAULT_SENTINEL ? null : Number($event.target.value)"
                                 size="small"
-                                :disabled="isEffortThinkingDisabled || isContextMaxForced"
+                                :disabled="isStarting || isContextMaxForced"
                             >
+                                <wa-option :value="DEFAULT_SENTINEL">Default: {{ defaultContextMaxLabel }}</wa-option>
+                                <small class="select-group-label">Force to:</small>
                                 <wa-option v-for="option in contextMaxOptions" :key="option.value" :value="option.value">
                                     {{ option.label }}
                                 </wa-option>
                             </wa-select>
-                            <span class="setting-help">
-                                {{ isContextMaxForced
-                                    ? 'Forced to 1M: context usage exceeds 85% of 200K.'
-                                    : 'Cannot be changed while a process is running.' }}
-                            </span>
+                            <span v-if="isContextMaxForced" class="setting-help">Forced to 1M: context usage exceeds 85% of 200K.</span>
+                            <a v-else-if="selectedContextMax !== null" class="reset-setting-link" @click.prevent="selectedContextMax = null">Reset to default: {{ defaultContextMaxLabel }}</a>
                         </div>
+
+                        <!-- Effort -->
                         <div class="setting-row">
                             <label class="setting-label">Effort</label>
                             <wa-select
-                                :value.prop="selectedEffort"
-                                @change="selectedEffort = $event.target.value"
+                                :value.prop="selectedEffort === null ? DEFAULT_SENTINEL : selectedEffort"
+                                @change="selectedEffort = $event.target.value === DEFAULT_SENTINEL ? null : $event.target.value"
                                 size="small"
-                                :disabled="isEffortThinkingDisabled"
+                                :disabled="isStarting"
                             >
+                                <wa-option :value="DEFAULT_SENTINEL">Default: {{ defaultEffortLabel }}</wa-option>
+                                <small class="select-group-label">Force to:</small>
                                 <wa-option v-for="option in effortOptions" :key="option.value" :value="option.value">
                                     {{ option.label }}
                                 </wa-option>
                             </wa-select>
-                            <span class="setting-help">Cannot be changed while a process is running.</span>
+                            <a v-if="selectedEffort !== null" class="reset-setting-link" @click.prevent="selectedEffort = null">Reset to default: {{ defaultEffortLabel }}</a>
                         </div>
+
+                        <!-- Thinking -->
                         <div class="setting-row">
                             <label class="setting-label">Thinking</label>
                             <wa-select
-                                :value.prop="String(selectedThinking)"
-                                @change="selectedThinking = $event.target.value === 'true'"
+                                :value.prop="selectedThinking === null ? DEFAULT_SENTINEL : String(selectedThinking)"
+                                @change="selectedThinking = $event.target.value === DEFAULT_SENTINEL ? null : $event.target.value === 'true'"
                                 size="small"
-                                :disabled="isEffortThinkingDisabled"
+                                :disabled="isStarting"
                             >
-                                <wa-option v-for="option in thinkingOptions" :key="option.value" :value="option.value" :label="option.label">
+                                <wa-option :value="DEFAULT_SENTINEL">Default: {{ defaultThinkingLabel }}</wa-option>
+                                <small class="select-group-label">Force to:</small>
+                                <wa-option v-for="option in thinkingOptions" :key="option.value" :value="option.value">
                                     {{ option.label }}
                                 </wa-option>
                             </wa-select>
-                            <span class="setting-help">Cannot be changed while a process is running.</span>
+                            <a v-if="selectedThinking !== null" class="reset-setting-link" @click.prevent="selectedThinking = null">Reset to default: {{ defaultThinkingLabel }}</a>
                         </div>
+
+                        <!-- Permission -->
                         <div class="setting-row">
                             <label class="setting-label">Permission</label>
                             <wa-select
-                                :value.prop="selectedPermissionMode"
-                                @change="selectedPermissionMode = $event.target.value"
+                                :value.prop="selectedPermissionMode === null ? DEFAULT_SENTINEL : selectedPermissionMode"
+                                @change="selectedPermissionMode = $event.target.value === DEFAULT_SENTINEL ? null : $event.target.value"
                                 size="small"
-                                :disabled="isDisabled"
+                                :disabled="isStarting"
                             >
+                                <wa-option :value="DEFAULT_SENTINEL">Default: {{ defaultPermissionLabel }}</wa-option>
+                                <small class="select-group-label">Force to:</small>
                                 <wa-option v-for="option in permissionModeOptions" :key="option.value" :value="option.value" :label="option.label">
                                     <span>{{ option.label }}</span>
                                     <span class="option-description">{{ option.description }}</span>
                                 </wa-option>
                             </wa-select>
-                            <span class="setting-help">Can be changed at any time, even while Claude is working.</span>
+                            <a v-if="selectedPermissionMode !== null" class="reset-setting-link" @click.prevent="selectedPermissionMode = null">Reset to default: {{ defaultPermissionLabel }}</a>
                         </div>
+
+                        <!-- Claude in Chrome -->
                         <div class="setting-row">
                             <label class="setting-label">Claude built-in Chrome MCP</label>
                             <wa-select
-                                :value.prop="String(selectedClaudeInChrome)"
-                                @change="selectedClaudeInChrome = $event.target.value === 'true'"
+                                :value.prop="selectedClaudeInChrome === null ? DEFAULT_SENTINEL : String(selectedClaudeInChrome)"
+                                @change="selectedClaudeInChrome = $event.target.value === DEFAULT_SENTINEL ? null : $event.target.value === 'true'"
                                 size="small"
-                                :disabled="isEffortThinkingDisabled"
+                                :disabled="isStarting"
                             >
-                                <wa-option v-for="option in claudeInChromeOptions" :key="option.value" :value="option.value" :label="option.label">
+                                <wa-option :value="DEFAULT_SENTINEL">Default: {{ defaultChromeLabel }}</wa-option>
+                                <small class="select-group-label">Force to:</small>
+                                <wa-option v-for="option in claudeInChromeOptions" :key="option.value" :value="option.value">
                                     {{ option.label }}
                                 </wa-option>
                             </wa-select>
-                            <span class="setting-help">Cannot be changed while a process is running.</span>
+                            <a v-if="selectedClaudeInChrome !== null" class="reset-setting-link" @click.prevent="selectedClaudeInChrome = null">Reset to default: {{ defaultChromeLabel }}</a>
                         </div>
                     </div>
                 </wa-popover>
@@ -1883,8 +1623,9 @@ body.sidebar-closed .message-input-toolbar {
     --max-width: min(30rem, 100vw);
     --arrow-size: 12px;
     &::part(body) {
-        max-height: 60dvh;
-        overflow-y: auto;
+        max-height: calc(100vh - 8rem);
+        display: flex;
+        flex-direction: column;
     }
 }
 
@@ -1892,18 +1633,45 @@ body.sidebar-closed .message-input-toolbar {
     display: flex;
     flex-direction: column;
     gap: var(--wa-space-m);
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
 }
 
-.restore-settings-button {
-    align-self: center;
+.settings-info-callout,
+.startup-warning-callout {
+    font-size: var(--wa-font-size-xs);
+    width: 100%;
 }
 
-.pin-settings-row {
+.settings-panel-actions {
     display: flex;
     flex-direction: column;
-    gap: var(--wa-space-2xs);
-    padding-bottom: var(--wa-space-xs);
+    align-items: center;
+    gap: var(--wa-space-xs);
+    flex-shrink: 0;
+    padding-bottom: var(--wa-space-s);
     border-bottom: 1px solid var(--wa-color-border);
+}
+
+.settings-panel-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--wa-space-2xs) var(--wa-space-s);
+    justify-content: center;
+}
+
+.settings-action-link {
+    font-size: var(--wa-font-size-xs);
+    color: var(--wa-color-brand-60);
+    cursor: pointer;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-3xs);
+    &:hover {
+        text-decoration: underline;
+    }
 }
 
 .setting-row {
@@ -1920,6 +1688,31 @@ body.sidebar-closed .message-input-toolbar {
 .setting-help {
     font-size: var(--wa-font-size-xs);
     color: var(--wa-color-text-quiet);
+}
+
+.select-group-label {
+    display: block;
+    padding: var(--wa-space-3xs) var(--wa-space-l);
+    font-size: var(--wa-font-size-xs);
+    color: var(--wa-color-text-quiet);
+    font-weight: var(--wa-font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.reset-setting-link {
+    font-size: var(--wa-font-size-xs);
+    color: var(--wa-color-brand-60);
+    cursor: pointer;
+    text-decoration: none;
+    &:hover {
+        text-decoration: underline;
+    }
+}
+
+.setting-forced {
+    text-decoration: underline dashed;
+    text-underline-offset: 3px;
 }
 
 .option-description {

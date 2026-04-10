@@ -39,7 +39,9 @@ def _collect_restart_data(session_id: str) -> dict | None:
     (no active crons, session not found, or cwd missing).
     """
     from twicc.core.models import Session, SessionCron
+    from twicc.synced_settings import read_synced_settings
 
+    defaults = read_synced_settings()
     active_crons = list(SessionCron.active_for_session(session_id))
     if not active_crons:
         return None
@@ -63,13 +65,12 @@ def _collect_restart_data(session_id: str) -> dict | None:
             {"cron_expr": c.cron_expr, "recurring": c.recurring, "prompt": c.prompt}
             for c in active_crons
         ],
-        "permission_mode": session.permission_mode or "default",
-        "selected_model": session.selected_model,
-        "effort": session.effort,
-        "thinking_enabled": session.thinking_enabled,
-        "claude_in_chrome": session.claude_in_chrome,
-        "context_max": session.context_max,
-        "keep_settings": session.keep_settings,
+        "permission_mode": session.permission_mode if session.permission_mode is not None else defaults.get("defaultPermissionMode", "default"),
+        "selected_model": session.selected_model if session.selected_model is not None else defaults.get("defaultModel", "opus"),
+        "effort": session.effort if session.effort is not None else defaults.get("defaultEffort", "medium"),
+        "thinking_enabled": session.thinking_enabled if session.thinking_enabled is not None else defaults.get("defaultThinking", True),
+        "claude_in_chrome": session.claude_in_chrome if session.claude_in_chrome is not None else defaults.get("defaultClaudeInChrome", True),
+        "context_max": session.context_max if session.context_max is not None else defaults.get("defaultContextMax", 200_000),
     }
 
 

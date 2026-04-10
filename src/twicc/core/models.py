@@ -325,12 +325,11 @@ class Session(models.Model):
     # Whether extended thinking is enabled (True=adaptive, False=disabled)
     thinking_enabled = models.BooleanField(null=True, default=None)
     # Whether the built-in Chrome MCP (Claude in Chrome) is activated for this session
-    claude_in_chrome = models.BooleanField(default=False)
+    # NULL = use global default, explicit value = forced for this session
+    claude_in_chrome = models.BooleanField(null=True, default=None)
     # Maximum context window size in tokens (200_000 = default 200K, 1_000_000 = extended 1M)
-    context_max = models.PositiveIntegerField(default=200_000)
-    # Whether session settings are pinned: when True, "always apply" defaults from
-    # global settings are bypassed and the session's own stored settings are used on resume.
-    keep_settings = models.BooleanField(default=False)
+    # NULL = use global default, explicit value = forced for this session
+    context_max = models.PositiveIntegerField(null=True, default=None)
 
     class Meta:
         ordering = ["-mtime"]

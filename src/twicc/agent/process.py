@@ -21,7 +21,8 @@ from claude_agent_sdk import (
     HookMatcher,
     PermissionResultAllow,
     PermissionResultDeny,
-    PermissionUpdate, ResultMessage, ThinkingConfigAdaptive, ThinkingConfigDisabled, ToolPermissionContext,
+    PermissionUpdate, ResultMessage, SystemMessage, ThinkingConfigAdaptive, ThinkingConfigDisabled,
+    ToolPermissionContext, UserMessage,
 )
 
 from twicc.claude_plugin import get_plugin_dir
@@ -174,6 +175,17 @@ class ClaudeProcess:
             old_state.value,
             new_state.value,
         )
+
+    def get_claude_settings(self) -> dict:
+        """Return the current Claude session settings as a dict for comparison."""
+        return {
+            "permission_mode": self.permission_mode,
+            "selected_model": self.selected_model,
+            "effort": self.effort,
+            "thinking_enabled": self.thinking_enabled,
+            "claude_in_chrome": self.claude_in_chrome,
+            "context_max": self.context_max,
+        }
 
     def get_pid(self) -> int | None:
         """Get the PID of the underlying Claude CLI subprocess.
@@ -736,11 +748,6 @@ class ClaudeProcess:
                 await self._handle_cron_tool_event(input_data)
                 return {"continue_": True}
 
-            # Build SDK model string: append [1m] suffix for extended 1M context
-            sdk_model = self.selected_model
-            if sdk_model and self.context_max == 1_000_000:
-                sdk_model = f"{sdk_model}[1m]"
-
             options = ClaudeAgentOptions(
                 system_prompt={
                     "type": "preset",
@@ -748,7 +755,7 @@ class ClaudeProcess:
                 },
                 cwd=self.cwd,
                 permission_mode=self.permission_mode,
-                model=sdk_model,
+                model=self.sdk_model,
                 effort=self.effort,
                 thinking=thinking_config,
                 setting_sources=["user", "project", "local"],
@@ -841,15 +848,14 @@ class ClaudeProcess:
         await self._client.set_permission_mode(mode)
         self.permission_mode = mode
 
-    async def set_model(self, model: str | None) -> None:
+    async def set_model(self, sdk_model: str | None) -> None:
         """Change the AI model on the live SDK client.
 
-        Calls the SDK's set_model() method to update the model on the running
-        Claude process, then updates the local attribute to keep the in-memory
-        state in sync.
+        Calls the SDK's set_model() method with the full SDK model string
+        (including "[1m]" suffix for extended context if applicable).
 
-        Args:
-            model: The model shorthand (e.g., "opus", "sonnet") or None for default
+        Note: this does NOT update self.selected_model or self.context_max.
+        The caller (apply_live_settings) is responsible for updating those.
 
         Raises:
             RuntimeError: If the process is not started
@@ -858,36 +864,87 @@ class ClaudeProcess:
             raise RuntimeError("Process not started")
 
         logger.debug(
-            "Setting model to '%s' for session %s",
-            model,
+            "Setting SDK model to '%s' for session %s",
+            sdk_model,
             self.session_id,
         )
-        await self._client.set_model(model)
-        self.selected_model = model
+        await self._client.set_model(sdk_model)
+
+    def _build_sdk_model(self, selected_model: str | None = None, context_max: int | None = None) -> str | None:
+        """Build the full SDK model string from model shorthand and context_max.
+
+        Appends "[1m]" suffix when context_max is 1M (extended context).
+        Uses the process's current values for any None arguments.
+        """
+        model = selected_model if selected_model is not None else self.selected_model
+        ctx = context_max if context_max is not None else self.context_max
+        if model is None:
+            return None
+        return f"{model}[1m]" if ctx == 1_000_000 else model
+
+    @property
+    def sdk_model(self) -> str | None:
+        """The current full SDK model string (including context suffix)."""
+        return self._build_sdk_model()
+
+    @staticmethod
+    def _is_permission_mode_change_ack(msg: object) -> bool:
+        """Check if a message is the CLI ack for a set_permission_mode control request.
+
+        The CLI emits: SystemMessage(subtype="status", data={..., "permissionMode": "...", "status": None})
+        """
+        return (
+            isinstance(msg, SystemMessage)
+            and msg.subtype == "status"
+            and "permissionMode" in msg.data
+        )
+
+    @staticmethod
+    def _is_model_change_ack(msg: object) -> bool:
+        """Check if a message is the CLI ack for a set_model control request.
+
+        The CLI emits: UserMessage(content="<local-command-stdout>Set model to ...</local-command-stdout>")
+        """
+        return (
+            isinstance(msg, UserMessage)
+            and isinstance(msg.content, str)
+            and msg.content.startswith("<local-command-stdout>Set model to ")
+        )
+
+    @staticmethod
+    def _is_settings_change_ack(msg: object) -> bool:
+        """Check if a message is an ack from a settings control request (not real assistant activity)."""
+        return ClaudeProcess._is_permission_mode_change_ack(msg) or ClaudeProcess._is_model_change_ack(msg)
 
     async def apply_live_settings(
         self,
         permission_mode: str,
         selected_model: str | None,
+        context_max: int,
     ) -> None:
-        """Apply permission mode and model changes to the live SDK client.
+        """Apply live and idle setting changes to the live SDK client.
 
         Compares the requested values with the current values and calls the SDK
         methods only when they differ.
 
-        Permission mode can be changed in any active state (USER_TURN or ASSISTANT_TURN).
-        Model can only be changed during USER_TURN (the SDK's set_model() has no effect
-        during ASSISTANT_TURN).
+        Permission mode (live): can be changed in any active state.
+        Model + context_max (idle): can only be changed during USER_TURN.
+        Context_max is handled by rebuilding the sdk_model string.
 
         Args:
             permission_mode: Desired permission mode
             selected_model: Desired model shorthand, or None
+            context_max: Desired context window size (200_000 or 1_000_000)
         """
         if permission_mode != self.permission_mode:
             await self.set_permission_mode(permission_mode)
 
-        if selected_model != self.selected_model and self.state == ProcessState.USER_TURN:
-            await self.set_model(selected_model)
+        if self.state == ProcessState.USER_TURN:
+            new_sdk_model = self._build_sdk_model(selected_model, context_max)
+            if new_sdk_model != self.sdk_model:
+                await self.set_model(new_sdk_model)
+                self.selected_model = selected_model
+                self.context_max = context_max
 
     async def send(
         self,
@@ -1023,17 +1080,27 @@ class ClaudeProcess:
                     await self._notify_state_change()
 
                 elif self.state != ProcessState.ASSISTANT_TURN:
-                    # Enforce assistant state if another message came after the ResultMessage
-                    self._set_state(ProcessState.ASSISTANT_TURN)
-                    await self._notify_state_change()
+                    # Enforce assistant state if another message came after the ResultMessage.
+                    # Skip ack messages from control requests (set_permission_mode, set_model)
+                    # as they don't represent real assistant activity.
+                    if not self._is_settings_change_ack(msg):
+                        self._set_state(ProcessState.ASSISTANT_TURN)
+                        await self._notify_state_change()
 
         except asyncio.CancelledError:
             # Normal cancellation during shutdown
             raise
-        except ClaudeSDKError as e:
-            await self._handle_error(f"SDK error: {e}", exc=e)
-        except Exception as e:
-            await self._handle_error(f"Unexpected error in message loop: {e}", exc=e)
+        except (ClaudeSDKError, Exception) as e:
+            # If the process was already killed intentionally (apply-settings, manual, shutdown),
+            # the message loop error is expected (CLI exiting) — don't treat it as an error.
+            if self.state == ProcessState.DEAD and self.kill_reason and self.kill_reason != "error":
+                logger.debug(
+                    "Message loop ended after intentional kill for session %s (kill_reason=%s): %s",
+                    self.session_id, self.kill_reason, e,
+                )
+                return
+            prefix = "SDK error" if isinstance(e, ClaudeSDKError) else "Unexpected error in message loop"
+            await self._handle_error(f"{prefix}: {e}", exc=e)
 
     async def _handle_error(self, error_message: str, exc: Exception | None = None) -> None:
         """Handle an error by transitioning to DEAD state.

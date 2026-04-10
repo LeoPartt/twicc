@@ -155,13 +155,12 @@ def create_session(
     thinking_enabled: bool | None = None,
     claude_in_chrome: bool | None = None,
     context_max: int | None = None,
-    keep_settings: bool | None = None,
 ) -> Session:
     """Create a session or subagent in the database.
 
     For subagents, parent_session must be provided.
     If permission_mode, selected_model, effort, thinking_enabled, claude_in_chrome,
-    context_max, or keep_settings is provided, it overrides the default.
+    or context_max is provided, it overrides the default.
     Returns the created session.
     """
     if parsed.type == SessionType.SUBAGENT:
@@ -193,8 +192,6 @@ def create_session(
             kwargs["claude_in_chrome"] = claude_in_chrome
         if context_max is not None:
             kwargs["context_max"] = context_max
-        if keep_settings is not None:
-            kwargs["keep_settings"] = keep_settings
         return Session.objects.create(**kwargs)
 
 
@@ -415,7 +412,6 @@ async def sync_and_broadcast(
             thinking_enabled=pending.get("thinking_enabled"),
             claude_in_chrome=pending.get("claude_in_chrome"),
             context_max=pending.get("context_max"),
-            keep_settings=pending.get("keep_settings"),
         )
 
     old_title = session.title

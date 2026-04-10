@@ -37,20 +37,50 @@ SYNCED_SETTINGS_DEFAULTS: dict = {
         "User message:\n{text}"
     ),
     "defaultPermissionMode": "default",
-    "alwaysApplyDefaultPermissionMode": False,
     "defaultModel": "opus",
-    "alwaysApplyDefaultModel": False,
     "defaultEffort": "medium",
-    "alwaysApplyDefaultEffort": False,
     "defaultThinking": True,
-    "alwaysApplyDefaultThinking": False,
     "defaultClaudeInChrome": True,
-    "alwaysApplyDefaultClaudeInChrome": False,
     "defaultContextMax": 200_000,
-    "alwaysApplyDefaultContextMax": False,
     "autoUnpinOnArchive": True,
     "terminalUseTmux": True,
 }
+
+# Claude session settings: classification by when they can be applied to a live process.
+# - "live": can be applied at any time (USER_TURN or ASSISTANT_TURN) via SDK methods
+# - "idle": can only be applied during USER_TURN via SDK methods
+# - "startup": can only be set at process creation (requires process stop to change)
+CLAUDE_SETTINGS_CATEGORIES: dict[str, list[str]] = {
+    "live": ["permission_mode"],
+    "idle": ["selected_model", "context_max"],
+    "startup": ["effort", "thinking_enabled", "claude_in_chrome"],
+}
+
+# Reverse lookup: setting name → category
+_SETTING_TO_CATEGORY: dict[str, str] = {
+    setting: category
+    for category, settings in CLAUDE_SETTINGS_CATEGORIES.items()
+    for setting in settings
+}
+
+
+def classify_claude_settings_changes(current: dict, requested: dict) -> dict[str, list[str]]:
+    """Compare current vs requested Claude session settings and return diffs by category.
+
+    Args:
+        current: Current settings on the process (or from DB).
+        requested: Requested settings from the frontend.
+
+    Returns:
+        Dict with keys "live", "idle", "startup", each mapping to a list of
+        setting names that differ. Empty lists for categories with no changes.
+    """
+    result: dict[str, list[str]] = {"live": [], "idle": [], "startup": []}
+    for setting, category in _SETTING_TO_CATEGORY.items():
+        if current.get(setting) != requested.get(setting):
+            result[category].append(setting)
+    return result
+
 
 # In-memory cache of the current synced settings (file content merged with defaults).
 # Populated lazily on first read, then kept up-to-date by write_synced_settings().

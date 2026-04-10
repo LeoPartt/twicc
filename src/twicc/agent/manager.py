@@ -90,6 +90,11 @@ class ProcessManager:
         self._cron_expiry_monitor_task: asyncio.Task[None] | None = None
         self._stop_event: asyncio.Event | None = None
         self._cron_restart_tasks: dict[str, asyncio.Task[None]] = {}  # session_id -> restart task
+        # Pending content to send after a settings-triggered restart completes.
+        # Stored when the user sends text + startup settings changes during USER_TURN:
+        # the process must be killed and restarted, and this content is sent after
+        # cron restart (if any) or directly with the new process.
+        self._pending_after_restart: dict[str, dict] = {}  # session_id -> {text, images, documents}
 
     def set_broadcast_callback(self, callback: BroadcastCallback) -> None:
         """Set the callback for broadcasting state changes.
@@ -112,45 +117,52 @@ class ProcessManager:
         selected_model: str | None = None,
         effort: str | None = None,
         thinking_enabled: bool | None = None,
-        claude_in_chrome: bool = False,
+        claude_in_chrome: bool = True,
         context_max: int = 200_000,
-        keep_settings: bool = False,
         *,
         images: list[dict] | None = None,
         documents: list[dict] | None = None,
         cancel_cron_restart: bool = True,
     ) -> None:
-        """Send a message to an existing session, optionally updating model/permission settings.
+        """Send a message to an existing session, applying settings changes as needed.
 
         If no active process exists for this session, a new one is created
         with the resume option to continue the existing conversation.
 
         Messages can be sent during USER_TURN (normal) or ASSISTANT_TURN
-        (Claude Agent SDK queues them and processes after current response).
+        (Claude reads them inline during work).
 
-        When a live process exists, model and permission mode are updated on the
-        SDK client before sending the message. If text is empty and there are no
-        attachments, only the settings are applied (no query is sent to Claude).
+        Settings are classified into categories:
+        - live (permission_mode): applied immediately in any state
+        - idle (selected_model, context_max): applied during USER_TURN via set_model()
+        - startup (effort, thinking_enabled, claude_in_chrome): require process stop
 
-        Args:
-            session_id: The Claude session identifier (must exist in database)
-            project_id: The TwiCC project identifier
-            cwd: Working directory for Claude operations
-            text: The message text to send (may be empty for settings-only updates)
-            permission_mode: Permission mode to apply
-            selected_model: Model shorthand to apply, or None for default
-            images: Optional list of SDK ImageBlockParam objects
-            documents: Optional list of SDK DocumentBlockParam objects
+        When startup settings change during USER_TURN, the process is killed
+        (reason="apply-settings") and restarted. During ASSISTANT_TURN, the
+        changes are saved to DB and applied on the next USER_TURN transition.
 
         Raises:
             RuntimeError: If the process cannot be started or message cannot be sent
         """
+        from twicc.synced_settings import classify_claude_settings_changes
+
         async with self._lock:
             # Cancel any running cron restart task — user is taking over this session.
             # Callers that ARE the cron restart task pass cancel_cron_restart=False
             # to avoid cancelling themselves.
             if cancel_cron_restart:
                 self._cancel_cron_restart_task(session_id)
+
+            has_content = bool(text) or bool(images) or bool(documents)
+
+            requested_settings = {
+                "permission_mode": permission_mode,
+                "selected_model": selected_model,
+                "effort": effort,
+                "thinking_enabled": thinking_enabled,
+                "claude_in_chrome": claude_in_chrome,
+                "context_max": context_max,
+            }
 
             if session_id in self._processes:
                 process = self._processes[session_id]
@@ -162,18 +174,65 @@ class ProcessManager:
                         session_id,
                     )
                     del self._processes[session_id]
-                elif process.state in (ProcessState.USER_TURN, ProcessState.ASSISTANT_TURN):
-                    # Process ready for input or busy responding.
-                    # Apply settings changes on the live SDK client before sending.
-                    # Permission mode works in any state; model only in USER_TURN.
-                    await process.apply_live_settings(permission_mode, selected_model)
 
-                    # If there is actual content to send, forward it to Claude
-                    has_content = bool(text) or bool(images) or bool(documents)
+                elif process.state == ProcessState.USER_TURN:
+                    changes = classify_claude_settings_changes(
+                        process.get_claude_settings(), requested_settings,
+                    )
+                    has_startup_changes = bool(changes["startup"])
+
+                    if has_startup_changes:
+                        # Startup settings changed → must kill and restart
+                        logger.info(
+                            "Startup settings changed for session %s (%s), killing process",
+                            session_id, changes["startup"],
+                        )
+                        has_crons = await self._session_has_crons(process)
+                        will_restart = has_content or has_crons
+                        if has_content:
+                            self._pending_after_restart[session_id] = {
+                                "text": text, "images": images, "documents": documents,
+                            }
+                        # kill() triggers _on_state_change(DEAD) synchronously:
+                        # - if has_crons: launches cron restart task (which will
+                        #   also send pending text after success)
+                        # - cleans up process from _processes
+                        await process.kill(reason="apply-settings")
+                        if will_restart:
+                            # Broadcast "starting" so the frontend blocks interaction
+                            await self._broadcast_process_state(
+                                session_id, project_id, ProcessState.STARTING,
+                            )
+                        # If no crons and has content → start directly
+                        if not has_crons and has_content:
+                            pending = self._pending_after_restart.pop(session_id, None)
+                            await self._start_process(
+                                session_id, project_id, cwd, pending["text"],
+                                resume=True, **requested_settings,
+                                images=pending.get("images"),
+                                documents=pending.get("documents"),
+                            )
+                        # If has_crons → cron restart task handles it
+                        return
+                    else:
+                        # Only live/idle changes → apply on the live process
+                        await process.apply_live_settings(
+                            permission_mode, selected_model, context_max,
+                        )
+                        if has_content:
+                            await process.send(text, images=images, documents=documents)
+                        return
+
+                elif process.state == ProcessState.ASSISTANT_TURN:
+                    # During assistant_turn: apply live (permission) immediately,
+                    # send text if any. Idle/startup changes are saved to DB by
+                    # the caller and will be checked on next USER_TURN transition.
+                    if permission_mode != process.permission_mode:
+                        await process.set_permission_mode(permission_mode)
                     if has_content:
                         await process.send(text, images=images, documents=documents)
-
                     return
+
                 else:
                     # Process starting - cannot send yet
                     raise RuntimeError(
@@ -189,10 +248,8 @@ class ProcessManager:
             # Create and start new process with resume
             await self._start_process(
                 session_id, project_id, cwd, text, resume=True,
-                permission_mode=permission_mode, selected_model=selected_model,
-                effort=effort, thinking_enabled=thinking_enabled,
-                claude_in_chrome=claude_in_chrome, context_max=context_max,
-                images=images, documents=documents
+                **requested_settings,
+                images=images, documents=documents,
             )
 
     async def create_session(
@@ -205,9 +262,8 @@ class ProcessManager:
         selected_model: str | None = None,
         effort: str | None = None,
         thinking_enabled: bool | None = None,
-        claude_in_chrome: bool = False,
+        claude_in_chrome: bool = True,
         context_max: int = 200_000,
-        keep_settings: bool = False,
         *,
         images: list[dict] | None = None,
         documents: list[dict] | None = None,
@@ -217,14 +273,6 @@ class ProcessManager:
         Unlike send_to_session which handles existing sessions, this creates
         a brand new session. The session_id is passed to the Claude CLI via
         the --session-id flag.
-
-        Args:
-            session_id: The client-provided session UUID
-            project_id: The TwiCC project identifier
-            cwd: Working directory for Claude operations
-            text: The initial message text
-            images: Optional list of SDK ImageBlockParam objects
-            documents: Optional list of SDK DocumentBlockParam objects
 
         Raises:
             RuntimeError: If a process already exists for this session_id
@@ -263,9 +311,8 @@ class ProcessManager:
         selected_model: str | None = None,
         effort: str | None = None,
         thinking_enabled: bool | None = None,
-        claude_in_chrome: bool = False,
+        claude_in_chrome: bool = True,
         context_max: int = 200_000,
-        keep_settings: bool = False,
         *,
         images: list[dict] | None = None,
         documents: list[dict] | None = None,
@@ -276,15 +323,6 @@ class ProcessManager:
         and create_session (resume=False).
 
         Must be called while holding self._lock.
-
-        Args:
-            session_id: The Claude session identifier
-            project_id: The TwiCC project identifier
-            cwd: Working directory for Claude operations
-            text: The message text to send
-            resume: If True, resume existing session. If False, create new session.
-            images: Optional list of SDK ImageBlockParam objects
-            documents: Optional list of SDK DocumentBlockParam objects
         """
         logger.debug(
             "Creating process for session %s, project %s (resume=%s)",
@@ -712,6 +750,9 @@ class ProcessManager:
 
         Thin wrapper around restart_session_crons() that handles task lifecycle
         (CancelledError, cleanup from _cron_restart_tasks dict).
+
+        After successful cron restart, sends any pending content that was queued
+        during a settings-triggered restart (user sent text + startup settings changes).
         """
         from twicc.cron_restart import restart_session_crons
 
@@ -723,6 +764,17 @@ class ProcessManager:
                 stop_event=self._stop_event,
                 initial_delay=RUNTIME_INITIAL_DELAY,
             )
+            # After successful cron restart, send pending content if any
+            pending = self._pending_after_restart.pop(session_id, None)
+            if pending and pending.get("text"):
+                process = self._processes.get(session_id)
+                if process and process.state == ProcessState.USER_TURN:
+                    logger.info("Sending pending text after cron restart for session %s", session_id)
+                    await process.send(
+                        pending["text"],
+                        images=pending.get("images"),
+                        documents=pending.get("documents"),
+                    )
         except asyncio.CancelledError:
             logger.info("Cron restart task cancelled for session %s", session_id)
             raise
@@ -870,14 +922,116 @@ class ProcessManager:
             logger.debug("Cron %s not found in DB for session %s (may already be deleted)", cron_id, session_id)
         await self._broadcast_process_state(session_id)
 
-    async def _broadcast_process_state(self, session_id: str) -> None:
-        """Trigger a process state broadcast for a session (used after cron changes)."""
-        process = self._processes.get(session_id)
-        if process and self._broadcast_callback:
-            try:
-                await self._broadcast_callback(process.get_info())
-            except Exception as e:
-                logger.error("Error broadcasting process state for session %s: %s", session_id, e)
+    @staticmethod
+    async def _session_has_crons(process: ClaudeProcess) -> bool:
+        """Check if a process has active crons (via its ProcessRun)."""
+        if process.process_run is None:
+            return False
+        return await asyncio.to_thread(lambda: process.process_run.crons.exists())
+
+    async def _broadcast_process_state(
+        self,
+        session_id: str,
+        project_id: str | None = None,
+        override_state: ProcessState | None = None,
+    ) -> None:
+        """Trigger a process state broadcast for a session.
+
+        When override_state is provided, broadcasts a synthetic ProcessInfo
+        with that state (useful for broadcasting "starting" after a kill).
+        Otherwise broadcasts the current process state (used after cron changes).
+        """
+        if self._broadcast_callback is None:
+            return
+        try:
+            if override_state is not None and project_id is not None:
+                now = asyncio.get_event_loop().time()
+                info = ProcessInfo(
+                    session_id=session_id,
+                    project_id=project_id,
+                    state=override_state,
+                    previous_state=None,
+                    started_at=now,
+                    state_changed_at=now,
+                    last_activity=now,
+                )
+                await self._broadcast_callback(info)
+            else:
+                process = self._processes.get(session_id)
+                if process:
+                    await self._broadcast_callback(process.get_info())
+        except Exception as e:
+            logger.error("Error broadcasting process state for session %s: %s", session_id, e)
+
+    async def _apply_pending_settings(self, process: ClaudeProcess) -> None:
+        """Check DB settings vs process settings and apply/restart on USER_TURN.
+
+        Called from _on_state_change when a process transitions to USER_TURN.
+        Compares the session's stored settings (potentially updated during
+        ASSISTANT_TURN) with the process's current settings.
+
+        - Idle changes (model, context) → apply live via set_model()
+        - Startup changes (effort, thinking, chrome) → kill + restart/cron restart
+        - No changes → no-op
+        """
+        from twicc.core.models import Session
+        from twicc.synced_settings import classify_claude_settings_changes, read_synced_settings
+
+        session = await asyncio.to_thread(
+            Session.objects.filter(id=process.session_id).first
+        )
+        if session is None:
+            return
+
+        # Resolve effective settings (null → global default)
+        defaults = read_synced_settings()
+        requested = {
+            "permission_mode": session.permission_mode if session.permission_mode is not None else defaults.get("defaultPermissionMode", "default"),
+            "selected_model": session.selected_model if session.selected_model is not None else defaults.get("defaultModel", "opus"),
+            "effort": session.effort if session.effort is not None else defaults.get("defaultEffort", "medium"),
+            "thinking_enabled": session.thinking_enabled if session.thinking_enabled is not None else defaults.get("defaultThinking", True),
+            "claude_in_chrome": session.claude_in_chrome if session.claude_in_chrome is not None else defaults.get("defaultClaudeInChrome", True),
+            "context_max": session.context_max if session.context_max is not None else defaults.get("defaultContextMax", 200_000),
+        }
+
+        changes = classify_claude_settings_changes(process.get_claude_settings(), requested)
+        if not any(changes.values()):
+            return
+
+        if changes["startup"]:
+            # Startup settings changed → kill and let cron restart / pending handle it
+            logger.info(
+                "Pending startup settings for session %s (%s), killing process on USER_TURN",
+                process.session_id, changes["startup"],
+            )
+            has_crons = await self._session_has_crons(process)
+            has_pending = process.session_id in self._pending_after_restart
+            will_restart = has_crons or has_pending
+            # kill() triggers _on_state_change(DEAD) synchronously
+            await process.kill(reason="apply-settings")
+            if will_restart:
+                await self._broadcast_process_state(
+                    process.session_id, process.project_id, ProcessState.STARTING,
+                )
+            # If no crons but has pending text → start directly
+            if not has_crons and has_pending:
+                pending = self._pending_after_restart.pop(process.session_id)
+                await self._start_process(
+                    process.session_id, process.project_id, process.cwd,
+                    pending["text"], resume=True, **requested,
+                    images=pending.get("images"), documents=pending.get("documents"),
+                )
+        else:
+            # Only live/idle changes → apply via SDK methods
+            logger.info(
+                "Applying live/idle settings for session %s (live=%s, idle=%s) on USER_TURN",
+                process.session_id, changes["live"], changes["idle"],
+            )
+            await process.apply_live_settings(
+                requested["permission_mode"],
+                requested["selected_model"],
+                requested["context_max"],
+            )
 
     async def _on_state_change(self, process: ClaudeProcess) -> None:
         """Handle process state change by cleaning up dead processes and broadcasting.
@@ -898,12 +1052,17 @@ class ProcessManager:
         Args:
             process: The process that changed state
         """
+        # Snapshot the state at entry. This is critical because _apply_pending_settings
+        # may kill() the process (changing process.state to DEAD) while we're handling
+        # a USER_TURN callback. Using the snapshot ensures each callback invocation only
+        # runs the logic for the state it was called with.
         info = process.get_info()
+        state = info.state
 
         logger.debug(
             "State change callback triggered for session %s: state=%s",
             info.session_id,
-            info.state.value,
+            state.value,
         )
 
         # First USER_TURN: purge old ProcessRuns for this session (cascade deletes their crons).
@@ -913,7 +1072,7 @@ class ProcessManager:
         # (set in _run_message_loop before _notify_state_change is called).
         # Systematic for all processes — no-op if no old process runs exist (DELETE affects 0 rows).
         if (
-            process.state == ProcessState.USER_TURN
+            state == ProcessState.USER_TURN
             and not process._old_runs_purged
             and process.process_run is not None
         ):
@@ -941,11 +1100,21 @@ class ProcessManager:
             except Exception as e:
                 logger.error("Error broadcasting state change: %s", e)
 
+        # --- Check for pending settings changes on USER_TURN transition ---
+        # When settings are changed during ASSISTANT_TURN, they are saved to DB
+        # but not applied to the process. On each USER_TURN transition, we compare
+        # DB settings with process settings and apply/restart as needed.
+        if state == ProcessState.USER_TURN:
+            try:
+                await self._apply_pending_settings(process)
+            except Exception as e:
+                logger.error("Error applying pending settings for session %s: %s", process.session_id, e)
+
         # Flush pending title when process becomes safe to write.
         # We add a small delay to let Claude CLI finish flushing its own I/O
         # buffers to the JSONL file — the ResultMessage arrives via the SDK stream
         # before Claude CLI has necessarily finished writing to disk.
-        if process.state in (ProcessState.USER_TURN, ProcessState.DEAD):
+        if state in (ProcessState.USER_TURN, ProcessState.DEAD):
             from twicc.titles import flush_pending_title
 
             try:
@@ -955,7 +1124,7 @@ class ProcessManager:
                 logger.error("Error flushing pending title: %s", e)
 
         # Update last_stopped_at when process dies, and propagate to recent subagents
-        if process.state == ProcessState.DEAD:
+        if state == ProcessState.DEAD:
             try:
                 from django.utils import timezone as dj_timezone
                 from twicc.core.models import Session
@@ -1013,6 +1182,7 @@ class ProcessManager:
                     try:
                         run_pk = process.process_run.pk
                         await asyncio.to_thread(lambda: process.process_run.delete())
+                        process.process_run = None
                         logger.info(
                             "Deleted process run %s for session %s (kill_reason=%s, user_turn_reached=%s)",
                             run_pk, process.session_id, process.kill_reason, process._first_user_turn_reached,
@@ -1042,7 +1212,7 @@ class ProcessManager:
                     )
 
         # Clean up dead processes. No lock needed - see docstring for concurrency model.
-        if process.state == ProcessState.DEAD:
+        if state == ProcessState.DEAD:
             if (
                 process.session_id in self._processes
                 and self._processes[process.session_id] is process

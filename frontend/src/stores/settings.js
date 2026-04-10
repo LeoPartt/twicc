@@ -48,17 +48,11 @@ export const SETTINGS_SCHEMA = {
     autoUnpinOnArchive: null,
     terminalUseTmux: null,
     defaultPermissionMode: null,
-    alwaysApplyDefaultPermissionMode: null,
     defaultModel: null,
-    alwaysApplyDefaultModel: null,
     defaultEffort: null,
-    alwaysApplyDefaultEffort: null,
     defaultThinking: null,
-    alwaysApplyDefaultThinking: null,
     defaultClaudeInChrome: null,
-    alwaysApplyDefaultClaudeInChrome: null,
     defaultContextMax: null,
-    alwaysApplyDefaultContextMax: null,
     // --- Not persisted - runtime state ---
     _effectiveTheme: null,
     _isTouchDevice: false,
@@ -94,17 +88,11 @@ const SETTINGS_VALIDATORS = {
     showArchivedProjects: (v) => typeof v === 'boolean',
     showArchivedWorkspaces: (v) => typeof v === 'boolean',
     defaultPermissionMode: (v) => Object.values(PERMISSION_MODE).includes(v),
-    alwaysApplyDefaultPermissionMode: (v) => typeof v === 'boolean',
     defaultModel: (v) => Object.values(MODEL).includes(v),
-    alwaysApplyDefaultModel: (v) => typeof v === 'boolean',
     defaultEffort: (v) => Object.values(EFFORT).includes(v),
-    alwaysApplyDefaultEffort: (v) => typeof v === 'boolean',
     defaultThinking: (v) => typeof v === 'boolean',
-    alwaysApplyDefaultThinking: (v) => typeof v === 'boolean',
     defaultClaudeInChrome: (v) => typeof v === 'boolean',
-    alwaysApplyDefaultClaudeInChrome: (v) => typeof v === 'boolean',
     defaultContextMax: (v) => Object.values(CONTEXT_MAX).includes(v),
-    alwaysApplyDefaultContextMax: (v) => typeof v === 'boolean',
     notifUserTurnSound: (v) => Object.values(NOTIFICATION_SOUNDS).includes(v),
     notifUserTurnBrowser: (v) => typeof v === 'boolean',
     notifPendingRequestSound: (v) => Object.values(NOTIFICATION_SOUNDS).includes(v),
@@ -197,17 +185,11 @@ export const useSettingsStore = defineStore('settings', {
         isShowArchivedProjects: (state) => state.showArchivedProjects,
         isShowArchivedWorkspaces: (state) => state.showArchivedWorkspaces,
         getDefaultPermissionMode: (state) => state.defaultPermissionMode,
-        isAlwaysApplyDefaultPermissionMode: (state) => state.alwaysApplyDefaultPermissionMode,
         getDefaultModel: (state) => state.defaultModel,
-        isAlwaysApplyDefaultModel: (state) => state.alwaysApplyDefaultModel,
         getDefaultEffort: (state) => state.defaultEffort,
-        isAlwaysApplyDefaultEffort: (state) => state.alwaysApplyDefaultEffort,
         getDefaultThinking: (state) => state.defaultThinking,
-        isAlwaysApplyDefaultThinking: (state) => state.alwaysApplyDefaultThinking,
         getDefaultClaudeInChrome: (state) => state.defaultClaudeInChrome,
-        isAlwaysApplyDefaultClaudeInChrome: (state) => state.alwaysApplyDefaultClaudeInChrome,
         getDefaultContextMax: (state) => state.defaultContextMax,
-        isAlwaysApplyDefaultContextMax: (state) => state.alwaysApplyDefaultContextMax,
         getNotifUserTurnSound: (state) => state.notifUserTurnSound,
         isNotifUserTurnBrowser: (state) => state.notifUserTurnBrowser,
         getNotifPendingRequestSound: (state) => state.notifPendingRequestSound,
@@ -463,119 +445,33 @@ export const useSettingsStore = defineStore('settings', {
             }
         },
 
-        /**
-         * Set whether the default permission mode should always be applied,
-         * even for sessions that have an explicit mode in the database.
-         * @param {boolean} enabled
-         */
-        setAlwaysApplyDefaultPermissionMode(enabled) {
-            if (SETTINGS_VALIDATORS.alwaysApplyDefaultPermissionMode(enabled)) {
-                this.alwaysApplyDefaultPermissionMode = enabled
-            }
-        },
-
-        /**
-         * Set the default Claude model for new sessions.
-         * @param {string} model - One of MODEL values
-         */
         setDefaultModel(model) {
             if (SETTINGS_VALIDATORS.defaultModel(model)) {
                 this.defaultModel = model
             }
         },
 
-        /**
-         * Set whether the default Claude model should always be applied,
-         * even for sessions that have an explicit model in the database.
-         * @param {boolean} enabled
-         */
-        setAlwaysApplyDefaultModel(enabled) {
-            if (SETTINGS_VALIDATORS.alwaysApplyDefaultModel(enabled)) {
-                this.alwaysApplyDefaultModel = enabled
-            }
-        },
-
-        /**
-         * Set the default effort level for new sessions.
-         * @param {string} effort - One of EFFORT values
-         */
         setDefaultEffort(effort) {
             if (SETTINGS_VALIDATORS.defaultEffort(effort)) {
                 this.defaultEffort = effort
             }
         },
 
-        /**
-         * Set whether the default effort level should always be applied,
-         * even for sessions that have an explicit effort in the database.
-         * @param {boolean} enabled
-         */
-        setAlwaysApplyDefaultEffort(enabled) {
-            if (SETTINGS_VALIDATORS.alwaysApplyDefaultEffort(enabled)) {
-                this.alwaysApplyDefaultEffort = enabled
-            }
-        },
-
-        /**
-         * Set the default thinking mode for new sessions.
-         * @param {boolean} thinking - true for adaptive, false for disabled
-         */
         setDefaultThinking(thinking) {
             if (SETTINGS_VALIDATORS.defaultThinking(thinking)) {
                 this.defaultThinking = thinking
             }
         },
 
-        /**
-         * Set whether the default thinking mode should always be applied,
-         * even for sessions that have an explicit thinking setting in the database.
-         * @param {boolean} enabled
-         */
-        setAlwaysApplyDefaultThinking(enabled) {
-            if (SETTINGS_VALIDATORS.alwaysApplyDefaultThinking(enabled)) {
-                this.alwaysApplyDefaultThinking = enabled
-            }
-        },
-
-        /**
-         * Set the default Claude in Chrome MCP mode for new sessions.
-         * @param {boolean} enabled - true to enable, false to disable
-         */
         setDefaultClaudeInChrome(enabled) {
             if (SETTINGS_VALIDATORS.defaultClaudeInChrome(enabled)) {
                 this.defaultClaudeInChrome = enabled
             }
         },
 
-        /**
-         * Set whether the default Claude in Chrome MCP mode should always be applied,
-         * even for sessions that have an explicit value in the database.
-         * @param {boolean} enabled
-         */
-        setAlwaysApplyDefaultClaudeInChrome(enabled) {
-            if (SETTINGS_VALIDATORS.alwaysApplyDefaultClaudeInChrome(enabled)) {
-                this.alwaysApplyDefaultClaudeInChrome = enabled
-            }
-        },
-
-        /**
-         * Set the default context max for new sessions.
-         * @param {number} contextMax - One of CONTEXT_MAX values (200_000 or 1_000_000)
-         */
         setDefaultContextMax(contextMax) {
             if (SETTINGS_VALIDATORS.defaultContextMax(contextMax)) {
                 this.defaultContextMax = contextMax
-            }
-        },
-
-        /**
-         * Set whether the default context max should always be applied,
-         * even for sessions that have an explicit value in the database.
-         * @param {boolean} enabled
-         */
-        setAlwaysApplyDefaultContextMax(enabled) {
-            if (SETTINGS_VALIDATORS.alwaysApplyDefaultContextMax(enabled)) {
-                this.alwaysApplyDefaultContextMax = enabled
             }
         },
 
@@ -658,16 +554,54 @@ export const useSettingsStore = defineStore('settings', {
 })
 
 /**
+ * Claude session settings categories (live/idle/startup), loaded from backend.
+ * Maps category name → array of setting field names.
+ * Used to determine which settings can be applied live vs require process restart.
+ */
+let _claudeSettingsCategories = { live: [], idle: [], startup: [] }
+
+/**
+ * Get the Claude settings categories loaded from the backend.
+ * @returns {{ live: string[], idle: string[], startup: string[] }}
+ */
+export function getClaudeSettingsCategories() {
+    return _claudeSettingsCategories
+}
+
+/**
+ * Classify changes between current and requested Claude session settings.
+ * Returns which settings differ, grouped by category.
+ * @param {Object} current - Current settings (from process or DB)
+ * @param {Object} requested - Requested settings (from dropdowns)
+ * @returns {{ live: string[], idle: string[], startup: string[] }}
+ */
+export function classifyClaudeSettingsChanges(current, requested) {
+    const result = { live: [], idle: [], startup: [] }
+    for (const [category, settings] of Object.entries(_claudeSettingsCategories)) {
+        for (const setting of settings) {
+            if (current[setting] !== requested[setting]) {
+                result[category].push(setting)
+            }
+        }
+    }
+    return result
+}
+
+/**
  * Apply backend-provided default values for synced settings into SETTINGS_SCHEMA.
  * Must be called BEFORE initSettings() / useSettingsStore() so that loadSettings()
  * picks up the correct defaults when it runs for the first time.
  * Also applies the current synced settings values to the store.
  * @param {Object} defaultSettings - Default values from the backend
  * @param {Object} currentSettings - Current synced settings from the backend
+ * @param {Object} claudeSettingsCategories - Claude settings categories from the backend
  */
-export function applyDefaultSettings(defaultSettings, currentSettings) {
+export function applyDefaultSettings(defaultSettings, currentSettings, claudeSettingsCategories) {
     if (defaultSettings && typeof defaultSettings === 'object') {
         Object.assign(SETTINGS_SCHEMA, defaultSettings)
+    }
+    if (claudeSettingsCategories && typeof claudeSettingsCategories === 'object') {
+        _claudeSettingsCategories = claudeSettingsCategories
     }
     // Store current settings for applySyncedSettings() to use after store init
     _pendingSyncedSettings = currentSettings
@@ -726,17 +660,11 @@ export function initSettings() {
             showArchivedProjects: store.showArchivedProjects,
             showArchivedWorkspaces: store.showArchivedWorkspaces,
             defaultPermissionMode: store.defaultPermissionMode,
-            alwaysApplyDefaultPermissionMode: store.alwaysApplyDefaultPermissionMode,
             defaultModel: store.defaultModel,
-            alwaysApplyDefaultModel: store.alwaysApplyDefaultModel,
             defaultEffort: store.defaultEffort,
-            alwaysApplyDefaultEffort: store.alwaysApplyDefaultEffort,
             defaultThinking: store.defaultThinking,
-            alwaysApplyDefaultThinking: store.alwaysApplyDefaultThinking,
             defaultClaudeInChrome: store.defaultClaudeInChrome,
-            alwaysApplyDefaultClaudeInChrome: store.alwaysApplyDefaultClaudeInChrome,
             defaultContextMax: store.defaultContextMax,
-            alwaysApplyDefaultContextMax: store.alwaysApplyDefaultContextMax,
             notifUserTurnSound: store.notifUserTurnSound,
             notifUserTurnBrowser: store.notifUserTurnBrowser,
             notifPendingRequestSound: store.notifPendingRequestSound,

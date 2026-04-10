@@ -246,22 +246,6 @@ export function clearUserTurnToast(sessionId) {
 }
 
 /**
- * Toggle the keep_settings flag for a session.
- * Immediately persists to the database via WebSocket.
- * @param {string} sessionId - The session ID
- * @param {boolean} keepSettings - Whether to pin settings for this session
- * @returns {boolean} - True if message was sent, false if not connected
- */
-export function updateKeepSettings(sessionId, keepSettings) {
-    if (!sessionId) return false
-    return sendWsMessage({
-        type: 'update_keep_settings',
-        session_id: sessionId,
-        keep_settings: keepSettings,
-    })
-}
-
-/**
  * Send synced settings to the backend for persistence in settings.json.
  * The backend will broadcast the updated settings to all connected clients.
  * @param {Object} settings - The synced settings key-value pairs

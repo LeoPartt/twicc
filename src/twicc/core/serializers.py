@@ -91,8 +91,6 @@ def serialize_session(session):
         "claude_in_chrome": session.claude_in_chrome,
         # Maximum context window size in tokens (200K or 1M)
         "context_max": session.context_max,
-        # Whether session settings are pinned (bypass "always apply" defaults)
-        "keep_settings": session.keep_settings,
     }
 
 

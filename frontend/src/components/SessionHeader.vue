@@ -90,7 +90,7 @@ const costBreakdown = computed(() => {
 })
 
 // Calculate context usage percentage based on session's context_max
-const contextMax = computed(() => session.value?.context_max ?? 200_000)
+const contextMax = computed(() => session.value?.context_max ?? settingsStore.getDefaultContextMax)
 
 const contextUsagePercentage = computed(() => {
     const usage = session.value?.context_usage

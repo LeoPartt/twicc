@@ -153,17 +153,11 @@ const titleSystemPrompt = computed(() => store.getTitleSystemPrompt)
 const terminalUseTmux = computed(() => store.isTerminalUseTmux)
 const compactSessionList = computed(() => store.isCompactSessionList)
 const defaultPermissionMode = computed(() => store.getDefaultPermissionMode)
-const alwaysApplyDefaultPermissionMode = computed(() => store.isAlwaysApplyDefaultPermissionMode)
 const defaultModel = computed(() => store.getDefaultModel)
-const alwaysApplyDefaultModel = computed(() => store.isAlwaysApplyDefaultModel)
 const defaultEffort = computed(() => store.getDefaultEffort)
-const alwaysApplyDefaultEffort = computed(() => store.isAlwaysApplyDefaultEffort)
 const defaultThinking = computed(() => store.getDefaultThinking)
-const alwaysApplyDefaultThinking = computed(() => store.isAlwaysApplyDefaultThinking)
 const defaultClaudeInChrome = computed(() => store.getDefaultClaudeInChrome)
-const alwaysApplyDefaultClaudeInChrome = computed(() => store.isAlwaysApplyDefaultClaudeInChrome)
 const defaultContextMax = computed(() => store.getDefaultContextMax)
-const alwaysApplyDefaultContextMax = computed(() => store.isAlwaysApplyDefaultContextMax)
 const showDiffs = computed(() => store.isShowDiffs)
 const toolDiffWordWrap = computed(() => store.isToolDiffWordWrap)
 const toolDiffSideBySide = computed(() => store.isToolDiffSideBySide)
@@ -330,81 +324,24 @@ function onDefaultPermissionModeChange(event) {
     store.setDefaultPermissionMode(event.target.value)
 }
 
-/**
- * Toggle "always apply default permission mode" setting.
- */
-function onAlwaysApplyDefaultPermissionModeChange(event) {
-    store.setAlwaysApplyDefaultPermissionMode(event.target.checked)
-}
-
-/**
- * Handle default model change.
- */
 function onDefaultModelChange(event) {
     store.setDefaultModel(event.target.value)
 }
 
-/**
- * Toggle "always apply default model" setting.
- */
-function onAlwaysApplyDefaultModelChange(event) {
-    store.setAlwaysApplyDefaultModel(event.target.checked)
-}
-
-/**
- * Handle default effort change.
- */
 function onDefaultEffortChange(event) {
     store.setDefaultEffort(event.target.value)
 }
 
-/**
- * Toggle "always apply default effort" setting.
- */
-function onAlwaysApplyDefaultEffortChange(event) {
-    store.setAlwaysApplyDefaultEffort(event.target.checked)
-}
-
-/**
- * Handle default thinking change.
- */
 function onDefaultThinkingChange(event) {
     store.setDefaultThinking(event.target.value === 'true')
 }
 
-/**
- * Toggle "always apply default thinking" setting.
- */
-function onAlwaysApplyDefaultThinkingChange(event) {
-    store.setAlwaysApplyDefaultThinking(event.target.checked)
-}
-
-/**
- * Handle default Claude in Chrome change.
- */
 function onDefaultClaudeInChromeChange(event) {
     store.setDefaultClaudeInChrome(event.target.value === 'true')
 }
 
-/**
- * Toggle "always apply default Claude in Chrome" setting.
- */
-function onAlwaysApplyDefaultClaudeInChromeChange(event) {
-    store.setAlwaysApplyDefaultClaudeInChrome(event.target.checked)
-}
-
-/**
- * Handle default context max change.
- */
 function onDefaultContextMaxChange(event) {
     store.setDefaultContextMax(Number(event.target.value))
-}
-
-/**
- * Toggle "always apply default context max" setting.
- */
-function onAlwaysApplyDefaultContextMaxChange(event) {
-    store.setAlwaysApplyDefaultContextMax(event.target.checked)
 }
 
 /**
@@ -605,11 +542,6 @@ function onChangelogClose() {
                                 <span class="option-description">{{ option.description }}</span>
                             </wa-option>
                         </wa-select>
-                        <wa-switch
-                            :checked="alwaysApplyDefaultPermissionMode"
-                            @change="onAlwaysApplyDefaultPermissionModeChange"
-                            size="small"
-                        >Always apply *</wa-switch>
                     </div>
                     <div class="setting-group">
                         <label class="setting-group-label">Default model</label>
@@ -626,11 +558,6 @@ function onChangelogClose() {
                                 {{ option.label }}
                             </wa-option>
                         </wa-select>
-                        <wa-switch
-                            :checked="alwaysApplyDefaultModel"
-                            @change="onAlwaysApplyDefaultModelChange"
-                            size="small"
-                        >Always apply *</wa-switch>
                     </div>
                     <div class="setting-group">
                         <label class="setting-group-label">Default context size</label>
@@ -647,11 +574,6 @@ function onChangelogClose() {
                                 {{ option.label }}
                             </wa-option>
                         </wa-select>
-                        <wa-switch
-                            :checked="alwaysApplyDefaultContextMax"
-                            @change="onAlwaysApplyDefaultContextMaxChange"
-                            size="small"
-                        >Always apply *</wa-switch>
                     </div>
                     <div class="setting-group">
                         <label class="setting-group-label">Default effort</label>
@@ -668,11 +590,6 @@ function onChangelogClose() {
                                 {{ option.label }}
                             </wa-option>
                         </wa-select>
-                        <wa-switch
-                            :checked="alwaysApplyDefaultEffort"
-                            @change="onAlwaysApplyDefaultEffortChange"
-                            size="small"
-                        >Always apply *</wa-switch>
                     </div>
                     <div class="setting-group">
                         <label class="setting-group-label">Default thinking</label>
@@ -689,11 +606,6 @@ function onChangelogClose() {
                                 {{ option.label }}
                             </wa-option>
                         </wa-select>
-                        <wa-switch
-                            :checked="alwaysApplyDefaultThinking"
-                            @change="onAlwaysApplyDefaultThinkingChange"
-                            size="small"
-                        >Always apply *</wa-switch>
                     </div>
                     <div class="setting-group">
                         <label class="setting-group-label">Default Chrome MCP</label>
@@ -710,19 +622,6 @@ function onChangelogClose() {
                                 {{ option.label }}
                             </wa-option>
                         </wa-select>
-                        <wa-switch
-                            :checked="alwaysApplyDefaultClaudeInChrome"
-                            @change="onAlwaysApplyDefaultClaudeInChromeChange"
-                            size="small"
-                        >Always apply *</wa-switch>
-                        <span class="setting-group-hint">Only applies to new sessions.</span>
-                    </div>
-                    <div>
-                        <span class="setting-group-hint">
-                            * Override the per-session saved value with the default one.
-                            <br>
-                            You'll still be able to pin different settings on a per session basis.
-                        </span>
                     </div>
                 </section>
 

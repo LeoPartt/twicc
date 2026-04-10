@@ -276,34 +276,6 @@ async def update_session_context_max(session_id: str, context_max: int) -> None:
     logger.info(f"Session {session_id} updated with context_max {context_max}")
 
 
-async def update_session_keep_settings(session_id: str, keep_settings: bool) -> None:
-    """Update the keep_settings flag for an existing session and broadcast the change.
-
-    Skips the DB update and broadcast if the value is already the same.
-    """
-    from twicc.core.models import Session
-    from twicc.core.serializers import serialize_session
-
-    rows = await sync_to_async(
-        Session.objects.filter(id=session_id).exclude(keep_settings=keep_settings).update
-    )(keep_settings=keep_settings)
-    if not rows:
-        return
-
-    session = await sync_to_async(Session.objects.filter(id=session_id).first)()
-    channel_layer = get_channel_layer()
-    await channel_layer.group_send(
-        "updates",
-        {
-            "type": "broadcast",
-            "data": {
-                "type": "session_updated",
-                "session": serialize_session(session),
-            },
-        },
-    )
-    logger.info(f"Session {session_id} updated with keep_settings {keep_settings}")
-
 
 def _get_project_display_name(project) -> str:
     """Compute a human-readable display name for a project.
@@ -674,7 +646,6 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         - mark_session_read_state: explicitly mark a session as read or unread
         - list_terminals: list active tmux terminal indices for a session
         - kill_terminal: kill a secondary terminal's tmux session and broadcast
-        - update_keep_settings: toggle the keep_settings flag for a session (immediate persist)
         - changelog_seen: acknowledge that the user has seen the changelog for a version
         """
         msg_type = content.get("type")
@@ -728,9 +699,6 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         elif msg_type == "rename_terminal":
             await self._handle_rename_terminal(content)
 
-        elif msg_type == "update_keep_settings":
-            await self._handle_update_keep_settings(content)
-
         elif msg_type == "changelog_seen":
             await self._handle_changelog_seen(content)
 
@@ -773,13 +741,13 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         title = content.get("title")  # Optional, only for new sessions
         images = content.get("images")  # Optional: SDK ImageBlockParam list
         documents = content.get("documents")  # Optional: SDK DocumentBlockParam list
-        permission_mode = content.get("permission_mode", "default")
-        selected_model = content.get("selected_model")  # Optional: SDK model shorthand
-        effort = content.get("effort")  # Optional: SDK effort level
-        thinking_enabled = content.get("thinking_enabled")  # Optional: bool
-        claude_in_chrome = content.get("claude_in_chrome", False)  # bool, defaults to False
-        context_max = content.get("context_max", 200_000)  # int: 200_000 (default) or 1_000_000
-        keep_settings = content.get("keep_settings", False)  # bool: pin settings for this session
+        # Claude session settings: null = use global default, explicit value = forced
+        permission_mode = content.get("permission_mode")
+        selected_model = content.get("selected_model")
+        effort = content.get("effort")
+        thinking_enabled = content.get("thinking_enabled")
+        claude_in_chrome = content.get("claude_in_chrome")
+        context_max = content.get("context_max")
 
         # Validate required fields (text is allowed to be empty for settings-only updates)
         if not session_id or not project_id:
@@ -838,26 +806,60 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         manager = get_process_manager()
         try:
             if exists:
-                # Update permission_mode, selected_model, effort, thinking in DB for existing sessions
-                await update_session_permission_mode(session_id, permission_mode)
-                if selected_model:
-                    await update_session_selected_model(session_id, selected_model)
-                if effort:
-                    await update_session_effort(session_id, effort)
-                if thinking_enabled is not None:
-                    await update_session_thinking_enabled(session_id, thinking_enabled)
-                await update_session_claude_in_chrome(session_id, claude_in_chrome)
-                await update_session_context_max(session_id, context_max)
-                await update_session_keep_settings(session_id, keep_settings)
+                # Save all Claude session settings to DB in one query.
+                # Values are null (use global default) or explicit (forced).
+                from twicc.core.models import Session
+                settings_fields = {
+                    "permission_mode": permission_mode,
+                    "selected_model": selected_model,
+                    "effort": effort,
+                    "thinking_enabled": thinking_enabled,
+                    "claude_in_chrome": claude_in_chrome,
+                    "context_max": context_max,
+                }
+                from twicc.core.serializers import serialize_session
+                await sync_to_async(
+                    Session.objects.filter(id=session_id).update
+                )(**settings_fields)
+                # Broadcast session update so all clients see the new settings
+                session_obj = await sync_to_async(Session.objects.filter(id=session_id).first)()
+                if session_obj:
+                    await self.channel_layer.group_send(
+                        "updates",
+                        {
+                            "type": "broadcast",
+                            "data": {
+                                "type": "session_updated",
+                                "session": serialize_session(session_obj),
+                            },
+                        },
+                    )
+
+                # If no text/attachments and no process is running, we're done:
+                # settings are saved to DB and broadcast, nothing to send.
+                has_content = bool(text) or bool(images) or bool(documents)
+                has_process = manager.get_process_info(session_id) is not None
+                if not has_content and not has_process:
+                    return
+
+                # Resolve effective values for the process manager
+                # (null → global default, so the process gets concrete values)
+                from twicc.synced_settings import read_synced_settings
+                defaults = read_synced_settings()
+                effective = {
+                    "permission_mode": permission_mode if permission_mode is not None else defaults.get("defaultPermissionMode", "default"),
+                    "selected_model": selected_model if selected_model is not None else defaults.get("defaultModel", "opus"),
+                    "effort": effort if effort is not None else defaults.get("defaultEffort", "medium"),
+                    "thinking_enabled": thinking_enabled if thinking_enabled is not None else defaults.get("defaultThinking", True),
+                    "claude_in_chrome": claude_in_chrome if claude_in_chrome is not None else defaults.get("defaultClaudeInChrome", True),
+                    "context_max": context_max if context_max is not None else defaults.get("defaultContextMax", 200_000),
+                }
+
                 # Session exists: send message to it
                 await manager.send_to_session(
                     session_id, project_id, cwd, text,
-                    permission_mode=permission_mode,
-                    selected_model=selected_model,
-                    effort=effort, thinking_enabled=thinking_enabled,
-                    claude_in_chrome=claude_in_chrome,
-                    context_max=context_max,
-                    images=images, documents=documents
+                    **effective,
+                    images=images, documents=documents,
                 )
             else:
                 # New session requires text (settings-only update makes no sense here)
@@ -880,26 +882,32 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
                 # Store session settings as pending (will be applied when watcher creates the session row)
                 from twicc.pending_settings import set_pending
 
-                pending_kwargs = {"permission_mode": permission_mode}
-                if selected_model:
-                    pending_kwargs["selected_model"] = selected_model
-                if effort:
-                    pending_kwargs["effort"] = effort
-                if thinking_enabled is not None:
-                    pending_kwargs["thinking_enabled"] = thinking_enabled
-                pending_kwargs["claude_in_chrome"] = claude_in_chrome
-                pending_kwargs["context_max"] = context_max
-                pending_kwargs["keep_settings"] = keep_settings
-                set_pending(session_id, **pending_kwargs)
+                set_pending(
+                    session_id,
+                    permission_mode=permission_mode,
+                    selected_model=selected_model,
+                    effort=effort,
+                    thinking_enabled=thinking_enabled,
+                    claude_in_chrome=claude_in_chrome,
+                    context_max=context_max,
+                )
+
+                # Resolve effective values for process creation
+                from twicc.synced_settings import read_synced_settings
+                defaults = read_synced_settings()
+                effective = {
+                    "permission_mode": permission_mode if permission_mode is not None else defaults.get("defaultPermissionMode", "default"),
+                    "selected_model": selected_model if selected_model is not None else defaults.get("defaultModel", "opus"),
+                    "effort": effort if effort is not None else defaults.get("defaultEffort", "medium"),
+                    "thinking_enabled": thinking_enabled if thinking_enabled is not None else defaults.get("defaultThinking", True),
+                    "claude_in_chrome": claude_in_chrome if claude_in_chrome is not None else defaults.get("defaultClaudeInChrome", True),
+                    "context_max": context_max if context_max is not None else defaults.get("defaultContextMax", 200_000),
+                }
 
                 await manager.create_session(
                     session_id, project_id, cwd, text,
-                    permission_mode=permission_mode,
-                    selected_model=selected_model,
-                    effort=effort, thinking_enabled=thinking_enabled,
-                    claude_in_chrome=claude_in_chrome,
-                    context_max=context_max,
-                    images=images, documents=documents
+                    **effective,
+                    images=images, documents=documents,
                 )
         except RuntimeError as e:
             # Process busy or other expected errors
@@ -1326,24 +1334,6 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
                     },
                 },
             )
-
-    async def _handle_update_keep_settings(self, content: dict) -> None:
-        """Handle update_keep_settings request from client.
-
-        Expected content format:
-        {
-            "type": "update_keep_settings",
-            "session_id": "claude-conv-xxx",
-            "keep_settings": true/false
-        }
-
-        Immediately persists the keep_settings flag and broadcasts the update.
-        """
-        session_id = content.get("session_id")
-        keep_settings = content.get("keep_settings")
-        if not session_id or keep_settings is None:
-            return
-        await update_session_keep_settings(session_id, keep_settings)
 
     async def _handle_changelog_seen(self, content: dict) -> None:
         """Persist that the user has seen the changelog for the given version."""
