@@ -1239,6 +1239,16 @@ def compute_item_kind(parsed_json: dict) -> ItemKind | None:
     if entry_type == 'assistant':
         content = get_message_content(parsed_json)
 
+        # "No response requested." is a system-level message, not a real assistant response
+        if (
+            isinstance(content, list)
+            and len(content) == 1
+            and isinstance(content[0], dict)
+            and content[0].get('type') == 'text'
+            and content[0].get('text') == 'No response requested.'
+        ):
+            return ItemKind.SYSTEM
+
         # Only assistant messages with visible content count as ASSISTANT_MESSAGE
         if _has_visible_content(content):
             return ItemKind.ASSISTANT_MESSAGE
