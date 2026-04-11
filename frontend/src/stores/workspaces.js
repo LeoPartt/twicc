@@ -4,7 +4,7 @@ import { useDataStore } from './data'
 
 export const useWorkspacesStore = defineStore('workspaces', {
     state: () => ({
-        workspaces: [],           // Array of { id, name, archived, projectIds: string[] }
+        workspaces: [],           // Array of { id, name, archived, projectIds: string[], autoProjectPatterns?: string[] }
         _isApplyingRemote: false, // Guard to prevent echo on WS receive
     }),
 
@@ -92,7 +92,7 @@ export const useWorkspacesStore = defineStore('workspaces', {
         },
 
         /** Create a new workspace. Returns the new workspace object. */
-        createWorkspace({ name, projectIds = [], archived = false, color = null }) {
+        createWorkspace({ name, projectIds = [], archived = false, color = null, autoProjectPatterns = [] }) {
             const trimmedName = name.trim()
             const ws = {
                 id: this._generateId(trimmedName),
@@ -100,6 +100,7 @@ export const useWorkspacesStore = defineStore('workspaces', {
                 archived,
                 projectIds,
                 color,
+                autoProjectPatterns,
             }
             this.workspaces.push(ws)
             this._sendWorkspaces()
@@ -107,13 +108,14 @@ export const useWorkspacesStore = defineStore('workspaces', {
         },
 
         /** Update an existing workspace. */
-        updateWorkspace(id, { name, projectIds, archived, color }) {
+        updateWorkspace(id, { name, projectIds, archived, color, autoProjectPatterns }) {
             const ws = this.workspaces.find(w => w.id === id)
             if (!ws) return
             if (name !== undefined) ws.name = name.trim()
             if (projectIds !== undefined) ws.projectIds = projectIds
             if (archived !== undefined) ws.archived = archived
             if (color !== undefined) ws.color = color
+            if (autoProjectPatterns !== undefined) ws.autoProjectPatterns = autoProjectPatterns
             this._sendWorkspaces()
         },
 

@@ -72,7 +72,7 @@ uv tool upgrade twicc
 - **Activity & quotas:** daily activity heatmaps and graphs, and usage history graphs (utilization & burn rate for 5h and 7-day quotas)
 - **Git integration:** log, diffs, file browser
 - **Full-text search:** across all sessions (Ctrl+Shift+F) with in-session search (Ctrl+F)
-- **Workspaces:** organize projects into named, color-coded groups to focus your workflow — scoped session list, search, snippets, and aggregated activity stats
+- **Workspaces:** organize projects into named, color-coded groups to focus your workflow — scoped session list, search, snippets, aggregated activity stats, and auto-add projects via directory patterns
 - **Self-aware:** TwiCC ships a Claude Code plugin (with skills) that lets Claude query your projects, sessions, costs, and search history — Claude knows about itself
 - **CLI:** JSON-output subcommands for scripting (projects, sessions, search, usage…)
 - **Cron job persistence:** scheduled tasks survive TwiCC restarts and are automatically renewed before expiry — unlike Claude Code's CLI where they are lost on restart and expire after 7 days

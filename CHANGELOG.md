@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Workspaces: organize projects into named groups with optional color, scoped session list, search, snippets, and aggregated stats
+- Workspaces: organize projects into named groups with optional color, scoped session list, search, snippets, aggregated stats, and auto-add projects via directory patterns
 - `--version` / `-V` flag to the CLI to display the current version without starting the server
 
 ### Changed

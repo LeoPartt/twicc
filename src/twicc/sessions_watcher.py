@@ -528,6 +528,14 @@ async def sync_and_broadcast(
             "session": serialize_session(session),
         })
 
+    # Auto-add newly created project to workspaces whose patterns match its directory.
+    if project_created:
+        project = await refresh_project(project)
+        if project.directory:
+            from twicc.workspaces import auto_add_project_to_workspaces
+
+            await auto_add_project_to_workspaces(project.id, project.directory)
+
 
 # Global stop event for clean shutdown
 _stop_event: asyncio.Event | None = None

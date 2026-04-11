@@ -6,6 +6,7 @@ import { useSettingsStore } from '../stores/settings'
 import { useDataStore } from '../stores/data'
 import ProjectBadge from './ProjectBadge.vue'
 import ProjectSelectOptions from './ProjectSelectOptions.vue'
+import DirectoryPickerPopup from './DirectoryPickerPopup.vue'
 
 const workspacesStore = useWorkspacesStore()
 const settingsStore = useSettingsStore()
@@ -32,7 +33,13 @@ const formData = ref({
     color: '',
     archived: false,
     projectIds: [],    // local copy, manipulated freely until save
+    autoProjectPatterns: [],
 })
+
+// -- Pattern input state -----------------------------------------------------
+const patternInput = ref('')
+const scanFeedback = ref('')
+let scanFeedbackTimer = null
 
 // -- Computed -----------------------------------------------------------------
 const dialogLabel = computed(() => {
@@ -81,7 +88,10 @@ function openAddForm() {
         color: '',
         archived: false,
         projectIds: [],
+        autoProjectPatterns: [],
     }
+    patternInput.value = ''
+    scanFeedback.value = ''
     errorMessage.value = ''
     view.value = 'form'
     nextTick(() => syncFormState())
@@ -94,7 +104,10 @@ function openEditForm(workspace) {
         color: workspace.color || '',
         archived: workspace.archived,
         projectIds: [...workspace.projectIds],
+        autoProjectPatterns: [...(workspace.autoProjectPatterns || [])],
     }
+    patternInput.value = ''
+    scanFeedback.value = ''
     errorMessage.value = ''
     view.value = 'form'
     nextTick(() => syncFormState())
@@ -132,6 +145,67 @@ function moveProjectDown(index) {
     ;[ids[index], ids[index + 1]] = [ids[index + 1], ids[index]]
 }
 
+// -- Pattern list manipulation (form) -----------------------------------------
+
+/** Computed v-model for DirectoryPickerPopup: if patternInput has no *, pass it through;
+ *  otherwise return '' so the picker opens at home. */
+const pickerDirectory = computed({
+    get() {
+        return patternInput.value.includes('*') ? '' : patternInput.value
+    },
+    set(dir) {
+        patternInput.value = dir
+    },
+})
+
+function addPattern() {
+    const trimmed = patternInput.value.trim()
+    if (!trimmed) return
+    if (!formData.value.autoProjectPatterns.includes(trimmed)) {
+        formData.value.autoProjectPatterns.push(trimmed)
+    }
+    patternInput.value = ''
+}
+
+function removePattern(index) {
+    formData.value.autoProjectPatterns.splice(index, 1)
+}
+
+/** Check if a directory matches a pattern (* = any chars, case insensitive).
+ *  Must stay in sync with match_pattern() in src/twicc/workspaces.py. */
+function matchPattern(directory, pattern) {
+    const effective = pattern.includes('*') ? pattern : pattern.replace(/\/+$/, '') + '/*'
+    const escaped = effective.split('*').map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    return new RegExp('^' + escaped.join('.*') + '$', 'i').test(directory)
+}
+
+function scanNow() {
+    const projects = dataStore.getProjects
+    const patterns = formData.value.autoProjectPatterns
+    if (patterns.length === 0) {
+        scanFeedback.value = 'No patterns defined'
+        clearScanFeedbackLater()
+        return
+    }
+    let added = 0
+    for (const project of projects) {
+        if (!project.directory || formData.value.projectIds.includes(project.id)) continue
+        if (patterns.some(p => matchPattern(project.directory, p))) {
+            formData.value.projectIds.push(project.id)
+            added++
+        }
+    }
+    scanFeedback.value = added > 0
+        ? `${added} project${added > 1 ? 's' : ''} added`
+        : 'No new projects found'
+    clearScanFeedbackLater()
+}
+
+function clearScanFeedbackLater() {
+    if (scanFeedbackTimer) clearTimeout(scanFeedbackTimer)
+    scanFeedbackTimer = setTimeout(() => { scanFeedback.value = '' }, 4000)
+}
+
 // -- Validation & save --------------------------------------------------------
 function handleSave() {
     errorMessage.value = ''
@@ -163,6 +237,7 @@ function handleSave() {
         color: formData.value.color || null,
         projectIds: [...formData.value.projectIds],
         archived: formData.value.archived,
+        autoProjectPatterns: [...formData.value.autoProjectPatterns],
     }
 
     if (formData.value.id) {
@@ -432,6 +507,72 @@ defineExpose({ open, close, openForWorkspace, openNew })
                 </wa-select>
             </div>
 
+            <!-- Auto-add project patterns -->
+            <div class="form-group">
+                <label class="form-label">Auto-add project patterns</label>
+                <p class="form-help-text">
+                    New projects whose directory matches a pattern will be added automatically when detected.
+                    <br>Use <code>*</code> as wildcard. A plain directory matches all projects inside it.
+                    <br>To add existing matching projects, click <strong>Add matching projects now</strong>.
+                </p>
+
+                <!-- Existing patterns -->
+                <div v-if="formData.autoProjectPatterns.length > 0" class="pattern-list">
+                    <div
+                        v-for="(pattern, index) in formData.autoProjectPatterns"
+                        :key="index"
+                        class="pattern-row"
+                    >
+                        <span class="pattern-value">{{ pattern }}</span>
+                        <button
+                            type="button"
+                            class="action-btn action-btn-danger"
+                            @click="removePattern(index)"
+                            title="Remove pattern"
+                        >
+                            <wa-icon name="xmark" />
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Add pattern input -->
+                <div class="pattern-input-row">
+                    <wa-input
+                        :value="patternInput"
+                        @input="patternInput = $event.target.value"
+                        @keydown.enter.prevent="addPattern"
+                        placeholder="e.g. /home/user/projects/*"
+                        size="small"
+                        class="pattern-input"
+                    />
+                    <DirectoryPickerPopup v-model="pickerDirectory" />
+                    <wa-button
+                        type="button"
+                        variant="neutral"
+                        appearance="outlined"
+                        size="small"
+                        @click="addPattern"
+                        :disabled="!patternInput.trim()"
+                    >
+                        Add
+                    </wa-button>
+                </div>
+
+                <!-- Scan now -->
+                <div class="scan-row">
+                    <wa-button
+                        type="button"
+                        variant="neutral"
+                        size="small"
+                        @click="scanNow"
+                    >
+                        <wa-icon name="magnifying-glass" slot="prefix"></wa-icon>
+                        Add matching projects now
+                    </wa-button>
+                    <span v-if="scanFeedback" class="scan-feedback">{{ scanFeedback }}</span>
+                </div>
+            </div>
+
             <!-- Error -->
             <wa-callout v-if="errorMessage" variant="danger" size="small">
                 {{ errorMessage }}
@@ -654,6 +795,72 @@ defineExpose({ open, close, openForWorkspace, openNew })
 
 .add-project-select {
     max-width: 280px;
+}
+
+/* -- Pattern list in form -------------------------------------------------- */
+.pattern-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--wa-space-3xs);
+}
+
+.pattern-row {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-s);
+    background: var(--wa-color-surface-alt);
+    border-radius: var(--wa-border-radius-m);
+    padding: var(--wa-space-3xs) var(--wa-space-xs);
+}
+
+.pattern-value {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--wa-font-size-s);
+    font-family: var(--wa-font-family-mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pattern-input-row {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-xs);
+    flex-wrap: wrap;
+}
+
+.pattern-input {
+    flex: 1;
+    min-width: 9rem;
+}
+
+.pattern-input-row > wa-button {
+    margin-left: auto;
+}
+
+.form-help-text {
+    font-size: var(--wa-font-size-xs);
+    color: var(--wa-color-text-quiet);
+    margin: 0;
+    line-height: 1.4;
+    code {
+        font-family: var(--wa-font-family-mono);
+        background: var(--wa-color-surface-alt);
+        padding: 0 var(--wa-space-3xs);
+        border-radius: var(--wa-border-radius-s);
+    }
+}
+
+.scan-row {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-s);
+}
+
+.scan-feedback {
+    font-size: var(--wa-font-size-s);
+    color: var(--wa-color-text-quiet);
 }
 
 /* -- Footer ----------------------------------------------------------------- */
