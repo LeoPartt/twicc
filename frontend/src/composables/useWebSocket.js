@@ -86,6 +86,20 @@ export function killProcess(sessionId) {
 }
 
 /**
+ * Stop a running background agent via the SDK's stop_task.
+ * @param {string} sessionId - The parent session ID that spawned the agent
+ * @param {string} agentId - The agent ID (from AgentLink)
+ * @returns {boolean} - True if message was sent, false if not connected
+ */
+export function stopAgent(sessionId, agentId) {
+    return sendWsMessage({
+        type: 'stop_agent',
+        session_id: sessionId,
+        agent_id: agentId
+    })
+}
+
+/**
  * Request a title suggestion for a session.
  * The result will arrive via WebSocket as title_suggested message.
  * @param {string} sessionId - The session ID

@@ -4,7 +4,7 @@ import { useDataStore } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
 import { formatDate } from '../utils/date'
 import { CONTEXT_MAX_LABELS, PROCESS_STATE, PROCESS_STATE_COLORS, PROCESS_STATE_NAMES } from '../constants'
-import { killProcess } from '../composables/useWebSocket'
+import { killProcess, stopAgent } from '../composables/useWebSocket'
 import ProjectBadge from './ProjectBadge.vue'
 import ProcessIndicator from './ProcessIndicator.vue'
 import CodeCommentsIndicator from './CodeCommentsIndicator.vue'
@@ -192,8 +192,20 @@ const canStopProcess = computed(() => {
     return ps && !ps.synthetic && ps.state && ps.state !== PROCESS_STATE.DEAD
 })
 
+// Check if this is a background agent that can be stopped
+const canStopAgent = computed(() => {
+    if (props.mode !== 'subagent') return false
+    const ps = processState.value
+    if (!ps || !ps.synthetic || !ps.state || ps.state === PROCESS_STATE.DEAD) return false
+    const parentId = session.value?.parent_session_id
+    if (!parentId) return false
+    const link = store.getAgentLinkByAgentId(parentId, props.sessionId)
+    return !!link?.isBackground
+})
+
 // Track when a stop request has been sent and we're waiting for the process to die
 const stoppingProcess = ref(false)
+const stoppingAgent = ref(false)
 
 // Confirmation dialog for stopping a process with active crons
 const stopConfirmDialogRef = ref(null)
@@ -202,6 +214,13 @@ const stopConfirmDialogRef = ref(null)
 watch(canStopProcess, (canStop) => {
     if (!canStop) {
         stoppingProcess.value = false
+    }
+})
+
+// Reset stoppingAgent when the agent stops running
+watch(canStopAgent, (canStop) => {
+    if (!canStop) {
+        stoppingAgent.value = false
     }
 })
 
@@ -217,6 +236,18 @@ function handleStopProcess() {
             stoppingProcess.value = true
             killProcess(props.sessionId)
         }
+    }
+}
+
+/**
+ * Stop the current agent via the SDK's stop_task.
+ * No confirmation dialog needed for agents (no crons).
+ */
+function handleStopAgent() {
+    const parentId = session.value?.parent_session_id
+    if (canStopAgent.value && !stoppingAgent.value && parentId) {
+        stoppingAgent.value = true
+        stopAgent(parentId, props.sessionId)
     }
 }
 
@@ -541,6 +572,21 @@ defineExpose({
                         <wa-icon name="ban" label="Stop"></wa-icon>
                     </wa-button>
                     <AppTooltip :for="`session-header-${sessionId}-stop-button`">Stop the Claude Code process</AppTooltip>
+
+                    <wa-button
+                        v-if="canStopAgent"
+                        :id="`session-header-${sessionId}-stop-agent-button`"
+                        variant="danger"
+                        appearance="filled"
+                        size="small"
+                        class="stop-button reduced-height"
+                        :loading="stoppingAgent"
+                        :disabled="stoppingAgent"
+                        @click="handleStopAgent"
+                    >
+                        <wa-icon name="ban" label="Stop Agent"></wa-icon>
+                    </wa-button>
+                    <AppTooltip :for="`session-header-${sessionId}-stop-agent-button`">Stop this agent</AppTooltip>
                 </template>
             </div>
 

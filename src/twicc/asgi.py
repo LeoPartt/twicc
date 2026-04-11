@@ -639,6 +639,7 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         - ping: heartbeat, responds with pong
         - send_message: send a message to a Claude session (creates new or resumes existing)
         - kill_process: kill a running Claude process
+        - stop_agent: gracefully stop a running agent/task
         - pending_request_response: respond to a pending tool approval or clarifying question
         - suggest_title: request a title suggestion for a session
         - update_synced_settings: update synced settings and broadcast to all clients
@@ -658,6 +659,9 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
         elif msg_type == "kill_process":
             await self._handle_kill_process(content)
+
+        elif msg_type == "stop_agent":
+            await self._handle_stop_agent(content)
 
         elif msg_type == "user_draft_updated":
             await self._handle_user_draft_updated(content)
@@ -959,6 +963,41 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
             # Process not found or not in killable state - not an error, just log
             logger.debug(
                 "kill_process: session %s not killed (not found or not active)",
+                session_id,
+            )
+
+    async def _handle_stop_agent(self, content: dict) -> None:
+        """Handle stop_agent request from client.
+
+        Expected content format:
+        {
+            "type": "stop_agent",
+            "session_id": "claude-conv-xxx",
+            "agent_id": "a6c7d21"
+        }
+
+        Calls stop_task to gracefully stop a background agent.
+        """
+        session_id = content.get("session_id")
+        agent_id = content.get("agent_id")
+
+        if not session_id or not agent_id:
+            logger.warning("stop_agent missing session_id or agent_id")
+            await self.send_json(
+                {
+                    "type": "error",
+                    "message": "stop_agent requires session_id and agent_id",
+                }
+            )
+            return
+
+        manager = get_process_manager()
+        stopped = await manager.stop_agent(session_id, agent_id)
+
+        if not stopped:
+            logger.error(
+                "stop_agent: agent %s in session %s not stopped (not found or parent process not active)",
+                agent_id,
                 session_id,
             )
 

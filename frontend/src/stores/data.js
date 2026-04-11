@@ -475,6 +475,16 @@ export const useDataStore = defineStore('data', {
             return sessionLinks[toolId]
         },
 
+        /** Reverse lookup: find the agent link in the parent session that spawned a given subagent. */
+        getAgentLinkByAgentId: (state) => (parentSessionId, subagentSessionId) => {
+            const sessionLinks = state.localState.agentLinks[parentSessionId]
+            if (!sessionLinks) return null
+            for (const link of Object.values(sessionLinks)) {
+                if (link.agentId === subagentSessionId) return link
+            }
+            return null
+        },
+
         /** Reverse lookup: find the tool_use line number in the parent session that spawned a given subagent. */
         getAgentToolUseLineNum: (state) => (parentSessionId, subagentSessionId) => {
             const sessionLinks = state.localState.agentLinks[parentSessionId]

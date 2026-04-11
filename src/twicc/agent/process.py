@@ -877,6 +877,29 @@ class ClaudeProcess:
         await self._client.set_permission_mode(mode)
         self.permission_mode = mode
 
+    async def stop_agent(self, agent_id: str) -> None:
+        """Stop a running agent/task via the SDK.
+
+        Calls the SDK's stop_task() method to gracefully stop a specific agent
+        running within this process. The CLI will emit a task_notification with
+        status='stopped' in the JSONL stream.
+
+        Args:
+            agent_id: The agent ID (same as task_id for the SDK)
+
+        Raises:
+            RuntimeError: If the process is not started
+        """
+        if self._client is None:
+            raise RuntimeError("Process not started")
+
+        logger.info(
+            "Stopping agent %s in session %s",
+            agent_id,
+            self.session_id,
+        )
+        await self._client.stop_task(agent_id)
+
     async def set_model(self, sdk_model: str | None) -> None:
         """Change the AI model on the live SDK client.
 

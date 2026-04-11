@@ -442,6 +442,50 @@ class ProcessManager:
             await process.kill(reason=reason)
             return True
 
+    async def stop_agent(self, session_id: str, agent_id: str) -> bool:
+        """Stop a running background agent by its agent ID.
+
+        Verifies that the agent belongs to the given session, then calls
+        stop_task on the session's process.
+
+        Args:
+            session_id: The parent session that spawned this agent
+            agent_id: The agent ID (same as task_id for the SDK)
+
+        Returns:
+            True if stop_task was called, False if not found or not valid
+        """
+        from twicc.core.models import Session
+
+        # Verify the agent exists and belongs to the given session
+        exists = await asyncio.to_thread(
+            lambda: Session.objects.filter(
+                agent_id=agent_id, parent_session_id=session_id
+            ).exists()
+        )
+        if not exists:
+            logger.debug(
+                "stop_agent: no agent %s found for session %s", agent_id, session_id
+            )
+            return False
+
+        process = self._processes.get(session_id)
+        if not process or process.state == ProcessState.DEAD:
+            logger.debug("stop_agent: no running process for session %s", session_id)
+            return False
+
+        try:
+            await process.stop_agent(agent_id)
+            return True
+        except Exception as e:
+            logger.warning(
+                "stop_agent: failed to stop agent %s in session %s: %s",
+                agent_id,
+                session_id,
+                e,
+            )
+            return False
+
     async def resolve_pending_request(
         self, session_id: str, response: PermissionResultAllow | PermissionResultDeny
     ) -> bool:

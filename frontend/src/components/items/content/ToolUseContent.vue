@@ -9,6 +9,7 @@ import { apiFetch } from '../../../utils/api'
 import { getIconUrl, getFileIconId } from '../../../utils/fileIcons'
 import { getLanguageFromPath } from '../../../utils/languages'
 import { AGENT_TOOL_NAMES } from '../../../constants'
+import { stopAgent } from '../../../composables/useWebSocket'
 import { getSessionCutoffMs } from '../../../utils/sessions'
 import { getParsedContent, hasContent } from '../../../utils/parsedContent'
 import { getTodoDescription, isValidTodos } from '../../../utils/todoList'
@@ -802,6 +803,16 @@ const toolCommentsCount = computed(() => {
         .filter(c => c.source === 'tool' && c.sourceRef === props.toolId).length
 })
 
+// Track when a stop-agent request has been sent
+const stoppingAgent = ref(false)
+
+// Reset stoppingAgent when the agent stops running
+watch(isAgentRunning, (running) => {
+    if (!running) {
+        stoppingAgent.value = false
+    }
+})
+
 /**
  * Navigate to the subagent tab.
  */
@@ -815,6 +826,16 @@ function navigateToSubagent() {
             subagentId: agentId.value
         }
     })
+}
+
+/**
+ * Stop the running agent via the SDK.
+ */
+function handleStopAgent() {
+    if (agentId.value && isAgentRunning.value && !stoppingAgent.value) {
+        stoppingAgent.value = true
+        stopAgent(props.sessionId, agentId.value)
+    }
 }
 
 </script>
@@ -903,6 +924,20 @@ function navigateToSubagent() {
                         View Agent
                         <CodeCommentsIndicator slot="end" :count="agentCommentsCount" :show-tooltip="false" class="agent-comments-indicator" />
                     </wa-button>
+                    <wa-button
+                        v-if="isAgentRunning && agentLink?.isBackground"
+                        :id="`stop-agent-${props.toolId}`"
+                        size="small"
+                        variant="danger"
+                        appearance="filled"
+                        class="stop-agent-button"
+                        :loading="stoppingAgent"
+                        :disabled="stoppingAgent"
+                        @click.stop="handleStopAgent"
+                    >
+                        <wa-icon name="ban" label="Stop Agent"></wa-icon>
+                    </wa-button>
+                    <AppTooltip :for="`stop-agent-${props.toolId}`">Stop this agent</AppTooltip>
                 </template>
             </template>
             <!-- Tool running spinner (Bash, WebFetch, MCP, etc.) -->
