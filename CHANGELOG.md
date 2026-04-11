@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Workspaces: organize projects into named groups with optional color, scoped session list, search, snippets, aggregated stats, and auto-add projects via directory patterns
+- Text selection comments: select any text in the chat and add a comment to include in your next message to Claude
 - `--version` / `-V` flag to the CLI to display the current version without starting the server
 
 ### Changed

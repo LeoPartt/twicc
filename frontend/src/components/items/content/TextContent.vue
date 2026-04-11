@@ -27,4 +27,13 @@ const displayText = computed(() => {
     word-break: break-word;
     font-family: var(--wa-font-sans);
 }
+
+/* In user messages, code blocks should wrap instead of scrolling horizontally,
+   so that the full content is visible (and selectable for text comments). */
+.text-content[role="user"] :deep(.markdown-body pre) {
+    &, & code {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+}
 </style>

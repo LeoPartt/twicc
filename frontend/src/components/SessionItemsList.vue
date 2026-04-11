@@ -18,6 +18,7 @@ import { useCodeCommentsStore } from '../stores/codeComments'
 import MessageInput from './MessageInput.vue'
 import PendingRequestForm from './PendingRequestForm.vue'
 import ProcessIndicator from './ProcessIndicator.vue'
+import TextSelectionComment from './TextSelectionComment.vue'
 
 // All states should animate for the bottom process indicator
 const BOTTOM_INDICATOR_ANIMATE_STATES = ['assistant_turn', 'user_turn', 'dead']
@@ -1282,6 +1283,135 @@ async function handleForwardedDrop({ files, text }) {
     }
 }
 
+// =============================================================================
+// Text selection comment (ephemeral annotation on selected session text)
+// =============================================================================
+
+const textSelectionCommentRef = ref(null)
+const textSelectionText = ref('')
+const textSelectionPosition = ref(null) // { top, left } viewport coords, or null
+
+/**
+ * Compute the floating widget position from the current browser selection.
+ * Returns { top, left } (viewport coords, anchored at bottom-center of selection)
+ * or null if the selection is gone.
+ */
+function getSelectionPosition() {
+    try {
+        const selection = window.getSelection()
+        if (!selection?.rangeCount) return null
+        const range = selection.getRangeAt(0)
+        const rect = range.getBoundingClientRect()
+        // Rect can be zero-size if the selected nodes were unmounted (virtual scroller recycling)
+        if (!rect.width && !rect.height) return null
+        return { top: rect.bottom, left: rect.left + rect.width / 2 }
+    } catch {
+        return null
+    }
+}
+
+/**
+ * Check whether the current selection is valid for a text selection comment:
+ * inside the virtual scroller and NOT inside a CodeMirror editor (which has
+ * its own code comments system).
+ */
+function isSelectionInSessionContent(selection) {
+    const anchor = selection?.anchorNode
+    if (!anchor) return false
+    const scrollerEl = scrollerRef.value?.$el
+    if (!scrollerEl?.contains(anchor)) return false
+    // Exclude selections inside CodeMirror editors (they have their own comments)
+    if (anchor.closest?.('.cm-editor') || anchor.parentElement?.closest('.cm-editor')) return false
+    return true
+}
+
+/**
+ * On mouseup inside the session scroller, check for a text selection.
+ * If non-empty, show the floating comment button at the selection position.
+ */
+function handleTextSelectionMouseup() {
+    // Don't interfere if the comment panel is already expanded
+    if (textSelectionCommentRef.value?.isExpanded) return
+
+    const selection = window.getSelection()
+    const text = selection?.toString()?.trim()
+    if (!text) {
+        textSelectionPosition.value = null
+        return
+    }
+
+    if (!isSelectionInSessionContent(selection)) {
+        textSelectionPosition.value = null
+        return
+    }
+
+    textSelectionText.value = text
+    textSelectionPosition.value = getSelectionPosition()
+}
+
+/**
+ * On scroller scroll, reposition the floating button to follow the selection.
+ * When the panel is expanded (user is typing), leave it fixed in the viewport.
+ */
+function handleTextSelectionScroll() {
+    // Don't move the panel while the user is interacting with it
+    if (textSelectionCommentRef.value?.isExpanded) return
+
+    const pos = getSelectionPosition()
+    if (pos) {
+        textSelectionPosition.value = pos
+    } else {
+        // Selection lost (nodes unmounted by virtual scroller, or cleared)
+        closeTextSelectionComment()
+    }
+}
+
+/**
+ * On selectionchange (fired when the user drags mobile selection handles, or
+ * adjusts the selection in any way), update the stored text and button position.
+ */
+function handleSelectionChange() {
+    // Don't update while the panel is expanded (user is typing their comment)
+    if (textSelectionCommentRef.value?.isExpanded) return
+
+    const selection = window.getSelection()
+    const text = selection?.toString()?.trim()
+    if (!text) {
+        closeTextSelectionComment()
+        return
+    }
+
+    if (!isSelectionInSessionContent(selection)) {
+        closeTextSelectionComment()
+        return
+    }
+
+    textSelectionText.value = text
+    const pos = getSelectionPosition()
+    if (pos) {
+        textSelectionPosition.value = pos
+    } else {
+        closeTextSelectionComment()
+    }
+}
+
+// Attach/detach scroll + selectionchange listeners when the floating widget is shown/hidden
+watch(textSelectionPosition, (pos, oldPos) => {
+    const el = scrollerRef.value?.$el
+    if (pos && !oldPos) {
+        el?.addEventListener('scroll', handleTextSelectionScroll, { passive: true })
+        document.addEventListener('selectionchange', handleSelectionChange)
+    } else if (!pos && oldPos) {
+        el?.removeEventListener('scroll', handleTextSelectionScroll)
+        document.removeEventListener('selectionchange', handleSelectionChange)
+    }
+})
+
+function closeTextSelectionComment() {
+    textSelectionPosition.value = null
+    textSelectionText.value = ''
+}
+
 defineExpose({
     getScrollerElement,
     handleForwardedDrop,
@@ -1297,6 +1427,7 @@ defineExpose({
         @dragleave="onDragLeave"
         @dragover="onDragOver"
         @drop="onDrop"
+        @mouseup="handleTextSelectionMouseup"
     >
         <!-- In-session search bar (Ctrl+F) -->
         <SessionSearchBar
@@ -1442,6 +1573,17 @@ defineExpose({
                 <span>{{ dragOverType === 'files' ? 'Drop files here' : 'Drop text into message' }}</span>
             </div>
         </div>
+
+        <!-- Ephemeral text selection comment widget (teleported to body to avoid overflow clipping) -->
+        <Teleport to="body">
+            <TextSelectionComment
+                v-if="textSelectionPosition"
+                ref="textSelectionCommentRef"
+                :selected-text="textSelectionText"
+                :position="textSelectionPosition"
+                @close="closeTextSelectionComment"
+            />
+        </Teleport>
     </div>
 </template>
 

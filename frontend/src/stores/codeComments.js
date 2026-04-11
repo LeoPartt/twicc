@@ -323,11 +323,20 @@ function makeFence(text) {
 
 /**
  * Format a single comment for insertion into the message textarea.
+ * @param {Object} comment - Comment object with lineText, content, filePath, etc.
+ * @param {Object} [options]
+ * @param {boolean} [options.isSelectedText=false] - If true, formats as a session text
+ *   comment ("Comment on selected text:") instead of a file/line comment.
  */
-export function formatComment(comment) {
-    const lang = getLanguageFromPath(comment.filePath) || ''
+export function formatComment(comment, { isSelectedText = false } = {}) {
     const fence = makeFence(comment.lineText)
     const quotedComment = comment.content.split('\n').map(line => `> ${line}`).join('\n')
+
+    if (isSelectedText) {
+        return `\n---\nComment on selected text:\n${fence}\n${comment.lineText}\n${fence}\n\n${quotedComment}`
+    }
+
+    const lang = getLanguageFromPath(comment.filePath) || ''
     const line = comment.displayLineNumber ?? comment.lineNumber
     return `\n---\nComment on **\`${comment.filePath}\`** line ${line}:\n${fence}${lang}\n${comment.lineText}\n${fence}\n\n${quotedComment}`
 }
