@@ -4,12 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Some entries include illustrative screenshots in nested sub-lists.
 
-## [Unreleased]
+## [1.4.0] - 2026-04-11
 
 ### Added
 
 - Workspaces: organize projects into named groups with optional color, scoped session list, search, snippets, aggregated stats, and auto-add projects via directory patterns
+  - ![Workspaces management dialog](frontend/public/whats-new/v1.4/workspaces1.webp)
+  - ![Workspace editing dialog](frontend/public/whats-new/v1.4/workspaces2.webp)
+  - ![Project and workspace selector](frontend/public/whats-new/v1.4/workspaces3.webp)
 - Text selection comments: select any text in the chat and add a comment to include in your next message to Claude
+  - ![Text selection with comment icon](frontend/public/whats-new/v1.4/text-comments1.webp)
+  - ![Comment input popup](frontend/public/whats-new/v1.4/text-comments2.webp)
 - `--version` / `-V` flag to the CLI to display the current version without starting the server
 
 ### Changed
@@ -17,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Bump `claude-agent-sdk` from 0.1.56 to 0.1.58 (bundled Claude Code CLI: 2.1.92 → 2.1.97)
 - Improve windowed burn rates in usage tooltips and graphs: remove misleading smoothed rate, add cross-period calculation for early-window accuracy, rename to "Burn rate (last X)", and add 6h/12h range options to the graph
 - Add permanent install instructions (`uv tool install twicc`) to the README alongside the existing `uvx` quick start
+  - ![Permanent install instructions in README](frontend/public/whats-new/v1.4/permanent-install.webp)
 - Auto-focus the terminal when switching to the terminal tab, and auto-focus the message input when switching to the chat tab via keyboard navigation
 - Redesign Claude session settings (model, effort, permissions...): replace "Always apply" and "Pin to session" with a simpler "Default" vs "Forced" model, and apply changes at the right time depending on the setting type
 
