@@ -41,6 +41,7 @@ const canAdd = computed(() => !!commentText.value.trim() && !!insertTextAtCursor
 /**
  * After the panel renders, measure its bounding rect and nudge it so it stays
  * fully visible inside the viewport (with an 8 px margin on every side).
+ * Uses visualViewport when available so it accounts for the mobile keyboard.
  */
 function clampToViewport() {
     const el = rootRef.value
@@ -48,8 +49,11 @@ function clampToViewport() {
 
     const rect = el.getBoundingClientRect()
     const margin = 8
-    const vw = window.innerWidth
-    const vh = window.innerHeight
+    const vv = window.visualViewport
+    const vw = vv?.width ?? window.innerWidth
+    // visualViewport.offsetTop + height gives the visible bottom edge in
+    // layout-viewport coordinates (same coordinate space as getBoundingClientRect).
+    const vh = vv ? (vv.offsetTop + vv.height) : window.innerHeight
 
     let dx = 0
     let dy = 0
@@ -62,12 +66,18 @@ function clampToViewport() {
     if (rect.bottom > vh - margin) dy = (vh - margin) - rect.bottom
     if (rect.top + dy < margin) dy = margin - rect.top
 
-    if (dx || dy) positionAdjust.value = { dx, dy }
+    positionAdjust.value = { dx, dy }
+}
+
+/** Re-clamp when the mobile keyboard opens/closes. */
+function onVisualViewportResize() {
+    if (expanded.value) clampToViewport()
 }
 
 function expand() {
     positionAdjust.value = { dx: 0, dy: 0 }
     expanded.value = true
+    window.visualViewport?.addEventListener('resize', onVisualViewportResize)
     nextTick(() => {
         clampToViewport()
         textareaRef.value?.focus()
@@ -75,6 +85,7 @@ function expand() {
 }
 
 function close() {
+    window.visualViewport?.removeEventListener('resize', onVisualViewportResize)
     emit('close')
 }
 
@@ -108,6 +119,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     document.removeEventListener('mousedown', handleDocumentMousedown, true)
+    window.visualViewport?.removeEventListener('resize', onVisualViewportResize)
 })
 
 defineExpose({ isExpanded: expanded })
@@ -201,7 +213,7 @@ defineExpose({ isExpanded: expanded })
     border-left: 3px solid var(--wa-color-brand);
     border-radius: var(--wa-border-radius-s);
     background: var(--wa-color-surface-lowered);
-    font-size: var(--wa-font-size-s);
+    font-size: var(--wa-font-size-m);
     line-height: 1.4;
     color: var(--wa-color-text-quiet);
     overflow: scroll;
@@ -212,7 +224,7 @@ defineExpose({ isExpanded: expanded })
 /* ── Help text ───────────────────────────────────────────────────── */
 
 .tsc-help {
-    font-size: var(--wa-font-size-xs);
+    font-size: var(--wa-font-size-s);
     line-height: 1.3;
 }
 
