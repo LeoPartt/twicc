@@ -54,6 +54,7 @@ export const SETTINGS_SCHEMA = {
     defaultClaudeInChrome: null,
     defaultContextMax: null,
     // --- Not persisted - runtime state ---
+    _devMode: false,
     _effectiveTheme: null,
     _isTouchDevice: false,
     _isMac: false,
@@ -124,7 +125,9 @@ function loadSettings() {
             }
 
             // Only keep keys that exist in schema and have valid values
+            // Skip _-prefixed keys (runtime state, not persisted)
             for (const key of Object.keys(SETTINGS_SCHEMA)) {
+                if (key.startsWith('_')) continue
                 if (key in parsed) {
                     const validator = SETTINGS_VALIDATORS[key]
                     if (!validator || validator(parsed[key])) {
@@ -150,7 +153,12 @@ function loadSettings() {
  */
 function saveSettings(settings) {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+        // Exclude _-prefixed keys (runtime state, not persisted)
+        const toSave = {}
+        for (const [key, value] of Object.entries(settings)) {
+            if (!key.startsWith('_')) toSave[key] = value
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave))
     } catch (e) {
         console.warn('Failed to save settings to localStorage:', e)
     }
@@ -194,6 +202,10 @@ export const useSettingsStore = defineStore('settings', {
         isNotifUserTurnBrowser: (state) => state.notifUserTurnBrowser,
         getNotifPendingRequestSound: (state) => state.notifPendingRequestSound,
         isNotifPendingRequestBrowser: (state) => state.notifPendingRequestBrowser,
+        /**
+         * Whether the backend is running in dev mode (source layout) vs installed package.
+         */
+        isDevMode: (state) => state._devMode,
         /**
          * Effective theme: always returns 'light' or 'dark', never 'system'.
          * Takes into account the system preference when themeMode is 'system'.
@@ -595,14 +607,16 @@ export function classifyClaudeSettingsChanges(current, requested) {
  * @param {Object} defaultSettings - Default values from the backend
  * @param {Object} currentSettings - Current synced settings from the backend
  * @param {Object} claudeSettingsCategories - Claude settings categories from the backend
+ * @param {boolean} devMode - Whether the backend is running in dev mode
  */
-export function applyDefaultSettings(defaultSettings, currentSettings, claudeSettingsCategories) {
+export function applyDefaultSettings(defaultSettings, currentSettings, claudeSettingsCategories, devMode) {
     if (defaultSettings && typeof defaultSettings === 'object') {
         Object.assign(SETTINGS_SCHEMA, defaultSettings)
     }
     if (claudeSettingsCategories && typeof claudeSettingsCategories === 'object') {
         _claudeSettingsCategories = claudeSettingsCategories
     }
+    SETTINGS_SCHEMA._devMode = !!devMode
     // Store current settings for applySyncedSettings() to use after store init
     _pendingSyncedSettings = currentSettings
 }

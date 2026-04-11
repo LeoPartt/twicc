@@ -10,6 +10,7 @@ urlpatterns = [
     path("api/auth/logout/", auth_views.logout),
     # API endpoints
     path("api/settings/", views.synced_settings),
+    path("api/changelog/", views.changelog),
     path("api/home/", views.home_data),
     path("api/daily-activity/", views.daily_activity),  # Global daily activity
     path("api/sessions/", views.all_sessions),

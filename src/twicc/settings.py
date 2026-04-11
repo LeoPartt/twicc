@@ -9,6 +9,7 @@ from twicc.version import get_version
 PACKAGE_DIR = Path(__file__).resolve().parent  # src/twicc/
 
 APP_VERSION = get_version()
+DEV_MODE = PACKAGE_DIR.parent.name == "src"
 
 # Load .env from the data directory (~/.twicc/.env or $TWICC_DATA_DIR/.env)
 # Idempotent: no-op if already loaded by run.py

@@ -813,7 +813,7 @@ function onChangelogClose() {
         <wa-divider></wa-divider>
         <footer v-if="currentVersion" class="settings-footer">
             <span class="settings-footer-version">
-                <a href="https://github.com/twidi/twicc/" target="_blank" rel="noopener">TwiCC v{{ currentVersion }}</a>
+                <a href="https://github.com/twidi/twicc/" target="_blank" rel="noopener">TwiCC v{{ currentVersion }}</a><template v-if="store.isDevMode"> [dev]</template>
                 <template v-if="latestVersion">
                     &rarr;
                     <a :href="latestVersion.releaseUrl" target="_blank" rel="noopener">v{{ latestVersion.version }} available</a>

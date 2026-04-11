@@ -1,12 +1,14 @@
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
 import { useDataStore } from '../stores/data.js'
+import { useSettingsStore } from '../stores/settings.js'
 import { fetchChangelog, resolveImageLocalUrl, resolveImageGitHubUrl } from '../utils/changelog.js'
 import { renderMarkdown } from '../utils/markdown.js'
 
 const emit = defineEmits(['close'])
 
 const store = useDataStore()
+const settingsStore = useSettingsStore()
 
 // Sentinel key for the combined "previous → current" entry in the version selector
 const COMBINED_VERSION_KEY = '__combined__'
@@ -172,7 +174,7 @@ async function open() {
     dialogRef.value.open = true
 
     try {
-        const data = await fetchChangelog()
+        const data = await fetchChangelog(settingsStore.isDevMode)
         // Build combined entry if we have a previous version different from current
         const combined = buildCombinedVersion(data, store.previousChangelogVersion, store.currentVersion)
         versions.value = combined ? [combined, ...data] : data

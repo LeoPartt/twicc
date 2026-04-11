@@ -1553,7 +1553,18 @@ def synced_settings(request):
         "settings": read_synced_settings(),
         "default_settings": SYNCED_SETTINGS_DEFAULTS,
         "claude_settings_categories": CLAUDE_SETTINGS_CATEGORIES,
+        "dev_mode": settings.DEV_MODE,
     })
+
+
+def changelog(request):
+    """GET /api/changelog/ - Serve the local CHANGELOG.md (dev mode only)."""
+    if not settings.DEV_MODE:
+        raise Http404
+    changelog_path = settings.PACKAGE_DIR.parent.parent / "CHANGELOG.md"
+    if not changelog_path.is_file():
+        raise Http404
+    return HttpResponse(changelog_path.read_bytes(), content_type="text/plain; charset=utf-8")
 
 
 def spa_index(request):

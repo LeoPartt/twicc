@@ -96,8 +96,8 @@ app.use(notivue)
     try {
         const resp = await fetch('/api/settings/')
         if (resp.ok) {
-            const { settings, default_settings, claude_settings_categories } = await resp.json()
-            applyDefaultSettings(default_settings, settings, claude_settings_categories)
+            const { settings, default_settings, claude_settings_categories, dev_mode } = await resp.json()
+            applyDefaultSettings(default_settings, settings, claude_settings_categories, dev_mode)
         } else {
             settingsFailed = true
         }

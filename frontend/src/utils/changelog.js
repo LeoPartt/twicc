@@ -5,13 +5,18 @@ const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/twidi/twicc/refs/head
 const CHANGELOG_URL = GITHUB_RAW_BASE + 'CHANGELOG.md'
 
 /**
- * Fetch and parse the changelog from GitHub.
+ * Fetch and parse the changelog.
+ * In dev mode, fetches from the local backend endpoint; otherwise from GitHub.
+ * @param {boolean} devMode - Whether the backend is running in dev mode
  * @returns {Promise<Array<{version: string, date: string|null, entries: Array}>>}
  */
-export async function fetchChangelog() {
-    const resp = await fetch(CHANGELOG_URL)
+export async function fetchChangelog(devMode = false) {
+    const url = devMode ? '/api/changelog/' : CHANGELOG_URL
+    const resp = await fetch(url)
     if (!resp.ok) throw new Error(`Failed to fetch changelog: ${resp.status}`)
-    return parseChangelog(await resp.text())
+    const versions = parseChangelog(await resp.text())
+    // In non-dev mode, only keep real releases (version starts with a digit)
+    return devMode ? versions : versions.filter(v => /^\d/.test(v.version))
 }
 
 /**
