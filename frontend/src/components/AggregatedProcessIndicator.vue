@@ -3,13 +3,13 @@
  * AggregatedProcessIndicator - Shows aggregated process state or unread count
  * for one or more projects.
  *
- * Mirrors per-session indicator logic at the project/workspace level:
- * - No active process: shows unread indicator (eye + count) if any, otherwise nothing.
- * - Active process in user_turn + unread sessions: shows unread indicator instead.
- * - Active process (any other state, or user_turn without unread): shows process indicator.
- *
- * Process state priority: dead > user_turn > starting > assistant_turn.
- * Only assistant_turn has pulse animation.
+ * Priority cascade (highest → lowest):
+ * 1. Pending request: hand icon (waiting for user response)
+ * 2. Unread sessions: eye icon
+ * 3. Assistant turn: robot icon (Claude is actively working)
+ * 4. Active crons: clock icon
+ * 5. Active processes (none of the above): green check
+ * 6. Nothing active: no indicator
  *
  * Used in project cards, workspace cards, detail panels, and project selectors
  * to quickly identify which projects/workspaces require attention.
@@ -40,60 +40,25 @@ const props = defineProps({
 
 const dataStore = useDataStore()
 
-// Priority order (higher = more important)
-const STATE_PRIORITY = {
-    assistant_turn: 1,
-    starting: 2,
-    user_turn: 3,
-    dead: 4,
-}
-
 /** Set of project IDs for fast lookup. */
 const projectIdSet = computed(() => new Set(props.projectIds))
 
-/** Aggregated most-important process state across all projects. */
-const aggregatedState = computed(() => {
-    let mostImportantState = null
-    let highestPriority = 0
+/** Aggregated process info: scans all process states for relevant projects. */
+const processInfo = computed(() => {
+    let processCount = 0
+    let pendingRequestCount = 0
+    let hasAssistantTurn = false
+    let activeCronCount = 0
 
-    for (const processState of Object.values(dataStore.processStates)) {
-        if (!projectIdSet.value.has(processState.project_id)) continue
-        const p = STATE_PRIORITY[processState.state] || 0
-        if (p > highestPriority) {
-            highestPriority = p
-            mostImportantState = processState.state
-        }
+    for (const ps of Object.values(dataStore.processStates)) {
+        if (!projectIdSet.value.has(ps.project_id)) continue
+        processCount++
+        if (ps.pending_request) pendingRequestCount++
+        if (ps.state === 'assistant_turn') hasAssistantTurn = true
+        activeCronCount += ps.active_crons?.length || 0
     }
 
-    return mostImportantState
-})
-
-/** Total count of active processes across all projects. */
-const processCount = computed(() => {
-    let count = 0
-    for (const processState of Object.values(dataStore.processStates)) {
-        if (projectIdSet.value.has(processState.project_id)) count++
-    }
-    return count
-})
-
-/** Whether any session across the projects has active cron jobs. */
-const hasActiveCrons = computed(() => {
-    for (const processState of Object.values(dataStore.processStates)) {
-        if (!projectIdSet.value.has(processState.project_id)) continue
-        if (processState.active_crons?.length > 0) return true
-    }
-    return false
-})
-
-/** Total number of active cron jobs across all projects. */
-const activeCronCount = computed(() => {
-    let count = 0
-    for (const processState of Object.values(dataStore.processStates)) {
-        if (!projectIdSet.value.has(processState.project_id)) continue
-        count += processState.active_crons?.length || 0
-    }
-    return count
+    return { processCount, pendingRequestCount, hasAssistantTurn, activeCronCount }
 })
 
 /** Number of sessions with unread content across all projects. */
@@ -113,27 +78,52 @@ const unreadCount = computed(() => {
 })
 
 /**
- * Show unread indicator instead of process/nothing when:
- * - No active process and there are unread sessions, OR
- * - Active process in user_turn and there are unread sessions
- * (mirrors per-session logic: unread replaces user_turn, but not other states)
+ * Priority cascade: pending_request > unread > assistant_turn > crons > active_process > nothing.
  */
-const showUnread = computed(() =>
-    unreadCount.value > 0 && (!aggregatedState.value || aggregatedState.value === 'user_turn')
-)
-
-// Tooltip text with count
-const tooltipText = computed(() => {
-    const count = processCount.value
-    let text = `${count} active Claude Code session${count !== 1 ? 's' : ''}`
-    const cronCount = activeCronCount.value
-    if (cronCount > 0) {
-        text += ` (${cronCount} active cron${cronCount > 1 ? 's' : ''})`
-    }
-    return text
+const displayMode = computed(() => {
+    const info = processInfo.value
+    if (info.pendingRequestCount > 0) return 'pending_request'
+    if (unreadCount.value > 0) return 'unread'
+    if (info.hasAssistantTurn) return 'assistant_turn'
+    if (info.activeCronCount > 0) return 'crons'
+    if (info.processCount > 0) return 'active_process'
+    return null
 })
 
-// Unique ID for this instance (avoids collisions when multiple instances exist)
+/** State to pass to ProcessIndicator for the three process-based display modes. */
+const processIndicatorState = computed(() => {
+    if (displayMode.value === 'assistant_turn') return 'assistant_turn'
+    return 'user_turn' // crons and active_process both render as user_turn variants
+})
+
+// Tooltip text
+const tooltipText = computed(() => {
+    const info = processInfo.value
+    const mode = displayMode.value
+
+    const sessionLabel = `${info.processCount} active session${info.processCount !== 1 ? 's' : ''}`
+    const cronSuffix = info.activeCronCount > 0
+        ? ` (${info.activeCronCount} active cron${info.activeCronCount > 1 ? 's' : ''})`
+        : ''
+
+    if (mode === 'pending_request') {
+        const pendingLabel = info.pendingRequestCount === 1
+            ? 'Pending request'
+            : `${info.pendingRequestCount} pending requests`
+        return `${pendingLabel} · ${sessionLabel}${cronSuffix}`
+    }
+
+    if (mode === 'unread') {
+        const unreadLabel = `${unreadCount.value} unread session${unreadCount.value !== 1 ? 's' : ''}`
+        return info.processCount > 0
+            ? `${unreadLabel} · ${sessionLabel}${cronSuffix}`
+            : unreadLabel
+    }
+
+    return `${sessionLabel}${cronSuffix}`
+})
+
+// Unique ID for this instance
 const indicatorId = useId()
 
 // Only assistant_turn should animate in this context
@@ -141,27 +131,55 @@ const animateStates = ['assistant_turn']
 </script>
 
 <template>
-    <!-- Unread indicator: replaces user_turn or stands alone when no process -->
-    <template v-if="showUnread">
+    <!-- Pending request: hand icon (highest priority) -->
+    <template v-if="displayMode === 'pending_request'">
+        <span :id="indicatorId" class="pending-indicator" :class="`pending-indicator--${size}`">
+            <wa-icon name="hand"></wa-icon>
+        </span>
+        <AppTooltip :for="indicatorId">{{ tooltipText }}</AppTooltip>
+    </template>
+    <!-- Unread sessions: eye icon -->
+    <template v-else-if="displayMode === 'unread'">
         <span :id="indicatorId" class="unread-indicator" :class="`unread-indicator--${size}`">
             <wa-icon name="eye"></wa-icon>
         </span>
-        <AppTooltip :for="indicatorId">{{ unreadCount }} unread session{{ unreadCount !== 1 ? 's' : '' }}{{ aggregatedState ? ` · ${tooltipText}` : '' }}</AppTooltip>
+        <AppTooltip :for="indicatorId">{{ tooltipText }}</AppTooltip>
     </template>
-    <!-- Process indicator: active process without unread sessions -->
-    <template v-else-if="aggregatedState">
+    <!-- Process states: assistant_turn / crons / active_process -->
+    <template v-else-if="displayMode">
         <ProcessIndicator
             :id="indicatorId"
-            :state="aggregatedState"
+            :state="processIndicatorState"
             :size="size"
             :animate-states="animateStates"
-            :has-active-crons="hasActiveCrons"
+            :has-active-crons="displayMode === 'crons'"
         />
         <AppTooltip :for="indicatorId">{{ tooltipText }}</AppTooltip>
     </template>
 </template>
 
 <style scoped>
+/* Pending request indicator — orange hand icon with pulse */
+.pending-indicator {
+    display: inline-flex;
+    align-items: center;
+    color: var(--wa-color-warning-60);
+    animation: pending-pulse 1.5s ease-in-out infinite;
+}
+
+.pending-indicator--small {
+    font-size: var(--wa-font-size-s);
+}
+
+.pending-indicator--medium {
+    font-size: var(--wa-font-size-l);
+}
+
+.pending-indicator--large {
+    font-size: var(--wa-font-size-2xl);
+}
+
+/* Unread indicator — orange eye icon */
 .unread-indicator {
     display: inline-flex;
     align-items: center;
@@ -178,5 +196,10 @@ const animateStates = ['assistant_turn']
 
 .unread-indicator--large {
     font-size: var(--wa-font-size-2xl);
+}
+
+@keyframes pending-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
 }
 </style>
