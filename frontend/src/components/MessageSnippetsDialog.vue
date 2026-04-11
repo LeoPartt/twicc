@@ -388,7 +388,7 @@ defineExpose({ open, close })
                     <span v-if="group.scope === 'global'" class="group-header-global">All projects</span>
                     <span v-else-if="group.scope.startsWith('workspace:')" class="group-header-workspace">
                         <wa-icon name="layer-group" auto-width :style="workspaceColorFromScope(group.scope) ? { color: workspaceColorFromScope(group.scope) } : null"></wa-icon>
-                        {{ workspaceNameFromScope(group.scope) }}
+                        Workspace {{ workspaceNameFromScope(group.scope) }}
                     </span>
                     <ProjectBadge v-else :project-id="projectIdFromScope(group.scope)" use-directory-for-unnamed />
                 </div>
