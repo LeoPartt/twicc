@@ -635,6 +635,15 @@ watch(shouldAutoOpen, (val) => {
     }
 }, { immediate: true })
 
+// Auto-close: if the diff was auto-opened and the tool result comes back with
+// an error, close it — the diff will be stale since Claude will retry shortly.
+watch(isToolError, (errored) => {
+    if (errored && hasAutoOpened && isOpen.value) {
+        isOpen.value = false
+        dataStore.setDetailOpen(props.sessionId, props.toolId, false)
+    }
+})
+
 // Diff stats for Edit/Write tools (parsed from the extra JSON field)
 const FILE_CHANGE_TOOLS = new Set(['Edit', 'Write'])
 const fileChangeStats = computed(() => {
