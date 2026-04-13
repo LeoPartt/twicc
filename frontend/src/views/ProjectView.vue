@@ -1479,7 +1479,11 @@ function updateSidebarClosedClass(closed) {
                     </KeepAlive>
                 </router-view>
             </div>
-            <ProjectDetailPanel v-if="!sessionId" :project-id="effectiveProjectId" />
+            <div v-show="!sessionId" class="project-detail-content">
+                <KeepAlive>
+                    <ProjectDetailPanel :project-id="effectiveProjectId" :active="!sessionId" :key="effectiveProjectId" />
+                </KeepAlive>
+            </div>
         </main>
     </wa-split-panel>
 
@@ -1715,7 +1719,8 @@ wa-split-panel::part(divider) {
     container-name: main-content;
 }
 
-.session-content {
+.session-content,
+.project-detail-content {
     height: 100%;
 }
 

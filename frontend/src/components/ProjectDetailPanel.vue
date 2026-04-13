@@ -2,7 +2,7 @@
 // ProjectDetailPanel.vue - Detail panel shown when no session is selected.
 // Delegates header display to ProjectDetailHeader, then shows tabbed content.
 
-import { ref, computed } from 'vue'
+import { ref, computed, onActivated, onDeactivated } from 'vue'
 import { useWorkspacesStore } from '../stores/workspaces'
 import { isWorkspaceProjectId, extractWorkspaceId } from '../utils/workspaceIds'
 import ProjectDetailHeader from './ProjectDetailHeader.vue'
@@ -14,9 +14,22 @@ const props = defineProps({
         type: String,
         required: true,
     },
+    /** Whether this panel is currently visible (not hidden behind a session view) */
+    active: {
+        type: Boolean,
+        default: true,
+    },
 })
 
 const workspacesStore = useWorkspacesStore()
+
+// KeepAlive lifecycle — track whether this instance is active (not cached)
+const isKeptAlive = ref(true)
+onActivated(() => { isKeptAlive.value = true })
+onDeactivated(() => { isKeptAlive.value = false })
+
+// Effective active state: visible AND not deactivated by KeepAlive
+const isActive = computed(() => props.active && isKeptAlive.value)
 
 // Workspace project IDs (needed for ContributionGraphs)
 const isWorkspaceMode = computed(() => isWorkspaceProjectId(props.projectId))
