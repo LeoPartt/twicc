@@ -33,6 +33,7 @@ const routes = [
         component: ProjectView,
         children: [
             { path: '', name: 'project', component: { render: () => null } },
+            { path: 'terminal', name: 'project-terminal', component: { render: () => null } },
             {
                 path: 'session/:sessionId',
                 name: 'session',
@@ -58,6 +59,7 @@ const routes = [
         component: ProjectView,
         children: [
             { path: '', name: 'projects-all', component: { render: () => null } },
+            { path: 'terminal', name: 'projects-terminal', component: { render: () => null } },
             {
                 path: ':projectId/session/:sessionId',
                 name: 'projects-session',

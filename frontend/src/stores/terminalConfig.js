@@ -26,6 +26,29 @@ export const useTerminalConfigStore = defineStore('terminalConfig', {
         },
 
         /**
+         * Get global snippets only (for "All Projects" terminal).
+         * @returns {Function} () => Array
+         */
+        getGlobalSnippets: (state) => () => {
+            return (state.snippets.global || []).map(s => ({ ...s, _scope: 'global' }))
+        },
+
+        /**
+         * Get global + workspace(s) + all projects in the workspace (for workspace terminals).
+         * @returns {Function} (projectIds: string[], workspaceIds?: string[]) => Array
+         */
+        getSnippetsForWorkspace: (state) => (projectIds, workspaceIds = null) => {
+            const global = (state.snippets.global || []).map(s => ({ ...s, _scope: 'global' }))
+            const wsSnippets = (workspaceIds || []).flatMap(wsId =>
+                (state.snippets[`workspace:${wsId}`] || []).map(s => ({ ...s, _scope: `workspace:${wsId}` }))
+            )
+            const projSnippets = projectIds.flatMap(pid =>
+                (state.snippets[`project:${pid}`] || []).map(s => ({ ...s, _scope: `project:${pid}` }))
+            )
+            return [...global, ...wsSnippets, ...projSnippets]
+        },
+
+        /**
          * Check if there are any snippets for a given project (global, workspace(s) or project-specific).
          * Used for visibility logic on desktop.
          * @returns {Function} (projectId: string, workspaceIds?: string[]) => boolean

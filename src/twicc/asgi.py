@@ -645,7 +645,7 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         - update_synced_settings: update synced settings and broadcast to all clients
         - session_viewed: mark a session as viewed by the user (updates last_viewed_at)
         - mark_session_read_state: explicitly mark a session as read or unread
-        - list_terminals: list active tmux terminal indices for a session
+        - list_terminals: list active tmux terminal indices for a terminal context
         - kill_terminal: kill a secondary terminal's tmux session and broadcast
         - changelog_seen: acknowledge that the user has seen the changelog for a version
         """
@@ -1400,29 +1400,29 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         await sync_to_async(_persist)()
 
     async def _handle_list_terminals(self, data):
-        """Handle list_terminals request: return active tmux terminal indices (with labels) for a session."""
-        session_id = data.get("session_id")
-        if not session_id:
-            await self.send_json({"type": "error", "message": "Missing session_id"})
+        """Handle list_terminals request: return active tmux terminal indices (with labels) for a terminal context."""
+        terminal_context = data.get("terminal_context")
+        if not terminal_context:
+            await self.send_json({"type": "error", "message": "Missing terminal_context"})
             return
 
-        from twicc.terminal import list_tmux_sessions_for_session
+        from twicc.terminal import list_tmux_terminals
 
-        terminals = await asyncio.to_thread(list_tmux_sessions_for_session, session_id)
+        terminals = await asyncio.to_thread(list_tmux_terminals, terminal_context)
 
         await self.send_json({
             "type": "terminal_list",
-            "session_id": session_id,
+            "terminal_context": terminal_context,
             "terminals": [t.index for t in terminals],
             "labels": {str(t.index): t.label for t in terminals if t.label},
         })
 
     async def _handle_kill_terminal(self, data):
         """Handle kill_terminal request: kill a secondary terminal's tmux session and broadcast."""
-        session_id = data.get("session_id")
+        terminal_context = data.get("terminal_context")
         terminal_index = data.get("terminal_index")
-        if not session_id or terminal_index is None:
-            await self.send_json({"type": "error", "message": "Missing session_id or terminal_index"})
+        if not terminal_context or terminal_index is None:
+            await self.send_json({"type": "error", "message": "Missing terminal_context or terminal_index"})
             return
 
         # Safety: never kill the main terminal via this handler
@@ -1430,9 +1430,9 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"type": "error", "message": "Cannot kill main terminal"})
             return
 
-        from twicc.terminal import kill_tmux_session
+        from twicc.terminal import kill_tmux_terminal
 
-        await asyncio.to_thread(kill_tmux_session, session_id, terminal_index)
+        await asyncio.to_thread(kill_tmux_terminal, terminal_context, terminal_index)
 
         # Broadcast to all clients
         await self.channel_layer.group_send(
@@ -1441,7 +1441,7 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
                 "type": "broadcast",
                 "data": {
                     "type": "terminal_killed",
-                    "session_id": session_id,
+                    "terminal_context": terminal_context,
                     "terminal_index": terminal_index,
                 },
             },
@@ -1454,11 +1454,11 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         persists across reconnections. The rename is broadcast to all clients
         for cross-device sync.
         """
-        session_id = data.get("session_id")
+        terminal_context = data.get("terminal_context")
         terminal_index = data.get("terminal_index")
         label = data.get("label", "")
-        if not session_id or terminal_index is None:
-            await self.send_json({"type": "error", "message": "Missing session_id or terminal_index"})
+        if not terminal_context or terminal_index is None:
+            await self.send_json({"type": "error", "message": "Missing terminal_context or terminal_index"})
             return
 
         from twicc.terminal import TERMINAL_LABEL_MAX_LENGTH, set_tmux_terminal_label
@@ -1466,7 +1466,7 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         # Sanitize: trim and truncate
         label = label.strip()[:TERMINAL_LABEL_MAX_LENGTH]
 
-        await asyncio.to_thread(set_tmux_terminal_label, session_id, terminal_index, label)
+        await asyncio.to_thread(set_tmux_terminal_label, terminal_context, terminal_index, label)
 
         # Broadcast to all clients (including the sender, for confirmation)
         await self.channel_layer.group_send(
@@ -1475,7 +1475,7 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
                 "type": "broadcast",
                 "data": {
                     "type": "terminal_renamed",
-                    "session_id": session_id,
+                    "terminal_context": terminal_context,
                     "terminal_index": terminal_index,
                     "label": label,
                 },
@@ -1504,7 +1504,12 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
 
 websocket_urlpatterns = [
+    # Terminal with session context
     path("ws/terminal/<str:project_id>/<str:session_id>/<int:terminal_index>/", terminal_application),
+    # Terminal with project context only (no session)
+    path("ws/terminal/<str:project_id>/<int:terminal_index>/", terminal_application),
+    # Terminal with no project (global/workspace context)
+    path("ws/terminal/<int:terminal_index>/", terminal_application),
     path("ws/", UpdatesConsumer.as_asgi()),
 ]
 

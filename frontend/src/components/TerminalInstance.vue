@@ -5,7 +5,19 @@ import { useTerminal } from '../composables/useTerminal'
 const emit = defineEmits(['disconnected'])
 
 const props = defineProps({
+    contextKey: {
+        type: String,
+        required: true,
+    },
     sessionId: {
+        type: String,
+        default: null,
+    },
+    projectId: {
+        type: String,
+        default: null,
+    },
+    cwd: {
         type: String,
         default: null,
     },
@@ -28,7 +40,11 @@ const {
     activeModifiers, lockedModifiers,
     handleExtraKeyInput, handleExtraKeyModifierToggle, handleExtraKeyPaste,
     handleComboPress, handleSnippetPress,
-} = useTerminal(props.sessionId, props.terminalIndex)
+} = useTerminal(props.contextKey, props.terminalIndex, {
+    sessionId: props.sessionId,
+    projectId: props.projectId,
+    cwd: props.cwd,
+})
 
 // Register terminal API with parent (TerminalPanel) for toolbar + ExtraKeysBar routing
 const registerTerminal = inject('registerTerminal', null)

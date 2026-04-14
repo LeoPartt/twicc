@@ -795,25 +795,25 @@ export function useWebSocket() {
             case 'terminal_list':
                 import('../stores/terminalTabs').then(({ useTerminalTabsStore }) => {
                     const store = useTerminalTabsStore()
-                    store.setIndices(msg.session_id, msg.terminals)
+                    store.setIndices(msg.terminal_context, msg.terminals)
                     if (msg.labels) {
-                        store.setLabels(msg.session_id, msg.labels)
+                        store.setLabels(msg.terminal_context, msg.labels)
                     }
                 })
                 break
             case 'terminal_created':
                 import('../stores/terminalTabs').then(({ useTerminalTabsStore }) => {
-                    useTerminalTabsStore().addIndex(msg.session_id, msg.terminal_index)
+                    useTerminalTabsStore().addIndex(msg.terminal_context, msg.terminal_index)
                 })
                 break
             case 'terminal_killed':
                 import('../stores/terminalTabs').then(({ useTerminalTabsStore }) => {
-                    useTerminalTabsStore().removeIndex(msg.session_id, msg.terminal_index)
+                    useTerminalTabsStore().removeIndex(msg.terminal_context, msg.terminal_index)
                 })
                 break
             case 'terminal_renamed':
                 import('../stores/terminalTabs').then(({ useTerminalTabsStore }) => {
-                    useTerminalTabsStore().setLabel(msg.session_id, msg.terminal_index, msg.label)
+                    useTerminalTabsStore().setLabel(msg.terminal_context, msg.terminal_index, msg.label)
                 })
                 break
             case 'startup_progress':

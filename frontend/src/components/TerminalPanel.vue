@@ -18,7 +18,19 @@ import TerminalSnippetsDialog from './TerminalSnippetsDialog.vue'
 import TerminalSnippetSendDialog from './TerminalSnippetSendDialog.vue'
 
 const props = defineProps({
+    contextKey: {
+        type: String,
+        required: true,
+    },
     sessionId: {
+        type: String,
+        default: null,
+    },
+    projectId: {
+        type: String,
+        default: null,
+    },
+    cwd: {
         type: String,
         default: null,
     },
@@ -35,39 +47,68 @@ const terminalConfigStore = useTerminalConfigStore()
 const workspacesStore = useWorkspacesStore()
 const terminalTabsStore = useTerminalTabsStore()
 
-// Resolve projectId from sessionId
 const session = computed(() => props.sessionId ? dataStore.getSession(props.sessionId) : null)
-const projectId = computed(() => session.value?.project_id)
+const resolvedProjectId = computed(() => props.projectId || session.value?.project_id)
 
-// Placeholder resolution context (shared between snippet enrichment and send dialog).
-const placeholderContext = computed(() => {
+// Build a placeholder resolution context for a given snippet.
+// For snippets scoped to a project (scope "project:<id>"), use THAT project's data
+// for project-related placeholders — even in workspace terminals showing snippets
+// from multiple projects. Session is always from props (null for non-session terminals).
+function buildPlaceholderContext(snippet) {
     const s = session.value
-    const pid = projectId.value
+    // Extract project from snippet scope (e.g. "project:abc" → "abc")
+    let pid = resolvedProjectId.value
+    if (snippet?._scope?.startsWith('project:')) {
+        pid = snippet._scope.slice('project:'.length)
+    }
     const project = pid ? dataStore.getProject(pid) : null
     const projectName = pid ? dataStore.getProjectDisplayName(pid) : null
     return { session: s, project, projectName }
-})
+}
 
-// Workspace IDs relevant for snippet display:
-// - If a workspace is active in the URL, use only that one.
-// - Otherwise, use all workspaces that contain this project.
+// Default context (no snippet-specific project) — used by the send dialog.
+const placeholderContext = computed(() => buildPlaceholderContext(null))
+
+// Workspace IDs for snippet scoping:
+// - Session/project terminal in a workspace URL: use that workspace
+// - Session/project terminal outside workspace: all workspaces containing the project
+// - Workspace terminal: use that workspace (extracted from contextKey)
+// - Global terminal: empty (global snippets only)
 const snippetWorkspaceIds = computed(() => {
     const wsId = route.query.workspace
     if (wsId) return [wsId]
-    const pid = projectId.value
+    // Workspace terminal: contextKey is "w:<workspaceId>"
+    if (props.contextKey.startsWith('w:')) {
+        return [props.contextKey.slice(2)]
+    }
+    const pid = resolvedProjectId.value
     if (!pid) return []
     return workspacesStore.getWorkspacesForProject(pid).map(ws => ws.id)
 })
 
-// Snippets for the current project (global + workspace(s) + project-specific, merged),
-// enriched with placeholder availability info (_disabled / _disabledReason).
+// Snippets available in current context, with placeholder availability checks.
+// For workspace terminals (no single project), get snippets from all workspace projects.
 const snippetsForProject = computed(() => {
-    const raw = projectId.value ? terminalConfigStore.getSnippetsForProject(projectId.value, snippetWorkspaceIds.value) : []
-    const ctx = placeholderContext.value
+    let raw
+    if (resolvedProjectId.value) {
+        // Session or project terminal: snippets for that project
+        raw = terminalConfigStore.getSnippetsForProject(resolvedProjectId.value, snippetWorkspaceIds.value)
+    } else if (props.contextKey.startsWith('w:')) {
+        // Workspace terminal: merge snippets from all projects in the workspace
+        const wsId = props.contextKey.slice(2)
+        const projectIds = workspacesStore.getVisibleProjectIds(wsId) || []
+        raw = terminalConfigStore.getSnippetsForWorkspace(projectIds, snippetWorkspaceIds.value)
+    } else {
+        // Global terminal: global snippets only
+        raw = terminalConfigStore.getGlobalSnippets()
+    }
 
     return raw.map(snippet => {
         const placeholders = snippet.placeholders || []
         if (placeholders.length === 0) return snippet
+        // Per-snippet context: project-scoped snippets resolve {project-dir} etc.
+        // using their own project's data, not the terminal's project.
+        const ctx = buildPlaceholderContext(snippet)
         const unavailable = getUnavailablePlaceholders(placeholders, ctx)
         if (unavailable.length === 0) return snippet
         return {
@@ -137,7 +178,7 @@ function removeTerminalTab(index) {
     }
     // Eagerly remove from store so that syncTerminalsFromBackend doesn't
     // re-add this tab before the backend's terminal_killed broadcast arrives.
-    terminalTabsStore.removeIndex(props.sessionId, index)
+    terminalTabsStore.removeIndex(props.contextKey, index)
 }
 
 /** Kill a secondary terminal: send WS message to clean up tmux + remove tab. */
@@ -145,7 +186,7 @@ function killTerminal(index) {
     if (index === 0) return
     sendWsMessage({
         type: 'kill_terminal',
-        session_id: props.sessionId,
+        terminal_context: props.contextKey,
         terminal_index: index,
     })
     removeTerminalTab(index)
@@ -195,7 +236,7 @@ function handleRename(index, label) {
     if (usesTmux.value) {
         sendWsMessage({
             type: 'rename_terminal',
-            session_id: props.sessionId,
+            terminal_context: props.contextKey,
             terminal_index: index,
             label,
         })
@@ -276,7 +317,7 @@ function handleSnippetSendTo(snippet, target) {
                     if (usesTmux.value && label) {
                         sendWsMessage({
                             type: 'rename_terminal',
-                            session_id: props.sessionId,
+                            terminal_context: props.contextKey,
                             terminal_index: newIndex,
                             label,
                         })
@@ -373,7 +414,7 @@ watch(
             discoveryDone = true
             sendWsMessage({
                 type: 'list_terminals',
-                session_id: props.sessionId,
+                terminal_context: props.contextKey,
             })
         }
     },
@@ -382,7 +423,7 @@ watch(
 
 // Watch the terminalTabsStore for backend terminal updates
 watch(
-    () => terminalTabsStore.indices[props.sessionId],
+    () => terminalTabsStore.indices[props.contextKey],
     (backendIndices, oldIndices) => {
         if (!backendIndices) return
         syncTerminalsFromBackend(backendIndices, oldIndices)
@@ -396,7 +437,7 @@ function syncTerminalsFromBackend(backendIndices, oldIndices) {
     for (const index of backendIndices) {
         if (!localIndices.has(index)) {
             // Use label from store if available, otherwise default
-            const storeLabel = terminalTabsStore.getLabel(props.sessionId, index)
+            const storeLabel = terminalTabsStore.getLabel(props.contextKey, index)
             const label = storeLabel || defaultLabel(index)
             terminals.value.push({ index, label })
         }
@@ -431,14 +472,14 @@ function syncTerminalsFromBackend(backendIndices, oldIndices) {
 
 // Watch store labels for cross-device sync (another client renamed a terminal)
 watch(
-    () => terminalTabsStore.labels[props.sessionId],
+    () => terminalTabsStore.labels[props.contextKey],
     (storeLabels) => {
         if (!storeLabels) return
         for (const term of terminals.value) {
             const storeLabel = storeLabels[term.index]
             if (storeLabel) {
                 term.label = storeLabel
-            } else if (!storeLabel && terminalTabsStore.indices[props.sessionId]?.includes(term.index)) {
+            } else if (!storeLabel && terminalTabsStore.indices[props.contextKey]?.includes(term.index)) {
                 // Label was cleared in the store for a known backend terminal → reset to default
                 term.label = defaultLabel(term.index)
             }
@@ -659,7 +700,10 @@ onBeforeUnmount(() => {
                 :class="['terminal-panel-wrapper', { active: activeIndex === term.index }]"
             >
                 <TerminalInstance
-                    :session-id="sessionId"
+                    :context-key="props.contextKey"
+                    :session-id="props.sessionId"
+                    :project-id="resolvedProjectId"
+                    :cwd="props.cwd"
                     :terminal-index="term.index"
                     :active="active && activeIndex === term.index"
                     @disconnected="onTerminalDisconnected(term.index)"
@@ -690,7 +734,7 @@ onBeforeUnmount(() => {
         <TerminalCombosDialog ref="manageCombosDialogRef" />
         <TerminalSnippetsDialog
             ref="manageSnippetsDialogRef"
-            :current-project-id="projectId"
+            :current-project-id="resolvedProjectId"
         />
         <TerminalSnippetSendDialog
             ref="snippetSendDialogRef"

@@ -131,34 +131,42 @@ const animateStates = ['assistant_turn']
 </script>
 
 <template>
-    <!-- Pending request: hand icon (highest priority) -->
-    <template v-if="displayMode === 'pending_request'">
-        <span :id="indicatorId" class="pending-indicator" :class="`pending-indicator--${size}`">
-            <wa-icon name="hand"></wa-icon>
-        </span>
-        <AppTooltip :for="indicatorId">{{ tooltipText }}</AppTooltip>
-    </template>
-    <!-- Unread sessions: eye icon -->
-    <template v-else-if="displayMode === 'unread'">
-        <span :id="indicatorId" class="unread-indicator" :class="`unread-indicator--${size}`">
-            <wa-icon name="eye"></wa-icon>
-        </span>
-        <AppTooltip :for="indicatorId">{{ tooltipText }}</AppTooltip>
-    </template>
-    <!-- Process states: assistant_turn / crons / active_process -->
-    <template v-else-if="displayMode">
-        <ProcessIndicator
-            :id="indicatorId"
-            :state="processIndicatorState"
-            :size="size"
-            :animate-states="animateStates"
-            :has-active-crons="displayMode === 'crons'"
-        />
-        <AppTooltip :for="indicatorId">{{ tooltipText }}</AppTooltip>
-    </template>
+    <span v-if="displayMode" class="aggregated-indicator-wrapper">
+        <!-- Pending request: hand icon (highest priority) -->
+        <template v-if="displayMode === 'pending_request'">
+            <span :id="indicatorId" class="pending-indicator" :class="`pending-indicator--${size}`">
+                <wa-icon name="hand"></wa-icon>
+            </span>
+            <AppTooltip :for="indicatorId">{{ tooltipText }}</AppTooltip>
+        </template>
+        <!-- Unread sessions: eye icon -->
+        <template v-else-if="displayMode === 'unread'">
+            <span :id="indicatorId" class="unread-indicator" :class="`unread-indicator--${size}`">
+                <wa-icon name="eye"></wa-icon>
+            </span>
+            <AppTooltip :for="indicatorId">{{ tooltipText }}</AppTooltip>
+        </template>
+        <!-- Process states: assistant_turn / crons / active_process -->
+        <template v-else>
+            <ProcessIndicator
+                :id="indicatorId"
+                :state="processIndicatorState"
+                :size="size"
+                :animate-states="animateStates"
+                :has-active-crons="displayMode === 'crons'"
+            />
+            <AppTooltip :for="indicatorId">{{ tooltipText }}</AppTooltip>
+        </template>
+    </span>
 </template>
 
 <style scoped>
+/* Wrapper: inline-flex so it inherits attrs (class) from parent without layout disruption */
+.aggregated-indicator-wrapper {
+    display: inline-flex;
+    align-items: center;
+}
+
 /* Pending request indicator — orange hand icon with pulse */
 .pending-indicator {
     display: inline-flex;

@@ -2,73 +2,52 @@ import { defineStore } from 'pinia'
 
 export const useTerminalTabsStore = defineStore('terminalTabs', {
     state: () => ({
-        // sessionId → sorted array of terminal indices from backend
+        // contextKey → sorted array of terminal indices from backend
         indices: {},
-        // sessionId → { terminalIndex: label } — labels from tmux user options
+        // contextKey → { terminalIndex: label } — labels from tmux user options
         labels: {},
     }),
     actions: {
-        setIndices(sessionId, terminalIndices) {
-            this.indices[sessionId] = [...terminalIndices].sort((a, b) => a - b)
+        setIndices(contextKey, terminalIndices) {
+            this.indices[contextKey] = [...terminalIndices].sort((a, b) => a - b)
         },
-        addIndex(sessionId, index) {
-            if (!this.indices[sessionId]) {
-                this.indices[sessionId] = [index]
+        addIndex(contextKey, index) {
+            if (!this.indices[contextKey]) {
+                this.indices[contextKey] = [index]
                 return
             }
-            if (!this.indices[sessionId].includes(index)) {
-                this.indices[sessionId] = [...this.indices[sessionId], index].sort((a, b) => a - b)
+            if (!this.indices[contextKey].includes(index)) {
+                this.indices[contextKey] = [...this.indices[contextKey], index].sort((a, b) => a - b)
             }
         },
-        removeIndex(sessionId, index) {
-            if (this.indices[sessionId]) {
-                this.indices[sessionId] = this.indices[sessionId].filter(i => i !== index)
+        removeIndex(contextKey, index) {
+            if (this.indices[contextKey]) {
+                this.indices[contextKey] = this.indices[contextKey].filter(i => i !== index)
             }
-            // Clean up label for removed terminal
-            if (this.labels[sessionId]) {
-                delete this.labels[sessionId][index]
+            if (this.labels[contextKey]) {
+                delete this.labels[contextKey][index]
             }
         },
-
-        /**
-         * Bulk-set labels from backend (used with terminal_list response).
-         * @param {string} sessionId
-         * @param {Object} labelsMap - { terminalIndex: label } (string keys from JSON)
-         */
-        setLabels(sessionId, labelsMap) {
-            this.labels[sessionId] = {}
+        setLabels(contextKey, labelsMap) {
+            this.labels[contextKey] = {}
             for (const [index, label] of Object.entries(labelsMap)) {
                 if (label) {
-                    this.labels[sessionId][Number(index)] = label
+                    this.labels[contextKey][Number(index)] = label
                 }
             }
         },
-
-        /**
-         * Set or clear a single terminal label.
-         * @param {string} sessionId
-         * @param {number} index
-         * @param {string} label - empty string to clear
-         */
-        setLabel(sessionId, index, label) {
-            if (!this.labels[sessionId]) {
-                this.labels[sessionId] = {}
+        setLabel(contextKey, index, label) {
+            if (!this.labels[contextKey]) {
+                this.labels[contextKey] = {}
             }
             if (label) {
-                this.labels[sessionId][index] = label
+                this.labels[contextKey][index] = label
             } else {
-                delete this.labels[sessionId][index]
+                delete this.labels[contextKey][index]
             }
         },
-
-        /**
-         * Get the label for a terminal, or empty string if none.
-         * @param {string} sessionId
-         * @param {number} index
-         * @returns {string}
-         */
-        getLabel(sessionId, index) {
-            return this.labels[sessionId]?.[index] || ''
+        getLabel(contextKey, index) {
+            return this.labels[contextKey]?.[index] || ''
         },
     },
 })

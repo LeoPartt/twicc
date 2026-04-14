@@ -1083,7 +1083,9 @@ onBeforeUnmount(() => {
             </wa-tab-panel>
             <wa-tab-panel name="terminal">
                 <TerminalPanel
-                    :session-id="session?.id"
+                    :context-key="`s:${session.id}`"
+                    :session-id="session.id"
+                    :project-id="session.project_id"
                     :active="isActive && activeTabId === 'terminal'"
                 />
             </wa-tab-panel>

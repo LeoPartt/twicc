@@ -189,11 +189,14 @@ function imeKeyToAnsiSequence(event, { ignoreShift = false, applicationCursorMod
  * The terminal is lazily initialized: nothing happens until `start()` is called
  * (typically when the Terminal tab becomes active for the first time).
  *
- * @param {string} sessionId - The session ID (non-reactive, captured once)
+ * @param {string} contextKey - Terminal context key (e.g. 's:<id>', 'p:<id>', 'global')
  * @param {number} terminalIndex - The terminal index (0 = main, N = secondary)
- * @returns {{ containerRef: import('vue').Ref, isConnected: import('vue').Ref<boolean>, started: import('vue').Ref<boolean>, start: () => void, reconnect: () => void }}
+ * @param {Object} options
+ * @param {string|null} options.sessionId - Session ID (for session terminals)
+ * @param {string|null} options.projectId - Project ID (for cwd resolution)
+ * @param {string|null} options.cwd - Explicit working directory (for workspace terminals)
  */
-export function useTerminal(sessionId, terminalIndex = 0) {
+export function useTerminal(contextKey, terminalIndex = 0, { sessionId = null, projectId = null, cwd = null } = {}) {
     const settingsStore = useSettingsStore()
     const dataStore = useDataStore()
     const containerRef = ref(null)
@@ -271,28 +274,53 @@ export function useTerminal(sessionId, terminalIndex = 0) {
     let desktopDragAbortController = null
 
     /**
-     * Check whether tmux should actually be used for this session.
+     * Check whether tmux should actually be used for this terminal.
      * Tmux is skipped for draft and archived sessions.
+     * For project/workspace/global terminals, tmux is always available (if enabled).
      */
     function shouldUseTmux() {
         if (!settingsStore.isTerminalUseTmux) return false
-        const session = dataStore.getSession(sessionId)
-        if (session?.draft || session?.archived) return false
+        if (sessionId) {
+            const session = dataStore.getSession(sessionId)
+            if (session?.draft || session?.archived) return false
+        }
         return true
     }
 
     /**
      * Build the WebSocket URL for the terminal endpoint.
-     * Includes the project ID in the path so the backend can resolve the
-     * working directory even for draft sessions (which don't exist in the DB).
-     * Sends ?tmux=1 only when tmux is applicable for the current session.
+     * Routing depends on context: session terminals include project+session IDs,
+     * project terminals include project ID, workspace/global terminals use index only.
+     * Sends ?tmux=1 only when tmux is applicable. Workspace terminals pass name and cwd.
      */
     function getWsUrl() {
         const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const session = dataStore.getSession(sessionId)
-        const projectId = session?.project_id || '_'
-        const base = `${wsProtocol}//${location.host}/ws/terminal/${projectId}/${sessionId}/${terminalIndex}/`
-        return shouldUseTmux() ? `${base}?tmux=1` : base
+        let path
+        const params = new URLSearchParams()
+        if (sessionId) {
+            // Session terminal: /ws/terminal/<projectId>/<sessionId>/<index>/
+            const pid = projectId || dataStore.getSession(sessionId)?.project_id || '_'
+            path = `${pid}/${sessionId}/${terminalIndex}`
+        } else if (projectId) {
+            // Project terminal: /ws/terminal/<projectId>/<index>/
+            path = `${projectId}/${terminalIndex}`
+        } else {
+            // Global or workspace terminal: /ws/terminal/<index>/
+            path = `${terminalIndex}`
+            // For workspace terminals (contextKey like "w:42"), pass name and cwd
+            if (contextKey !== 'global') {
+                params.set('name', contextKey)
+                if (cwd) {
+                    params.set('cwd', cwd)
+                }
+            }
+        }
+        if (shouldUseTmux()) {
+            params.set('tmux', '1')
+        }
+        const qs = params.toString()
+        const base = `${wsProtocol}//${location.host}/ws/terminal/${path}/`
+        return qs ? `${base}?${qs}` : base
     }
 
     /**
@@ -312,7 +340,7 @@ export function useTerminal(sessionId, terminalIndex = 0) {
                 terminal?.writeln('\x1b[32mConnected (tmux).\x1b[0m \x1b[2m(Session persists across disconnections)\x1b[0m')
             } else {
                 terminal?.writeln('\x1b[32mConnected.\x1b[0m \x1b[2m(Ctrl+D or type "exit" to disconnect)\x1b[0m')
-                if (settingsStore.isTerminalUseTmux) {
+                if (settingsStore.isTerminalUseTmux && sessionId) {
                     const session = dataStore.getSession(sessionId)
                     const reason = session?.draft ? 'draft' : 'archived'
                     terminal?.writeln(`\x1b[2m(tmux disabled for ${reason} sessions)\x1b[0m`)
@@ -1322,7 +1350,7 @@ export function useTerminal(sessionId, terminalIndex = 0) {
      * then connect the WebSocket.
      */
     function initTerminal() {
-        if (!containerRef.value || !sessionId) return
+        if (!containerRef.value || !contextKey) return
 
         const effectiveTheme = settingsStore.getEffectiveTheme
         terminal = new Terminal({
@@ -1507,7 +1535,7 @@ export function useTerminal(sessionId, terminalIndex = 0) {
         if (started.value) return
         started.value = true
 
-        if (containerRef.value && sessionId) {
+        if (containerRef.value && contextKey) {
             initTerminal()
         }
         // If containerRef isn't ready yet, the watcher below will pick it up
@@ -1676,8 +1704,13 @@ export function useTerminal(sessionId, terminalIndex = 0) {
         const placeholders = snippet.placeholders || []
         let text = snippet.snippet
         if (placeholders.length > 0) {
-            const session = dataStore.getSession(sessionId)
-            const pid = session?.project_id
+            const session = sessionId ? dataStore.getSession(sessionId) : null
+            // Use snippet's own project scope if available (workspace terminals show
+            // snippets from multiple projects), fall back to composable's projectId
+            let pid = projectId || session?.project_id
+            if (snippet?._scope?.startsWith('project:')) {
+                pid = snippet._scope.slice('project:'.length)
+            }
             const project = pid ? dataStore.getProject(pid) : null
             const projectName = pid ? dataStore.getProjectDisplayName(pid) : null
             text = resolveSnippetText(text, placeholders, { session, project, projectName })
@@ -1719,14 +1752,14 @@ export function useTerminal(sessionId, terminalIndex = 0) {
 
     // Watch containerRef in case it's set after start() (v-if scenarios)
     watch(containerRef, (el) => {
-        if (el && !terminal && started.value && sessionId) {
+        if (el && !terminal && started.value && contextKey) {
             initTerminal()
         }
     })
 
-    // Close the terminal WebSocket when the session is archived
+    // Close the terminal WebSocket when the session is archived (session terminals only)
     watch(
-        () => dataStore.getSession(sessionId)?.archived,
+        () => sessionId ? dataStore.getSession(sessionId)?.archived : undefined,
         (archived) => {
             if (archived && ws) {
                 intentionalClose = true

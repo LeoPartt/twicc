@@ -428,8 +428,8 @@ def session_detail(request, project_id, session_id, parent_session_id=None):
                 manager = get_process_manager()
                 async_to_sync(manager.kill_process)(session_id, reason="archived")
 
-                from twicc.terminal import kill_all_tmux_sessions
-                kill_all_tmux_sessions(session_id)
+                from twicc.terminal import kill_all_tmux_terminals
+                kill_all_tmux_terminals(f"s:{session_id}")
 
         # Handle pinned update
         if "pinned" in data:

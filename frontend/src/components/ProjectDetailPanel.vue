@@ -3,10 +3,13 @@
 // Delegates header display to ProjectDetailHeader, then shows tabbed content.
 
 import { ref, computed, onActivated, onDeactivated } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ALL_PROJECTS_ID, useDataStore } from '../stores/data'
 import { useWorkspacesStore } from '../stores/workspaces'
 import { isWorkspaceProjectId, extractWorkspaceId } from '../utils/workspaceIds'
 import ProjectDetailHeader from './ProjectDetailHeader.vue'
 import ContributionGraphs from './ContributionGraphs.vue'
+import TerminalPanel from './TerminalPanel.vue'
 
 const props = defineProps({
     /** Project ID or ALL_PROJECTS_ID for aggregate view */
@@ -21,6 +24,7 @@ const props = defineProps({
     },
 })
 
+const dataStore = useDataStore()
 const workspacesStore = useWorkspacesStore()
 
 // KeepAlive lifecycle — track whether this instance is active (not cached)
@@ -38,14 +42,64 @@ const workspaceProjectIds = computed(() =>
     workspaceId.value ? workspacesStore.getVisibleProjectIds(workspaceId.value) : null
 )
 
-// Tab management
-const activeTab = ref('stats')
+const terminalContextKey = computed(() => {
+    if (props.projectId === ALL_PROJECTS_ID) {
+        return 'global'
+    }
+    if (isWorkspaceProjectId(props.projectId)) {
+        return `w:${extractWorkspaceId(props.projectId)}`
+    }
+    return `p:${props.projectId}`
+})
+
+// For project terminals, pass the real project ID (not workspace/all-projects pseudo-IDs)
+const terminalProjectId = computed(() => {
+    if (props.projectId === ALL_PROJECTS_ID || isWorkspaceProjectId(props.projectId)) {
+        return null
+    }
+    return props.projectId
+})
+
+// For workspace terminals, compute the lowest common ancestor of all project directories
+const terminalCwd = computed(() => {
+    if (!isWorkspaceMode.value || !workspaceProjectIds.value) return null
+    const dirs = workspaceProjectIds.value
+        .map(pid => dataStore.getProject(pid))
+        .map(p => p?.directory)
+        .filter(Boolean)
+    if (dirs.length === 0) return null
+    if (dirs.length === 1) return dirs[0]
+    // Find the longest common path prefix
+    const parts = dirs.map(d => d.split('/'))
+    const common = []
+    for (let i = 0; i < parts[0].length; i++) {
+        const segment = parts[0][i]
+        if (parts.every(p => p[i] === segment)) {
+            common.push(segment)
+        } else {
+            break
+        }
+    }
+    return common.length > 1 ? common.join('/') : '/'
+})
+
+// Tab management — derived from route (like SessionView)
+const route = useRoute()
+const router = useRouter()
 const headerRef = ref(null)
 
 const TABS = [
     { id: 'stats', label: 'Stats', icon: 'chart-simple' },
-    { id: 'dummy', label: 'Dummy', icon: 'flask' },
+    { id: 'terminal', label: 'Terminal', icon: 'terminal' },
 ]
+
+// Active tab derived from the route name
+const isAllProjectsMode = computed(() => route.name?.startsWith('projects-'))
+const activeTab = computed(() => {
+    const name = route.name
+    if (name === 'project-terminal' || name === 'projects-terminal') return 'terminal'
+    return 'stats'
+})
 
 const activeTabLabel = computed(() => {
     const tab = TABS.find(t => t.id === activeTab.value)
@@ -53,7 +107,21 @@ const activeTabLabel = computed(() => {
 })
 
 function switchToTab(tabId) {
-    activeTab.value = tabId
+    if (tabId === activeTab.value) return
+    if (tabId === 'terminal') {
+        router.push({
+            name: isAllProjectsMode.value ? 'projects-terminal' : 'project-terminal',
+            params: isAllProjectsMode.value ? {} : { projectId: props.projectId },
+            query: route.query,
+        })
+    } else {
+        // Stats = default route (no suffix)
+        router.push({
+            name: isAllProjectsMode.value ? 'projects-all' : 'project',
+            params: isAllProjectsMode.value ? {} : { projectId: props.projectId },
+            query: route.query,
+        })
+    }
 }
 
 function switchToTabAndCollapse(tabId) {
@@ -65,7 +133,8 @@ function switchToTabAndCollapse(tabId) {
 
 function onTabShow(event) {
     const panel = event.detail?.name
-    if (panel) switchToTab(panel)
+    // Only handle events from our own tabs (not from nested tab-groups like TerminalPanel's)
+    if (panel && TABS.some(t => t.id === panel)) switchToTab(panel)
 }
 </script>
 
@@ -110,11 +179,13 @@ function onTabShow(event) {
                 <ContributionGraphs :project-id="projectId" :project-ids="workspaceProjectIds" />
             </wa-tab-panel>
 
-            <wa-tab-panel name="dummy">
-                <div class="dummy-content">
-                    <wa-icon name="flask" style="font-size: 2rem; opacity: 0.3;"></wa-icon>
-                    <p>Dummy tab for testing</p>
-                </div>
+            <wa-tab-panel name="terminal">
+                <TerminalPanel
+                    :context-key="terminalContextKey"
+                    :project-id="terminalProjectId"
+                    :cwd="terminalCwd"
+                    :active="isActive && activeTab === 'terminal'"
+                />
             </wa-tab-panel>
         </wa-tab-group>
     </div>
@@ -178,17 +249,6 @@ wa-tab::part(base) {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
-    padding-bottom: 3rem;
-}
-
-.dummy-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--wa-space-m);
-    padding: var(--wa-space-xl);
-    color: var(--wa-color-text-quiet);
 }
 
 /* Compact tab nav: hidden by default, shown in compact overlay */
