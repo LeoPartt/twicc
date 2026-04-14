@@ -19,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Bump `claude-agent-sdk` from 0.1.56 to 0.1.58 (bundled Claude Code CLI: 2.1.92 → 2.1.97)
+- Bump `claude-agent-sdk` from 0.1.56 to 0.1.59 (bundled Claude Code CLI: 2.1.92 → 2.1.105)
 - Improve windowed burn rates in usage tooltips and graphs: remove misleading smoothed rate, add cross-period calculation for early-window accuracy, rename to "Burn rate (last X)", and add 6h/12h range options to the graph
 - Add permanent install instructions (`uv tool install twicc`) to the README alongside the existing `uvx` quick start
   - ![Permanent install instructions in README](frontend/public/whats-new/v1.4/permanent-install.webp)
