@@ -188,7 +188,7 @@ def get_directory_tree(dir_path, show_hidden=False, show_ignored=False, director
     # queued directories stay as "loaded": false.
 
     tree = {
-        "name": os.path.basename(dir_path),
+        "name": os.path.basename(dir_path) or dir_path,
         "type": "directory",
         "loaded": True,
         "is_git": git_root is not None,
@@ -258,7 +258,7 @@ def search_files(dir_path, query, max_results=50, show_hidden=False, show_ignore
     Results are sorted by best match (filename match > contiguous > shorter path),
     then the top N are assembled into a tree.
     """
-    root_name = os.path.basename(dir_path)
+    root_name = os.path.basename(dir_path) or dir_path
 
     if not query:
         return {

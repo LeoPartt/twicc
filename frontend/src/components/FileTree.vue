@@ -151,7 +151,8 @@ function getCompactableChildren(node) {
 
 const compact = computed(() => {
     if (props.node.type !== 'directory' || props.isRoot || !props.compactFolders) {
-        return { displayName: props.node.name, effectiveNode: props.node, effectivePath: props.path }
+        const displayName = props.isRoot ? props.path : props.node.name
+        return { displayName, effectiveNode: props.node, effectivePath: props.path }
     }
 
     let current = props.node
