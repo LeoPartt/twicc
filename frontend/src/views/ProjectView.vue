@@ -22,6 +22,8 @@ import { buildProjectTree, flattenProjectTree } from '../utils/projectTree'
 import CostDisplay from '../components/CostDisplay.vue'
 import AppTooltip from '../components/AppTooltip.vue'
 import UsageGraphDialog from '../components/UsageGraphDialog.vue'
+import AggregatedProcessIndicator from '../components/AggregatedProcessIndicator.vue'
+import CodeCommentsIndicator from '../components/CodeCommentsIndicator.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -907,7 +909,13 @@ function updateSidebarClosedClass(closed) {
                                     :value="'workspace:' + ws.id"
                                 >
                                     <wa-icon slot="icon" name="layer-group" :style="ws.color ? { color: ws.color } : null"></wa-icon>
-                                    {{ ws.name }}
+                                    <span class="selector-item-content">
+                                        {{ ws.name }}
+                                        <span class="selector-item-indicators">
+                                            <CodeCommentsIndicator :project-ids="workspacesStore.getVisibleProjectIds(ws.id)" />
+                                            <AggregatedProcessIndicator :project-ids="workspacesStore.getVisibleProjectIds(ws.id)" size="small" />
+                                        </span>
+                                    </span>
                                 </wa-dropdown-item>
                                 <wa-dropdown-item value="__manage_workspaces__">
                                     <wa-icon slot="icon" name="gear"></wa-icon>
@@ -923,7 +931,13 @@ function updateSidebarClosedClass(closed) {
                                 :value="p.id"
                             >
                                 <wa-icon slot="icon" name="check" :style="{ visibility: !isAllProjectsMode && projectId === p.id ? 'visible' : 'hidden' }"></wa-icon>
-                                <ProjectBadge :project-id="p.id" />
+                                <span class="selector-item-content">
+                                    <ProjectBadge :project-id="p.id" />
+                                    <span class="selector-item-indicators">
+                                        <CodeCommentsIndicator :project-ids="[p.id]" />
+                                        <AggregatedProcessIndicator :project-ids="[p.id]" size="small" />
+                                    </span>
+                                </span>
                             </wa-dropdown-item>
 
                             <!-- Unnamed projects (directory tree) -->
@@ -944,8 +958,12 @@ function updateSidebarClosedClass(closed) {
                                     :value="item.project.id"
                                 >
                                     <wa-icon slot="icon" name="check" :style="{ visibility: !isAllProjectsMode && projectId === item.project.id ? 'visible' : 'hidden' }"></wa-icon>
-                                    <span :style="{ paddingLeft: `${item.depth * 12}px` }">
+                                    <span class="selector-item-content" :style="{ paddingLeft: `${item.depth * 12}px` }">
                                         <ProjectBadge :project-id="item.project.id" />
+                                        <span class="selector-item-indicators">
+                                            <CodeCommentsIndicator :project-ids="[item.project.id]" />
+                                            <AggregatedProcessIndicator :project-ids="[item.project.id]" size="small" />
+                                        </span>
                                     </span>
                                 </wa-dropdown-item>
                             </template>
@@ -969,7 +987,13 @@ function updateSidebarClosedClass(closed) {
                                 :value="'workspace:' + ws.id"
                             >
                                 <wa-icon slot="icon" :name="ws.id === activeWorkspaceId ? 'check' : 'layer-group'" :style="ws.id !== activeWorkspaceId && ws.color ? { color: ws.color } : null"></wa-icon>
-                                {{ ws.name }}
+                                <span class="selector-item-content">
+                                    {{ ws.name }}
+                                    <span class="selector-item-indicators">
+                                        <CodeCommentsIndicator :project-ids="workspacesStore.getVisibleProjectIds(ws.id)" />
+                                        <AggregatedProcessIndicator :project-ids="workspacesStore.getVisibleProjectIds(ws.id)" size="small" />
+                                    </span>
+                                </span>
                             </wa-dropdown-item>
                             <wa-dropdown-item value="__manage_workspaces__">
                                 <wa-icon slot="icon" name="gear"></wa-icon>
@@ -992,7 +1016,13 @@ function updateSidebarClosedClass(closed) {
                                 :value="pid"
                             >
                                 <wa-icon slot="icon" name="check" :style="{ visibility: !isAllProjectsMode && projectId === pid ? 'visible' : 'hidden' }"></wa-icon>
-                                <ProjectBadge :project-id="pid" />
+                                <span class="selector-item-content">
+                                    <ProjectBadge :project-id="pid" />
+                                    <span class="selector-item-indicators">
+                                        <CodeCommentsIndicator :project-ids="[pid]" />
+                                        <AggregatedProcessIndicator :project-ids="[pid]" size="small" />
+                                    </span>
+                                </span>
                             </wa-dropdown-item>
 
                             <!-- Other projects (not in workspace) -->
@@ -1010,7 +1040,13 @@ function updateSidebarClosedClass(closed) {
                                 :value="p.id"
                             >
                                 <wa-icon slot="icon" name="check" :style="{ visibility: !isAllProjectsMode && projectId === p.id ? 'visible' : 'hidden' }"></wa-icon>
-                                <ProjectBadge :project-id="p.id" />
+                                <span class="selector-item-content">
+                                    <ProjectBadge :project-id="p.id" />
+                                    <span class="selector-item-indicators">
+                                        <CodeCommentsIndicator :project-ids="[p.id]" />
+                                        <AggregatedProcessIndicator :project-ids="[p.id]" size="small" />
+                                    </span>
+                                </span>
                             </wa-dropdown-item>
                             <!-- Other unnamed projects (directory tree) -->
                             <wa-divider v-if="otherNamedProjects.length && otherFlatTree.length"></wa-divider>
@@ -1030,8 +1066,12 @@ function updateSidebarClosedClass(closed) {
                                     :value="item.project.id"
                                 >
                                     <wa-icon slot="icon" name="check" :style="{ visibility: !isAllProjectsMode && projectId === item.project.id ? 'visible' : 'hidden' }"></wa-icon>
-                                    <span :style="{ paddingLeft: `${item.depth * 12}px` }">
+                                    <span class="selector-item-content" :style="{ paddingLeft: `${item.depth * 12}px` }">
                                         <ProjectBadge :project-id="item.project.id" />
+                                        <span class="selector-item-indicators">
+                                            <CodeCommentsIndicator :project-ids="[item.project.id]" />
+                                            <AggregatedProcessIndicator :project-ids="[item.project.id]" size="small" />
+                                        </span>
                                     </span>
                                 </wa-dropdown-item>
                             </template>
@@ -1663,6 +1703,22 @@ wa-split-panel::part(divider) {
     box-sizing: border-box;
     background-color: var(--dot-color, transparent);
     border-color: var(--dot-color, var(--wa-color-border-quiet));
+}
+
+.selector-item-content {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    gap: var(--wa-space-xs);
+}
+
+.selector-item-indicators {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    margin-left: auto;
+    flex-shrink: 0;
 }
 
 .tree-folder-dropdown-item {
