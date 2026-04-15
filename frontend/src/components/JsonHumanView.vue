@@ -25,6 +25,7 @@ import MarkdownContent from './MarkdownContent.vue'
 import CodeEditor from './CodeEditor.vue'
 import DiffEditor from './DiffEditor.vue'
 import JhvEditorToolbar from './JhvEditorToolbar.vue'
+import MediaPreviewDialog from './MediaPreviewDialog.vue'
 import { getIconUrl, getFileIconId } from '../utils/fileIcons'
 import { getLanguageFromPath } from '../utils/languages'
 
@@ -308,6 +309,16 @@ const contentBlockSource = computed(() => {
     }
     return null
 })
+
+const imagePreviewDialogRef = ref(null)
+const imagePreviewItems = computed(() => {
+    if (contentBlockSource.value?.kind !== 'image') return []
+    return [{ type: 'image', src: `data:${contentBlockSource.value.mediaType};base64,${contentBlockSource.value.data}` }]
+})
+
+function openImagePreview() {
+    imagePreviewDialogRef.value?.open(0)
+}
 
 /**
  * Computed diff pairs for the current value (only meaningful when value is an object).
@@ -930,11 +941,11 @@ const readDiffEditorRefs = reactive({})
                             <template v-if="!diffPairs.consumed.has(key)">
                                 <!-- Content block source: render "data" as image or binary blob -->
                                 <template v-if="key === 'data' && contentBlockSource">
-                                    <!-- Image: show the image inline -->
+                                    <!-- Image: show the image inline, clickable to open preview -->
                                     <template v-if="contentBlockSource.kind === 'image'">
                                         <div class="jhv-key jhv-block-key">{{ formatLabel('data') }}:</div>
                                         <div class="jhv-content-block">
-                                            <img :src="'data:' + contentBlockSource.mediaType + ';base64,' + contentBlockSource.data" class="jhv-content-image" loading="lazy" />
+                                            <img :src="'data:' + contentBlockSource.mediaType + ';base64,' + contentBlockSource.data" class="jhv-content-image jhv-content-image-clickable" loading="lazy" @click="openImagePreview" />
                                         </div>
                                     </template>
                                     <!-- Binary: show placeholder instead of raw data -->
@@ -995,6 +1006,9 @@ const readDiffEditorRefs = reactive({})
                                 </div>
                             </details>
                         </template>
+                        <Teleport to="body">
+                            <MediaPreviewDialog v-if="contentBlockSource?.kind === 'image'" ref="imagePreviewDialogRef" :items="imagePreviewItems" />
+                        </Teleport>
                     </template>
                 </div>
             </template>
@@ -1124,6 +1138,10 @@ const readDiffEditorRefs = reactive({})
     max-height: 30rem;
     border-radius: var(--wa-border-radius-l);
     object-fit: contain;
+}
+
+.jhv-content-image-clickable {
+    cursor: pointer;
 }
 
 .jhv-binary-blob {
