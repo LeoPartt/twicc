@@ -2,7 +2,7 @@
 // ProjectDetailPanel.vue - Detail panel shown when no session is selected.
 // Delegates header display to ProjectDetailHeader, then shows tabbed content.
 
-import { ref, computed, watchEffect, onActivated, onDeactivated } from 'vue'
+import { ref, computed, watch, watchEffect, onActivated, onDeactivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ALL_PROJECTS_ID, useDataStore } from '../stores/data'
 import { useWorkspacesStore } from '../stores/workspaces'
@@ -11,6 +11,7 @@ import ProjectDetailHeader from './ProjectDetailHeader.vue'
 import { apiFetch } from '../utils/api'
 import ContributionGraphs from './ContributionGraphs.vue'
 import FilesPanel from './FilesPanel.vue'
+import GitPanel from './GitPanel.vue'
 import TerminalPanel from './TerminalPanel.vue'
 
 const props = defineProps({
@@ -176,22 +177,48 @@ const filesAvailableRoots = computed(() => {
 // Tab management — derived from route (like SessionView)
 const headerRef = ref(null)
 
-const TABS = [
-    { id: 'stats', label: 'Stats', icon: 'chart-simple' },
-    { id: 'files', label: 'Files', icon: 'folder-open' },
-    { id: 'terminal', label: 'Terminal', icon: 'terminal' },
-]
+const isSingleProjectMode = computed(() => !isAllProjectsMode.value && !isWorkspaceMode.value)
+
+const hasGitRepo = computed(() => {
+    if (!isSingleProjectMode.value) return false
+    return !!dataStore.getProject(props.projectId)?.git_root
+})
+
+const TABS = computed(() => {
+    const tabs = [
+        { id: 'stats', label: 'Stats', icon: 'chart-simple' },
+        { id: 'files', label: 'Files', icon: 'folder-open' },
+    ]
+    if (hasGitRepo.value) {
+        tabs.push({ id: 'git', label: 'Git', icon: 'code-branch' })
+    }
+    tabs.push({ id: 'terminal', label: 'Terminal', icon: 'terminal' })
+    return tabs
+})
 
 // Active tab derived from the route name
 const activeTab = computed(() => {
     const name = route.name
     if (name === 'project-files' || name === 'projects-files') return 'files'
+    if (name === 'project-git' || name === 'projects-git') return 'git'
     if (name === 'project-terminal' || name === 'projects-terminal') return 'terminal'
     return 'stats'
 })
 
+watch([activeTab, hasGitRepo], ([tabId, hasGit]) => {
+    if (tabId === 'git' && !hasGit) {
+        if (!isActive.value) return
+        if (!dataStore.getProject(props.projectId)) return
+        router.replace({
+            name: isAllProjectsMode.value ? 'projects-all' : 'project',
+            params: isAllProjectsMode.value ? {} : { projectId: props.projectId },
+            query: route.query,
+        })
+    }
+}, { immediate: true })
+
 const activeTabLabel = computed(() => {
-    const tab = TABS.find(t => t.id === activeTab.value)
+    const tab = TABS.value.find(t => t.id === activeTab.value)
     return tab?.label ?? null
 })
 
@@ -200,6 +227,12 @@ function switchToTab(tabId) {
     if (tabId === 'files') {
         router.push({
             name: isAllProjectsMode.value ? 'projects-files' : 'project-files',
+            params: isAllProjectsMode.value ? {} : { projectId: props.projectId },
+            query: route.query,
+        })
+    } else if (tabId === 'git') {
+        router.push({
+            name: isAllProjectsMode.value ? 'projects-git' : 'project-git',
             params: isAllProjectsMode.value ? {} : { projectId: props.projectId },
             query: route.query,
         })
@@ -229,7 +262,7 @@ function switchToTabAndCollapse(tabId) {
 function onTabShow(event) {
     const panel = event.detail?.name
     // Only handle events from our own tabs (not from nested tab-groups like TerminalPanel's)
-    if (panel && TABS.some(t => t.id === panel)) switchToTab(panel)
+    if (panel && TABS.value.some(t => t.id === panel)) switchToTab(panel)
 }
 </script>
 
@@ -281,6 +314,16 @@ function onTabShow(event) {
                     :root-restriction="filesRootRestriction"
                     :external-roots="filesAvailableRoots"
                     :active="isActive && activeTab === 'files'"
+                />
+            </wa-tab-panel>
+
+            <wa-tab-panel v-if="hasGitRepo" name="git">
+                <GitPanel
+                    :project-id="projectId"
+                    :session-id="projectId"
+                    :project-git-root="dataStore.getProject(projectId)?.git_root"
+                    :is-draft="true"
+                    :active="isActive && activeTab === 'git'"
                 />
             </wa-tab-panel>
 
@@ -357,6 +400,7 @@ wa-tab::part(base) {
 }
 
 .detail-tabs :deep(wa-tab-panel[name="files"])::part(base),
+.detail-tabs :deep(wa-tab-panel[name="git"])::part(base),
 .detail-tabs :deep(wa-tab-panel[name="terminal"])::part(base) {
     overflow-y: hidden;
     padding-bottom: 0;
