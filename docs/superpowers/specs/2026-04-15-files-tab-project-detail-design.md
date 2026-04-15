@@ -253,7 +253,7 @@ const filesRootRestriction = computed(() => {
 
 | Mode | apiPrefix | Restriction mechanism |
 |------|-----------|----------------------|
-| All projects | `/api` (standalone) | `?root=$HOME` |
+| All projects | `/api` (standalone) | None (unrestricted) |
 | Workspace | `/api` (standalone) | `?root=<LCA>` |
 | Project | `/api/projects/<id>` | `validate_path` (server-side, existing) |
 

@@ -120,8 +120,8 @@ const filesApiPrefix = computed(() => {
 const filesRootRestriction = computed(() => {
     // Project mode: restriction handled by validate_path, no need for ?root=
     if (!isAllProjectsMode.value && !isWorkspaceMode.value) return null
-    // All-projects mode: restrict to $HOME
-    if (props.projectId === ALL_PROJECTS_ID) return homeDir.value
+    // All-projects mode: no restriction (user's machine, no scope to enforce)
+    if (props.projectId === ALL_PROJECTS_ID) return null
     // Workspace mode: restrict to LCA
     return terminalCwd.value
 })
@@ -130,7 +130,11 @@ const filesAvailableRoots = computed(() => {
     // All-projects mode
     if (props.projectId === ALL_PROJECTS_ID) {
         if (!homeDir.value) return []
-        return [{ key: 'home', label: 'Home directory', path: homeDir.value }]
+        const roots = [{ key: 'home', label: 'Home directory', path: homeDir.value }]
+        if (homeDir.value !== '/') {
+            roots.push({ key: 'root', label: 'System root', path: '/' })
+        }
+        return roots
     }
 
     // Workspace mode
