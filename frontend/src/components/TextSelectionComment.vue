@@ -6,6 +6,7 @@
 
 import { ref, inject, nextTick, computed, onMounted, onBeforeUnmount } from 'vue'
 import { formatComment } from '../stores/codeComments'
+import { useSettingsStore } from '../stores/settings'
 
 const props = defineProps({
     /** The text the user selected in the session view. */
@@ -17,6 +18,13 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const insertTextAtCursor = inject('insertTextAtCursor', null)
+const settingsStore = useSettingsStore()
+
+const placeholderText = computed(() => {
+    if (settingsStore.isTouchDevice) return 'Add a comment...'
+    const keys = settingsStore.isMac ? '⌘↵ or Ctrl↵' : 'Ctrl↵ or Meta↵'
+    return `Add a comment... (${keys} to add to message)`
+})
 
 const expanded = ref(false)
 const commentText = ref('')
@@ -136,6 +144,11 @@ function addToMessage() {
 }
 
 function handleKeydown(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault()
+        addToMessage()
+        return
+    }
     if (e.key === 'Escape') {
         e.stopPropagation()
         close()
@@ -195,7 +208,7 @@ defineExpose({ isExpanded: expanded })
                 ref="textareaRef"
                 :value="commentText"
                 @input="commentText = $event.target.value"
-                placeholder="Add a comment..."
+                :placeholder="placeholderText"
                 size="small"
                 rows="3"
             ></wa-textarea>
@@ -257,7 +270,7 @@ defineExpose({ isExpanded: expanded })
     font-size: var(--wa-font-size-m);
     line-height: 1.4;
     color: var(--wa-color-text-quiet);
-    overflow: scroll;
+    overflow: auto;
     white-space: pre-wrap;
     word-break: break-word;
     cursor: grab;
