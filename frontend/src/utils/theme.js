@@ -44,19 +44,67 @@ function applyWaClasses() {
     document.documentElement.dataset.theme = currentWaTheme
 }
 
+// ── Cached theme colors ─────────────────────────────────────────────────
+// Recomputed only when the color scheme, WA theme, or brand accent changes.
+
+let _cachedSurfaceColor = ''
+let _cachedSelectionColor = ''
+
+/**
+ * Resolve a CSS color variable to an rgba() string via 1×1 canvas pixel readback.
+ * Needed because modern browsers may return oklch/lab from getComputedStyle,
+ * which xterm.js and CodeMirror can't parse.
+ */
+function resolveColorVariable(varExpr) {
+    const el = document.createElement('div')
+    el.style.color = varExpr
+    document.body.appendChild(el)
+    const computed = getComputedStyle(el).color
+    el.remove()
+
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = 1
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    ctx.clearRect(0, 0, 1, 1)
+    ctx.fillStyle = computed
+    ctx.fillRect(0, 0, 1, 1)
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+    return `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`
+}
+
+function recomputeCachedColors() {
+    _cachedSurfaceColor = resolveColorVariable('var(--wa-color-surface-default)')
+    _cachedSelectionColor = resolveColorVariable('var(--selection-bg-color)')
+}
+
+/** Cached surface background color (e.g. for terminal/editor backgrounds). */
+export function getSurfaceColor() {
+    return _cachedSurfaceColor
+}
+
+/** Cached selection background color (e.g. for terminal/editor selections). */
+export function getSelectionColor() {
+    return _cachedSelectionColor
+}
+
+// ── Public setters (invalidate cache after applying) ────────────────────
+
 export function setColorScheme(mode) {
     currentColorScheme = mode
     applyColorScheme()
+    recomputeCachedColors()
 }
 
 export function setWaTheme(theme) {
     currentWaTheme = theme
     applyWaClasses()
+    recomputeCachedColors()
 }
 
 export function setWaBrand(brand) {
     currentWaBrand = brand
     applyWaClasses()
+    recomputeCachedColors()
 }
 
 /**
@@ -66,5 +114,9 @@ export function setWaBrand(brand) {
 export function initTheme() {
     applyColorScheme()
     applyWaClasses()
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyColorScheme)
+    recomputeCachedColors()
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        applyColorScheme()
+        recomputeCachedColors()
+    })
 }

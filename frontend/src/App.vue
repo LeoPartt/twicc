@@ -272,6 +272,11 @@ body {
 :root {
     overflow-y: auto;
 
+    --selection-bg-color: oklch(from var(--wa-color-brand-50) l c h / 0.25);
+    ::selection {
+        background-color: var(--selection-bg-color);
+    }
+
     --base-user-assistant-card-color: var(--wa-color-gray-95);
     --user-card-base-color: oklch(from var(--base-user-assistant-card-color) calc(l + 0.015) c h);
     --assistant-card-base-color: oklch(from var(--base-user-assistant-card-color) calc(l + 0.03) c h);
@@ -343,7 +348,7 @@ body {
     --diff-removedTextBackground: #FFC4C3;
     --diff-insertedLineBackground: #C0FFD8;
     --diff-insertedTextBackground: #A7E9B8;
-    --diff-selectionBackground: #BBDFFF99;
+    --diff-selectionBackground: var(--selection-bg-color);
 }
 
 .wa-dark {
@@ -406,7 +411,7 @@ body {
     --diff-removedTextBackground: #5E1B1B;
     --diff-insertedLineBackground: #1B452B;
     --diff-insertedTextBackground: #2A573B;
-    --diff-selectionBackground: #003d7399;
+    --diff-selectionBackground: var(--selection-bg-color);
 }
 
 /* Reset Web Awesome button styles inside Notivue notifications */

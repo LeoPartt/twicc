@@ -9,14 +9,10 @@ import { useSettingsStore } from '../stores/settings'
 import { useDataStore } from '../stores/data'
 import { toast } from '../composables/useToast'
 import { resolveSnippetText } from '../utils/snippetPlaceholders'
+import { getSurfaceColor, getSelectionColor } from '../utils/theme'
 import '@xterm/xterm/css/xterm.css'
 
 // ── Terminal themes ──────────────────────────────────────────────────────
-// Background colors read from the active WA theme's --wa-color-surface-default.
-
-function getSurfaceColor() {
-    return getComputedStyle(document.documentElement).getPropertyValue('--wa-color-surface-default').trim()
-}
 
 function buildDarkTheme() {
     const bg = getSurfaceColor()
@@ -25,8 +21,7 @@ function buildDarkTheme() {
         foreground: '#e0e0e0',
         cursor: '#e0e0e0',
         cursorAccent: bg,
-        selectionBackground: 'rgba(255, 255, 255, 0.15)',
-        selectionForeground: '#ffffff',
+        selectionBackground: getSelectionColor(),
         // ANSI colors (normal)
         black: bg,
         red: '#f87171',
@@ -48,14 +43,13 @@ function buildDarkTheme() {
     }
 }
 
-const THEMES = {
-    light: {
+function buildLightTheme() {
+    return {
         background: '#ffffff',
         foreground: '#24292e',
         cursor: '#24292e',
         cursorAccent: '#ffffff',
-        selectionBackground: 'rgba(0, 0, 0, 0.1)',
-        selectionForeground: '#24292e',
+        selectionBackground: getSelectionColor(),
         // ANSI colors (normal)
         black: '#24292e',
         red: '#d73a49',
@@ -74,11 +68,11 @@ const THEMES = {
         brightMagenta: '#8a63d2',
         brightCyan: '#3192aa',
         brightWhite: '#fafbfc',
-    },
+    }
 }
 
 function getTerminalTheme(colorScheme) {
-    return colorScheme === 'dark' ? buildDarkTheme() : THEMES.light
+    return colorScheme === 'dark' ? buildDarkTheme() : buildLightTheme()
 }
 
 // ── Mobile special-key handling ─────────────────────────────────────────

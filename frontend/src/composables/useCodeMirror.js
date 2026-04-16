@@ -11,8 +11,9 @@ import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
 import { indentWithTab } from '@codemirror/commands'
 import { search, searchKeymap, highlightSelectionMatches, openSearchPanel, closeSearchPanel, searchPanelOpen } from '@codemirror/search'
 import { minimalSetup } from 'codemirror'
-import { githubDark, githubLight } from '@uiw/codemirror-theme-github'
+import { githubDarkInit, githubLightInit } from '@uiw/codemirror-theme-github'
 import { getLanguageFromPath } from '../utils/languages'
+import { getSurfaceColor, getSelectionColor } from '../utils/theme'
 
 // ─── a) Language map ─────────────────────────────────────────────────────────
 
@@ -181,11 +182,6 @@ export async function resolveLanguage(filePath, languageOverride) {
 
 // ─── c) Theme extension ──────────────────────────────────────────────────────
 
-/** Read the current surface background from the active WA theme. */
-function getSurfaceColor() {
-    return getComputedStyle(document.documentElement).getPropertyValue('--wa-color-surface-default').trim()
-}
-
 /**
  * Create a CodeMirror extension array for the given theme.
  * In dark mode, adds a background color override to match the app's surface color.
@@ -194,7 +190,9 @@ function getSurfaceColor() {
  * @returns {import('@codemirror/state').Extension[]}
  */
 export function createThemeExtension(isDark) {
-    if (!isDark) return [githubLight]
+    const selBg = getSelectionColor()
+
+    if (!isDark) return [githubLightInit({ settings: { selection: selBg, selectionMatch: selBg } })]
 
     const bg = getSurfaceColor()
     const bgOverride = EditorView.theme({
@@ -202,7 +200,7 @@ export function createThemeExtension(isDark) {
         '.cm-gutters': { backgroundColor: bg },
     })
 
-    return [githubDark, bgOverride]
+    return [githubDarkInit({ settings: { selection: selBg, selectionMatch: selBg } }), bgOverride]
 }
 
 // ─── d) Font size extension ──────────────────────────────────────────────────
