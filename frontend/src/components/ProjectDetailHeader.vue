@@ -31,12 +31,24 @@ const props = defineProps({
         type: String,
         required: true,
     },
-    /** Label of the currently active tab (e.g., "Stats"). Shown in compact collapsed mode. */
-    activeTabLabel: {
+    /**
+     * All available tabs for the compact-mode dropdown selector.
+     * Each entry: { id, label, icon? }
+     */
+    tabs: {
+        type: Array,
+        default: () => [],
+    },
+    /**
+     * ID of the currently active tab (matches a tab.id from the tabs prop).
+     */
+    activeTabId: {
         type: String,
         default: null,
     },
 })
+
+const emit = defineEmits(['select-tab'])
 
 const store = useDataStore()
 const settingsStore = useSettingsStore()
@@ -139,6 +151,19 @@ const indicatorProjectIds = computed(() => {
 // Compact mode state
 const isCompactExpanded = ref(false)
 
+// Active tab object (from the tabs prop, matched by activeTabId)
+const activeTab = computed(() => props.tabs.find(t => t.id === props.activeTabId) || null)
+
+/**
+ * Handle tab selection from the compact dropdown.
+ */
+function handleCompactTabSelect(event) {
+    const value = event.detail?.item?.value
+    if (value && value !== props.activeTabId) {
+        emit('select-tab', value)
+    }
+}
+
 defineExpose({ isCompactExpanded })
 
 // Edit dialog ref (single project only)
@@ -161,8 +186,20 @@ function handleEditClick() {
         <div class="detail-title-row">
             <!-- Clickable zone for compact toggle -->
             <div class="compact-toggle-zone" @click="isCompactExpanded = !isCompactExpanded">
-                <!-- Active tab label: shown only in compact collapsed mode -->
-                <span v-if="activeTabLabel" class="compact-active-tab-label">{{ activeTabLabel }}</span>
+                <!-- Compact tab dropdown: shown only in compact collapsed mode -->
+                <wa-dropdown v-if="tabs.length" class="compact-tab-dropdown" placement="bottom-start" @wa-select="handleCompactTabSelect" @click.stop>
+                    <wa-button slot="trigger" variant="brand" appearance="outlined" size="small" class="compact-active-tab-label" with-caret>
+                        {{ activeTab?.label }}
+                    </wa-button>
+                    <wa-dropdown-item
+                        v-for="tab in tabs"
+                        :key="tab.id"
+                        :value="tab.id"
+                        :class="{ 'active-tab-item': tab.id === activeTabId }"
+                    >
+                        {{ tab.label }}
+                    </wa-dropdown-item>
+                </wa-dropdown>
 
                 <!-- Single project mode -->
                 <template v-if="isSingleProjectMode">
@@ -320,19 +357,19 @@ function handleEditClick() {
     display: none;
 }
 
-/* Active tab label: hidden by default, shown in compact collapsed mode */
-.compact-active-tab-label {
+/* Compact tab dropdown: hidden by default, shown in compact collapsed mode */
+.compact-tab-dropdown {
     display: none;
-    font-size: var(--wa-font-size-s);
-    font-weight: 700;
-    color: var(--wa-color-brand-on-quiet);
-    flex-shrink: 0;
-    border-color: var(--wa-color-brand-border-loud);
-    border-radius: var(--wa-form-control-border-radius);
-    border-style: var(--wa-border-style);
-    border-width: var(--wa-border-width-s);
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
-    box-shadow: var(--wa-shadow-offset-x-s) var(--wa-shadow-offset-y-s) 0 0 var(--wa-color-brand-border-loud);
+}
+.compact-active-tab-label {
+    font-size: var(--wa-font-size-3xs);
+    &::part(label) {
+        font-size: var(--wa-font-size-s);
+    }
+}
+.active-tab-item {
+    opacity: 0.5;
+    pointer-events: none;
 }
 
 .detail-sparkline-row {
@@ -412,15 +449,14 @@ function handleEditClick() {
         padding-inline: var(--wa-space-xs);
     }
 
-    /* In compact collapsed mode: show active tab label */
-    .detail-header.compact-collapsed .compact-active-tab-label {
+    /* In compact collapsed mode: show tab dropdown */
+    .detail-header.compact-collapsed .compact-tab-dropdown {
         display: inline-flex;
         align-items: center;
-        gap: var(--wa-space-2xs);
     }
 
-    /* In compact expanded mode: hide active tab label */
-    .detail-header.compact-expanded .compact-active-tab-label {
+    /* In compact expanded mode: hide tab dropdown */
+    .detail-header.compact-expanded .compact-tab-dropdown {
         display: none;
     }
 

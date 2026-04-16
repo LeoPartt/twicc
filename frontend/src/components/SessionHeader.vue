@@ -24,26 +24,23 @@ const props = defineProps({
         validator: (value) => ['session', 'subagent'].includes(value)
     },
     /**
-     * Label of the currently active tab (e.g., "Chat", "Files").
-     * Shown in the compact header when collapsed, replacing the action buttons.
+     * All available tabs for the compact-mode dropdown selector.
+     * Each entry: { id, label, processState?, commentsCount? }
      */
-    activeTabLabel: {
-        type: String,
-        default: null
-    },
-    activeTabCommentsCount: {
-        type: Number,
-        default: 0
+    tabs: {
+        type: Array,
+        default: () => []
     },
     /**
-     * Process state for the currently active subagent tab (if any).
-     * Shown in the compact-active-tab-label when an agent tab is active.
+     * ID of the currently active tab (matches a tab.id from the tabs prop).
      */
-    activeTabProcessState: {
-        type: Object,
+    activeTabId: {
+        type: String,
         default: null
     }
 })
+
+const emit = defineEmits(['select-tab'])
 
 const store = useDataStore()
 const settingsStore = useSettingsStore()
@@ -259,6 +256,20 @@ function handleStopAgent() {
 // Track expanded state of the compact header overlay
 const isCompactExpanded = ref(false)
 
+// Active tab object (from the tabs prop, matched by activeTabId)
+const activeTab = computed(() => props.tabs.find(t => t.id === props.activeTabId) || null)
+
+/**
+ * Handle tab selection from the compact dropdown.
+ * Emits 'select-tab' with the selected tab ID.
+ */
+function handleCompactTabSelect(event) {
+    const value = event.detail?.item?.value
+    if (value && value !== props.activeTabId) {
+        emit('select-tab', value)
+    }
+}
+
 // Rename dialog (provided by ProjectView)
 const injectedOpenRenameDialog = inject('openRenameDialog')
 
@@ -399,16 +410,34 @@ defineExpose({
 
             <!-- Clickable zone: title + project + context ring + chevron toggle compact mode -->
             <div class="compact-toggle-zone" @click="isCompactExpanded = !isCompactExpanded">
-                <!-- Active tab label: shown only in compact collapsed mode, replacing action buttons -->
-                <wa-button v-if="activeTabLabel" variant="brand" appearance="outlined" size="small" class="compact-active-tab-label">
-                    <span>{{ activeTabLabel }}</span>
-                    <ProcessIndicator
-                        v-if="activeTabProcessState"
-                        :state="activeTabProcessState.state"
-                        size="small"
-                    />
-                    <CodeCommentsIndicator :count="activeTabCommentsCount" :show-tooltip="false" class="compact-tab-comments-indicator" />
-                </wa-button>
+                <!-- Compact tab dropdown: shown only in compact collapsed mode, replacing action buttons -->
+                <wa-dropdown v-if="tabs.length" class="compact-tab-dropdown" placement="bottom-start" @wa-select="handleCompactTabSelect" @click.stop>
+                    <wa-button slot="trigger" variant="brand" appearance="outlined" size="small" class="compact-active-tab-label" with-caret>
+                        <span>{{ activeTab?.label }}</span>
+                        <ProcessIndicator
+                            v-if="activeTab?.processState"
+                            :state="activeTab.processState.state"
+                            size="small"
+                        />
+                        <CodeCommentsIndicator :count="activeTab?.commentsCount || 0" :show-tooltip="false" class="compact-tab-comments-indicator" />
+                    </wa-button>
+                    <wa-dropdown-item
+                        v-for="tab in tabs"
+                        :key="tab.id"
+                        :value="tab.id"
+                        :class="{ 'active-tab-item': tab.id === activeTabId }"
+                    >
+                        <span class="compact-tab-dropdown-item-content">
+                            <span>{{ tab.label }}</span>
+                            <ProcessIndicator
+                                v-if="tab.processState"
+                                :state="tab.processState.state"
+                                size="small"
+                            />
+                            <CodeCommentsIndicator :count="tab.commentsCount || 0" :show-tooltip="false" class="compact-tab-comments-indicator" />
+                        </span>
+                    </wa-dropdown-item>
+                </wa-dropdown>
 
                 <h2 :id="`session-header-${sessionId}-title`">{{ displayName }}</h2>
                 <AppTooltip :for="`session-header-${sessionId}-title`">{{ displayName }}</AppTooltip>
@@ -640,9 +669,11 @@ defineExpose({
     display: contents;
 }
 
-/* Active tab label: hidden by default, shown in compact collapsed mode */
-.compact-active-tab-label {
+/* Compact tab dropdown: hidden by default, shown in compact collapsed mode */
+.compact-tab-dropdown {
     display: none;
+}
+.compact-active-tab-label {
     font-size: var(--wa-font-size-3xs);
     &::part(label) {
         font-size: var(--wa-font-size-s);
@@ -651,6 +682,15 @@ defineExpose({
 .compact-tab-comments-indicator {
     font-size: var(--wa-font-size-xs);
     margin-left: var(--wa-space-2xs);
+}
+.compact-tab-dropdown-item-content {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+}
+.active-tab-item {
+    opacity: 0.5;
+    pointer-events: none;
 }
 
 .draft-tag, .archived-tag, .stale-tag {
@@ -918,18 +958,17 @@ wa-divider {
         border-bottom: solid var(--wa-color-surface-border) var(--divider-size);
     }
 
-    /* In compact collapsed mode: hide action buttons, show active tab label */
+    /* In compact collapsed mode: hide action buttons, show tab dropdown */
     .session-header.compact-collapsed .session-title-actions {
         display: none;
     }
-    .session-header.compact-collapsed .compact-active-tab-label {
+    .session-header.compact-collapsed .compact-tab-dropdown {
         display: inline-flex;
         align-items: center;
-        gap: var(--wa-space-2xs);
     }
 
-    /* In compact expanded mode: show action buttons, hide active tab label */
-    .session-header.compact-expanded .compact-active-tab-label {
+    /* In compact expanded mode: show action buttons, hide tab dropdown */
+    .session-header.compact-expanded .compact-tab-dropdown {
         display: none;
     }
 

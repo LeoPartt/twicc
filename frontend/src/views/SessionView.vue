@@ -211,15 +211,6 @@ function agentCommentsCount(agentSessionId) {
         .filter(c => c.subagentSessionId === agentSessionId).length
 }
 
-const activeTabCommentsCount = computed(() => {
-    const tabId = activeTabId.value
-    if (tabId === 'main') return chatCommentsCount.value
-    if (tabId === 'files') return filesCommentsCount.value
-    if (tabId === 'git') return gitCommentsCount.value
-    if (tabId.startsWith('agent-')) return agentCommentsCount(tabId.replace('agent-', ''))
-    return 0
-})
-
 // Tabs state - computed from store (automatically updates when session changes)
 // Format: [{ id: 'agent-xxx', agentId: 'xxx' }, ...]
 const openSubagentTabs = computed(() => {
@@ -247,25 +238,25 @@ const activeTabId = computed(() => {
     return 'main'
 })
 
-// Human-readable label for the active tab (used in compact header)
-const activeTabLabel = computed(() => {
-    const tabId = activeTabId.value
-    if (tabId === 'main') return 'Chat'
-    if (tabId === 'files') return 'Files'
-    if (tabId === 'git') return 'Git'
-    if (tabId === 'terminal') return 'Terminal'
-    if (tabId.startsWith('agent-')) {
-        return 'Agent';
+// All tabs for the compact header dropdown (includes labels, process state, comment counts)
+const compactTabs = computed(() => {
+    const tabs = [
+        { id: 'main', label: 'Chat', commentsCount: chatCommentsCount.value }
+    ]
+    for (const tab of openSubagentTabs.value) {
+        tabs.push({
+            id: tab.id,
+            label: `Agent "${getAgentShortId(tab.agentId)}"`,
+            processState: store.getProcessState(tab.agentId) || null,
+            commentsCount: agentCommentsCount(tab.agentId)
+        })
     }
-    return null
-})
-
-// Process state for the active subagent tab (used in compact header label)
-const activeTabProcessState = computed(() => {
-    const tabId = activeTabId.value
-    if (!tabId.startsWith('agent-')) return null
-    const agentId = tabId.replace('agent-', '')
-    return store.getProcessState(agentId) || null
+    tabs.push({ id: 'files', label: 'Files', commentsCount: filesCommentsCount.value })
+    if (hasGitRepo.value) {
+        tabs.push({ id: 'git', label: 'Git', commentsCount: gitCommentsCount.value })
+    }
+    tabs.push({ id: 'terminal', label: 'Terminal' })
+    return tabs
 })
 
 // Redirect away from git tab if the session has no git repo
@@ -832,9 +823,9 @@ onBeforeUnmount(() => {
             ref="sessionHeaderRef"
             :session-id="sessionId"
             mode="session"
-            :active-tab-label="activeTabLabel"
-            :active-tab-comments-count="activeTabCommentsCount"
-            :active-tab-process-state="activeTabProcessState"
+            :tabs="compactTabs"
+            :active-tab-id="activeTabId"
+            @select-tab="switchToTab"
         >
             <!-- Compact mode: tab navigation inside the header overlay -->
             <template #compact-extra>

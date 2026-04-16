@@ -186,13 +186,13 @@ const hasGitRepo = computed(() => {
 
 const TABS = computed(() => {
     const tabs = [
-        { id: 'stats', label: 'Stats', icon: 'chart-simple' },
-        { id: 'files', label: 'Files', icon: 'folder-open' },
+        { id: 'stats', label: 'Stats' },
+        { id: 'files', label: 'Files' },
     ]
     if (hasGitRepo.value) {
-        tabs.push({ id: 'git', label: 'Git', icon: 'code-branch' })
+        tabs.push({ id: 'git', label: 'Git' })
     }
-    tabs.push({ id: 'terminal', label: 'Terminal', icon: 'terminal' })
+    tabs.push({ id: 'terminal', label: 'Terminal' })
     return tabs
 })
 
@@ -217,10 +217,7 @@ watch([activeTab, hasGitRepo], ([tabId, hasGit]) => {
     }
 }, { immediate: true })
 
-const activeTabLabel = computed(() => {
-    const tab = TABS.value.find(t => t.id === activeTab.value)
-    return tab?.label ?? null
-})
+// Note: TABS already has { id, label, icon } — pass directly to header for the compact dropdown
 
 function switchToTab(tabId) {
     if (tabId === activeTab.value) return
@@ -268,7 +265,7 @@ function onTabShow(event) {
 
 <template>
     <div class="project-detail-panel">
-        <ProjectDetailHeader ref="headerRef" :project-id="projectId" :active-tab-label="activeTabLabel">
+        <ProjectDetailHeader ref="headerRef" :project-id="projectId" :tabs="TABS" :active-tab-id="activeTab" @select-tab="switchToTab">
             <template #compact-extra>
                 <div class="compact-tab-nav">
                     <wa-button
@@ -279,7 +276,6 @@ function onTabShow(event) {
                         :appearance="activeTab === tab.id ? 'outlined' : 'plain'"
                         @click="switchToTabAndCollapse(tab.id)"
                     >
-                        <wa-icon :name="tab.icon" slot="prefix"></wa-icon>
                         {{ tab.label }}
                     </wa-button>
                 </div>
