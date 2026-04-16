@@ -97,13 +97,16 @@ function onVisualViewportResize() {
     if (expanded.value) clampToViewport()
 }
 
-// ─── Drag (via quote as handle) ────────────────────────────────────
+// ─── Drag (panel background as handle) ────────────────────────────
 
 let dragStart = null
 
 function onDragPointerDown(e) {
     // Only primary button / single touch
     if (e.button !== 0) return
+    // Don't drag when interacting with quote (scrollable), textareas, or buttons
+    const target = e.target
+    if (target.closest('.tsc-quote, wa-textarea, wa-button, textarea, button')) return
     e.preventDefault()
     isDragging.value = true
     dragStart = { x: e.clientX, y: e.clientY, ...panelOffset.value }
@@ -208,14 +211,16 @@ defineExpose({ isExpanded: expanded })
             <wa-icon name="comment" variant="regular"></wa-icon>
         </wa-button>
 
-        <!-- Expanded: comment panel -->
-        <div v-else class="tsc-panel" @keydown="handleKeydown">
-            <!-- Selected text preview (also serves as drag handle) -->
-            <div
-                class="tsc-quote"
-                :class="{ dragging: isDragging }"
-                @pointerdown="onDragPointerDown"
-            >{{ selectedText }}</div>
+        <!-- Expanded: comment panel (background is the drag handle) -->
+        <div
+            v-else
+            class="tsc-panel"
+            :class="{ dragging: isDragging }"
+            @keydown="handleKeydown"
+            @pointerdown="onDragPointerDown"
+        >
+            <!-- Selected text preview (scrollable) -->
+            <div class="tsc-quote">{{ selectedText }}</div>
 
             <wa-textarea
                 ref="textareaRef"
@@ -268,6 +273,12 @@ defineExpose({ isExpanded: expanded })
     display: flex;
     flex-direction: column;
     gap: var(--wa-space-s);
+    cursor: grab;
+    touch-action: none; /* prevent scroll while dragging on mobile */
+}
+
+.tsc-panel.dragging {
+    cursor: grabbing;
 }
 
 /* ── Selected text quote ─────────────────────────────────────────── */
@@ -284,13 +295,8 @@ defineExpose({ isExpanded: expanded })
     overflow: auto;
     white-space: pre-wrap;
     word-break: break-word;
-    cursor: grab;
-    touch-action: none; /* prevent scroll while dragging on mobile */
-    user-select: none;
-}
-
-.tsc-quote.dragging {
-    cursor: grabbing;
+    cursor: auto;
+    touch-action: auto; /* allow native scroll within quote */
 }
 
 /* ── Help text ───────────────────────────────────────────────────── */

@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Text selection comment panel is now draggable via the quote handle
+- Text selection comment panel is now draggable via the panel background (quote is scrollable)
 - Snippet buttons show a scope indicator
 - Re-clicking the active project/workspace in the sidebar deselects the current session and navigates to the home view (to access the new tabs)
 - On small-height screens, tabs can be switched directly from the compact header via a dropdown without expanding it first
