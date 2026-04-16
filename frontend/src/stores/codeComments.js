@@ -327,13 +327,23 @@ function makeFence(text) {
  * @param {Object} [options]
  * @param {boolean} [options.isSelectedText=false] - If true, formats as a session text
  *   comment ("Comment on selected text:") instead of a file/line comment.
+ * @param {string} [options.sourceLabel] - Optional source suffix (e.g. "from terminal").
+ *   Only used when isSelectedText is true.
  */
-export function formatComment(comment, { isSelectedText = false } = {}) {
+export function formatComment(comment, { isSelectedText = false, sourceLabel = '' } = {}) {
     const fence = makeFence(comment.lineText)
-    const quotedComment = comment.content.split('\n').map(line => `> ${line}`).join('\n')
+    const hasComment = !!comment.content?.trim()
+    const quotedComment = hasComment
+        ? comment.content.split('\n').map(line => `> ${line}`).join('\n')
+        : ''
 
     if (isSelectedText) {
-        return `\n---\nComment on selected text:\n${fence}\n${comment.lineText}\n${fence}\n\n${quotedComment}`
+        const suffix = sourceLabel ? ` ${sourceLabel}` : ''
+        const header = hasComment
+            ? `Comment on selected text${suffix}:`
+            : `Selected text${suffix}:`
+        const commentBlock = hasComment ? `\n\n${quotedComment}` : ''
+        return `\n---\n${header}\n${fence}\n${comment.lineText}\n${fence}${commentBlock}`
     }
 
     const lang = getLanguageFromPath(comment.filePath) || ''

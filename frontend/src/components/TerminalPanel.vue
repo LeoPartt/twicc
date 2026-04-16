@@ -804,6 +804,7 @@ onBeforeUnmount(() => {
                 :selected-text="terminalCommentText"
                 :position="terminalCommentPosition"
                 auto-expand
+                source-label="from terminal"
                 @close="closeTerminalComment"
             />
         </Teleport>

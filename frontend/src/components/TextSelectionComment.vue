@@ -15,6 +15,8 @@ const props = defineProps({
     position: { type: Object, required: true },
     /** When true, skip the collapsed button and open the panel immediately on mount. */
     autoExpand: { type: Boolean, default: false },
+    /** Optional source suffix for the formatted output (e.g. "from terminal"). */
+    sourceLabel: { type: String, default: '' },
 })
 
 const emit = defineEmits(['close'])
@@ -23,9 +25,9 @@ const insertTextAtCursor = inject('insertTextAtCursor', null)
 const settingsStore = useSettingsStore()
 
 const placeholderText = computed(() => {
-    if (settingsStore.isTouchDevice) return 'Add a comment...'
+    if (settingsStore.isTouchDevice) return 'Optional comment...'
     const keys = settingsStore.isMac ? '⌘↵ or Ctrl↵' : 'Ctrl↵ or Meta↵'
-    return `Add a comment... (${keys} to add to message)`
+    return `Optional comment... (${keys} to add to message)`
 })
 
 const expanded = ref(false)
@@ -56,7 +58,7 @@ const rootStyle = computed(() => {
     return base
 })
 
-const canAdd = computed(() => !!commentText.value.trim() && !!insertTextAtCursor)
+const canAdd = computed(() => !!insertTextAtCursor)
 
 // ─── Viewport clamping ─────────────────────────────────────────────
 
@@ -152,7 +154,7 @@ function addToMessage() {
 
     const formatted = formatComment(
         { lineText: props.selectedText, content: commentText.value },
-        { isSelectedText: true },
+        { isSelectedText: true, sourceLabel: props.sourceLabel },
     )
     insertTextAtCursor(formatted + '\n')
     close()
@@ -232,7 +234,7 @@ defineExpose({ isExpanded: expanded })
             ></wa-textarea>
 
             <div class="tsc-help">
-                This comment is not saved — click "Add to message" once you're done writing.
+                <strong>Note:</strong> Clicking outside this dialog will discard the selection and any comment entered. Drag here to move the dialog.
             </div>
 
             <div class="tsc-actions">
@@ -284,14 +286,13 @@ defineExpose({ isExpanded: expanded })
 /* ── Selected text quote ─────────────────────────────────────────── */
 
 .tsc-quote {
-    max-height: 4.8em; /* ~3 lines */
+    max-height: 6.4em; /* ~4 lines */
     padding: var(--wa-space-xs) var(--wa-space-xs);
     border-left: 3px solid var(--wa-color-brand);
     border-radius: var(--wa-border-radius-s);
     background: var(--wa-color-surface-lowered);
-    font-size: var(--wa-font-size-m);
+    font-size: var(--wa-font-size-s);
     line-height: 1.4;
-    color: var(--wa-color-text-quiet);
     overflow: auto;
     white-space: pre-wrap;
     word-break: break-word;
@@ -304,6 +305,7 @@ defineExpose({ isExpanded: expanded })
 .tsc-help {
     font-size: var(--wa-font-size-s);
     line-height: 1.3;
+    color: var(--wa-color-text-quiet);
 }
 
 /* ── Actions ─────────────────────────────────────────────────────── */
