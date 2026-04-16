@@ -135,8 +135,8 @@ defineExpose({ open, close })
             </wa-button>
 
             <!-- Split button: Send + dropdown for target selection -->
-            <div class="send-split-group">
-                <wa-button variant="brand" class="send-main-btn" :disabled="sendDisabled" @click="handleSend">
+            <wa-button-group label="Send options">
+                <wa-button variant="brand"  class="send-main-btn" :disabled="sendDisabled" @click="handleSend">
                     Send
                 </wa-button>
                 <wa-dropdown placement="top-end" :disabled="sendDisabled" @wa-select="handleSendTo">
@@ -153,11 +153,11 @@ defineExpose({ open, close })
                     </wa-dropdown-item>
                     <wa-divider></wa-divider>
                     <wa-dropdown-item value="new">
-                        <wa-icon slot="prefix" name="plus"></wa-icon>
+                        <wa-icon slot="icon" name="plus"></wa-icon>
                         New tab
                     </wa-dropdown-item>
                 </wa-dropdown>
-            </div>
+            </wa-button-group>
         </div>
     </wa-dialog>
 </template>
@@ -178,30 +178,6 @@ defineExpose({ open, close })
     display: flex;
     gap: var(--wa-space-s);
     justify-content: flex-end;
-}
-
-/* ── Split button group ──────────────────────────────────────────── */
-.send-split-group {
-    display: inline-flex;
-    align-items: stretch;
-}
-
-.send-main-btn::part(base) {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-}
-
-.send-arrow-btn {
-    /* Collapse left border to avoid double-border between buttons */
-    margin-left: -1px;
-}
-
-.send-arrow-btn::part(base) {
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-    /* Narrower padding for the chevron-only button */
-    padding-inline: 0.5em;
-    min-width: unset;
 }
 
 </style>

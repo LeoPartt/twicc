@@ -304,13 +304,13 @@ function keyClasses(keyDef) {
                                     </wa-dropdown-item>
                                     <wa-divider></wa-divider>
                                     <wa-dropdown-item value="new">
-                                        <wa-icon slot="prefix" name="plus"></wa-icon>
+                                        <wa-icon slot="icon" name="plus"></wa-icon>
                                         New tab
                                     </wa-dropdown-item>
                                     <wa-divider></wa-divider>
                                 </template>
                                 <wa-dropdown-item value="edit">
-                                    <wa-icon slot="prefix" name="pen-to-square"></wa-icon>
+                                    <wa-icon slot="icon" name="pen-to-square"></wa-icon>
                                     Edit before sending
                                 </wa-dropdown-item>
                             </wa-dropdown>

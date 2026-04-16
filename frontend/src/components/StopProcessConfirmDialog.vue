@@ -77,7 +77,7 @@ defineExpose({ open, close })
                 Cancel, keep the process
             </wa-button>
             <wa-button variant="danger" appearance="filled" @click="handleConfirm">
-                <wa-icon slot="prefix" name="ban"></wa-icon>
+                <wa-icon slot="start" name="ban"></wa-icon>
                 {{ mode === 'archive' ? 'Stop and archive' : 'Stop the process' }}
             </wa-button>
         </div>

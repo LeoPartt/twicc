@@ -82,7 +82,7 @@ async function handleSubmit() {
                         :disabled="loading"
                         size="small"
                     >
-                        <wa-icon slot="prefix" name="lock" variant="solid"></wa-icon>
+                        <wa-icon slot="start" name="lock" variant="solid"></wa-icon>
                     </wa-input>
                 </div>
 
@@ -99,7 +99,7 @@ async function handleSubmit() {
                     :disabled="!password || loading"
                     class="login-button"
                 >
-                    <wa-icon slot="prefix" name="right-to-bracket"></wa-icon>
+                    <wa-icon slot="start" name="right-to-bracket"></wa-icon>
                     Sign in
                 </wa-button>
             </form>

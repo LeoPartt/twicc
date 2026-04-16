@@ -582,7 +582,7 @@ function goToNextDiff() {
                             class="reduced-height"
                             @click="save"
                         >
-                            <wa-icon v-if="saving" slot="prefix" name="spinner" spin></wa-icon>
+                            <wa-spinner v-if="saving" slot="start"></wa-spinner>
                             Save
                         </wa-button>
                         <wa-button

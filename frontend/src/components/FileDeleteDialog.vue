@@ -91,7 +91,7 @@ defineExpose({ open, close })
                 Cancel
             </wa-button>
             <wa-button variant="danger" :disabled="isDeleting" @click="handleDelete">
-                <wa-spinner v-if="isDeleting" slot="prefix"></wa-spinner>
+                <wa-spinner v-if="isDeleting" slot="start"></wa-spinner>
                 Delete
             </wa-button>
         </div>

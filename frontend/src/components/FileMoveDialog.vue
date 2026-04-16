@@ -203,7 +203,7 @@ defineExpose({ open, close })
                 variant="brand"
                 :disabled="isMoving || !selectedDir"
             >
-                <wa-spinner v-if="isMoving" slot="prefix"></wa-spinner>
+                <wa-spinner v-if="isMoving" slot="start"></wa-spinner>
                 Move
             </wa-button>
         </div>

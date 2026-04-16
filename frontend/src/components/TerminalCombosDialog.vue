@@ -427,7 +427,8 @@ defineExpose({ open, close })
                     Close
                 </wa-button>
                 <wa-button variant="brand" @click="openAddForm">
-                    + Add combo
+                    <wa-icon slot="start" name="plus"></wa-icon>
+                    Add combo
                 </wa-button>
             </template>
             <template v-else>

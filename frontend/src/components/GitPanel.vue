@@ -1259,7 +1259,7 @@ onMounted(() => {
                             :value.prop="selectedBranch"
                             @change="onBranchChange"
                         >
-                            <wa-icon slot="prefix" name="code-branch"></wa-icon>
+                            <wa-icon slot="start" name="code-branch"></wa-icon>
                             <wa-option value="">All branches</wa-option>
                             <wa-divider></wa-divider>
                             <wa-option
@@ -1282,7 +1282,7 @@ onMounted(() => {
                             placeholder="Filter commits..."
                             clearable
                         >
-                            <wa-icon slot="prefix" name="magnifying-glass"></wa-icon>
+                            <wa-icon slot="start" name="magnifying-glass"></wa-icon>
                         </wa-input>
 
                         <wa-button

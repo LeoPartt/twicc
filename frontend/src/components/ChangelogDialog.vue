@@ -283,7 +283,7 @@ defineExpose({ open, close })
                     :disabled="currentEntryIdx <= 0"
                     @click="prev"
                 >
-                    <wa-icon name="chevron-left" slot="prefix"></wa-icon>
+                    <wa-icon name="chevron-left" slot="start"></wa-icon>
                     Prev
                 </wa-button>
                 <span class="changelog-counter">
@@ -297,7 +297,7 @@ defineExpose({ open, close })
                     @click="next"
                 >
                     Next
-                    <wa-icon name="chevron-right" slot="suffix"></wa-icon>
+                    <wa-icon name="chevron-right" slot="end"></wa-icon>
                 </wa-button>
             </div>
         </div>

@@ -226,7 +226,7 @@ defineExpose({ open, close })
             size="small"
             @click="removeCurrent"
         >
-            <wa-icon name="trash" slot="prefix"></wa-icon>
+            <wa-icon name="trash" slot="start"></wa-icon>
             Remove
         </wa-button>
     </wa-dialog>

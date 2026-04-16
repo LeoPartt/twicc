@@ -506,7 +506,7 @@ defineExpose({
                     :loading="isLoading"
                     @click="handleRetry"
                 >
-                    <wa-icon name="arrow-rotate-right" slot="prefix"></wa-icon>
+                    <wa-icon name="arrow-rotate-right" slot="start"></wa-icon>
                     Retry
                 </wa-button>
             </wa-callout>

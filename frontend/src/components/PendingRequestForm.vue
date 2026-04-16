@@ -657,8 +657,8 @@ function handleSubmitQuestions() {
                         :disabled="isResponding"
                         @click="handleDeny"
                     >
-                        <wa-spinner v-if="isResponding" slot="prefix"></wa-spinner>
-                        <wa-icon v-else name="xmark" variant="classic" slot="prefix"></wa-icon>
+                        <wa-spinner v-if="isResponding" slot="start"></wa-spinner>
+                        <wa-icon v-else name="xmark" variant="classic" slot="start"></wa-icon>
                         Deny
                     </wa-button>
                     <wa-button
@@ -669,7 +669,7 @@ function handleSubmitQuestions() {
                         :disabled="isResponding"
                         @click="handleStartEdit"
                     >
-                        <wa-icon name="pen" variant="classic" slot="prefix"></wa-icon>
+                        <wa-icon name="pen" variant="classic" slot="start"></wa-icon>
                         Approve with changes
                     </wa-button>
                     <wa-button
@@ -678,8 +678,8 @@ function handleSubmitQuestions() {
                         :disabled="isResponding"
                         @click="handleApprove"
                     >
-                        <wa-spinner v-if="isResponding" slot="prefix"></wa-spinner>
-                        <wa-icon v-else name="check" variant="classic" slot="prefix"></wa-icon>
+                        <wa-spinner v-if="isResponding" slot="start"></wa-spinner>
+                        <wa-icon v-else name="check" variant="classic" slot="start"></wa-icon>
                         Approve
                     </wa-button>
                 </template>
@@ -711,8 +711,8 @@ function handleSubmitQuestions() {
                             :disabled="isResponding"
                             @click="handleDeny"
                         >
-                            <wa-spinner v-if="isResponding" slot="prefix"></wa-spinner>
-                            <wa-icon v-else name="xmark" variant="classic" slot="prefix"></wa-icon>
+                            <wa-spinner v-if="isResponding" slot="start"></wa-spinner>
+                            <wa-icon v-else name="xmark" variant="classic" slot="start"></wa-icon>
                             Deny
                         </wa-button>
                     </div>
@@ -733,8 +733,8 @@ function handleSubmitQuestions() {
                         :disabled="isResponding"
                         @click="handleApproveWithChanges"
                     >
-                        <wa-spinner v-if="isResponding" slot="prefix"></wa-spinner>
-                        <wa-icon v-else name="check" variant="classic" slot="prefix"></wa-icon>
+                        <wa-spinner v-if="isResponding" slot="start"></wa-spinner>
+                        <wa-icon v-else name="check" variant="classic" slot="start"></wa-icon>
                         Approve with changes
                     </wa-button>
                 </template>
@@ -821,8 +821,8 @@ function handleSubmitQuestions() {
                     :disabled="isResponding || !canSubmitQuestions"
                     @click="handleSubmitQuestions"
                 >
-                    <wa-spinner v-if="isResponding" slot="prefix"></wa-spinner>
-                    <wa-icon v-else name="paper-plane" variant="classic" slot="prefix"></wa-icon>
+                    <wa-spinner v-if="isResponding" slot="start"></wa-spinner>
+                    <wa-icon v-else name="paper-plane" variant="classic" slot="start"></wa-icon>
                     Submit
                 </wa-button>
             </div>

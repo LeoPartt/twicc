@@ -1416,8 +1416,8 @@ function updateSidebarClosedClass(closed) {
                                 <div class="quota-tooltip-note quota-tooltip-row-danger" v-if="quotaFiveHourCost.capped"><wa-icon name="triangle-exclamation"></wa-icon> Based on capped 5h estimate</div>
                             </template>
                             <div class="quota-tooltip-buttons">
-                                <wa-button size="small" variant="brand" :appearance="quotaButtonAppearance" href="https://claude.ai/settings/usage" target="_blank" rel="noopener">View on claude.ai</wa-button>
-                                <wa-button size="small" variant="brand" :appearance="quotaButtonAppearance" @click="openUsageGraph('five-hour')"><wa-icon slot="prefix" name="chart-line"></wa-icon>View graph</wa-button>
+                                <wa-button size="small" variant="brand" :appearance="quotaButtonAppearance" href="https://claude.ai/settings/usage" target="_blank" rel="noopener"><wa-icon slot="start" name="up-right-from-square"></wa-icon>View on claude.ai</wa-button>
+                                <wa-button size="small" variant="brand" :appearance="quotaButtonAppearance" @click="openUsageGraph('five-hour')"><wa-icon slot="start" name="chart-line"></wa-icon>View graph</wa-button>
                             </div>
                         </div>
                     </AppTooltip>
@@ -1452,8 +1452,8 @@ function updateSidebarClosedClass(closed) {
                                 <div class="quota-tooltip-note quota-tooltip-row-danger" v-if="quotaSevenDayCost.capped"><wa-icon name="triangle-exclamation"></wa-icon> Based on capped 7d estimate</div>
                             </template>
                             <div class="quota-tooltip-buttons">
-                                <wa-button size="small" variant="brand" :appearance="quotaButtonAppearance" href="https://claude.ai/settings/usage" target="_blank" rel="noopener">View on claude.ai</wa-button>
-                                <wa-button size="small" variant="brand" :appearance="quotaButtonAppearance" @click="openUsageGraph('seven-day')"><wa-icon slot="prefix" name="chart-line"></wa-icon>View graph</wa-button>
+                                <wa-button size="small" variant="brand" :appearance="quotaButtonAppearance" href="https://claude.ai/settings/usage" target="_blank" rel="noopener"><wa-icon slot="start" name="up-right-from-square"></wa-icon>View on claude.ai</wa-button>
+                                <wa-button size="small" variant="brand" :appearance="quotaButtonAppearance" @click="openUsageGraph('seven-day')"><wa-icon slot="start" name="chart-line"></wa-icon>View graph</wa-button>
                             </div>
                         </div>
                     </AppTooltip>
@@ -1473,7 +1473,7 @@ function updateSidebarClosedClass(closed) {
                             <div class="quota-tooltip-row"><span class="quota-tooltip-label">Used</span><span>{{ quotaExtraUsage.usedCredits ?? 0 }} credits</span></div>
                             <div class="quota-tooltip-row"><span class="quota-tooltip-label">Monthly limit</span><span>{{ quotaExtraUsage.monthlyLimit ?? '?' }} credits</span></div>
                             <div class="quota-tooltip-row"><span class="quota-tooltip-label">Reset</span><span>{{ formatResetTime(extraUsageResetDate()) }}</span></div>
-                            <wa-button size="small" variant="brand" :appearance="quotaButtonAppearance" href="https://claude.ai/settings/usage" target="_blank" rel="noopener" class="quota-stale-button">View on claude.ai</wa-button>
+                            <wa-button size="small" variant="brand" :appearance="quotaButtonAppearance" href="https://claude.ai/settings/usage" target="_blank" rel="noopener" class="quota-stale-button"><wa-icon slot="start" name="up-right-from-square"></wa-icon>View on claude.ai</wa-button>
                         </div>
                     </AppTooltip>
                     <wa-icon v-if="quotaIsStale" id="quota-stale-warning" name="triangle-exclamation" class="quota-stale-icon"></wa-icon>
@@ -1481,7 +1481,7 @@ function updateSidebarClosedClass(closed) {
                         <div class="quota-tooltip">
                             <div class="quota-stale-header"><wa-icon name="triangle-exclamation" class="quota-stale-header-icon"></wa-icon><span>Data may be outdated</span></div>
                             <div class="quota-tooltip-row"><span class="quota-tooltip-label">Last update</span><span>{{ quotaLastUpdateFormatted }}</span></div>
-                            <wa-button size="small" variant="brand" :appearance="quotaButtonAppearance" href="https://claude.ai/settings/usage" target="_blank" rel="noopener" class="quota-stale-button">View usage on claude.ai</wa-button>
+                            <wa-button size="small" variant="brand" :appearance="quotaButtonAppearance" href="https://claude.ai/settings/usage" target="_blank" rel="noopener" class="quota-stale-button"><wa-icon slot="start" name="up-right-from-square"></wa-icon>View usage on claude.ai</wa-button>
                         </div>
                     </AppTooltip>
                 </div>

@@ -566,7 +566,7 @@ defineExpose({ open, close, openForWorkspace, openNew })
                         size="small"
                         @click="scanNow"
                     >
-                        <wa-icon name="magnifying-glass" slot="prefix"></wa-icon>
+                        <wa-icon name="magnifying-glass-plus" slot="start"></wa-icon>
                         Add matching projects now
                     </wa-button>
                     <span v-if="scanFeedback" class="scan-feedback">{{ scanFeedback }}</span>
@@ -586,7 +586,8 @@ defineExpose({ open, close, openForWorkspace, openNew })
                     Close
                 </wa-button>
                 <wa-button variant="brand" @click="openAddForm">
-                    + New workspace
+                    <wa-icon name="plus" slot="start"></wa-icon>
+                    New workspace
                 </wa-button>
             </template>
             <template v-else>

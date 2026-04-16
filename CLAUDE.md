@@ -212,6 +212,14 @@ import '@awesome.me/webawesome/dist/components/callout/callout.js'
 
 If a `wa-*` component appears unstyled in production (but works in dev), it's likely missing its import in `main.js`.
 
+**Slots for icons:** Web Awesome 3 uses `start` and `end` slots for icons inside buttons (not `prefix`/`suffix` which don't exist). For `wa-dropdown-item`, use the `icon` slot. Examples:
+
+```html
+<wa-button><wa-icon slot="start" name="check"></wa-icon> Save</wa-button>
+<wa-button>Next <wa-icon slot="end" name="chevron-right"></wa-icon></wa-button>
+<wa-dropdown-item><wa-icon slot="icon" name="plus"></wa-icon> New</wa-dropdown-item>
+```
+
 ## Web Awesome Documentation
 
 A nearly complete "one file" version of the docs is available at `frontend/node_modules/@awesome.me/webawesome/dist/llms.txt`

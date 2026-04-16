@@ -233,7 +233,7 @@ const testCases = reactive([
                     :appearance="editingStates[index] ? 'filled' : 'outlined'"
                     @click="toggleEdit(index)"
                 >
-                    <wa-icon :name="editingStates[index] ? 'eye' : 'pen'" variant="classic" slot="prefix"></wa-icon>
+                    <wa-icon :name="editingStates[index] ? 'eye' : 'pen'" variant="classic" slot="start"></wa-icon>
                     {{ editingStates[index] ? 'Read' : 'Edit' }}
                 </wa-button>
             </h2>

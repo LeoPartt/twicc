@@ -1357,7 +1357,7 @@ defineExpose({ insertTextAtCursor })
                                 size="small"
                                 @click="removeAllAttachments"
                             >
-                                <wa-icon name="trash" slot="prefix"></wa-icon>
+                                <wa-icon name="trash" slot="start"></wa-icon>
                                 Remove all
                             </wa-button>
                         </div>

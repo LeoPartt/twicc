@@ -281,7 +281,7 @@ defineExpose({
                 Cancel
             </wa-button>
             <wa-button type="submit" :form="formId" variant="brand" :disabled="isSaving">
-                <wa-spinner v-if="isSaving" slot="prefix"></wa-spinner>
+                <wa-spinner v-if="isSaving" slot="start"></wa-spinner>
                 Save
             </wa-button>
         </div>
