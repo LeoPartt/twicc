@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { renderMarkdown } from '../utils/markdown.js'
 import { vHighlight } from '../directives/vHighlight.js'
 // Uses the combined version that includes both light and dark
-// Then override with our theme file that uses [data-theme] without media queries
+// Then override with our theme file that uses [data-color-scheme] without media queries
 import 'github-markdown-css/github-markdown.css'
 import '../styles/github-markdown-themes.css'
 
@@ -140,7 +140,7 @@ function handleLinkClick(event) {
 /* -------------------------------------------------------------------
    Styles NOT covered by github-markdown-css:
    Shiki syntax highlighting extras + Mermaid diagrams.
-   Dark mode handled via class data-theme="dark" on <html> (set by main.js).
+   Dark mode handled via class data-color-scheme="dark" on <html> (set by main.js).
    NOT scoped — must penetrate v-html content.
    ------------------------------------------------------------------- */
 .markdown-body {

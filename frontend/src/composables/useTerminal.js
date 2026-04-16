@@ -12,18 +12,23 @@ import { resolveSnippetText } from '../utils/snippetPlaceholders'
 import '@xterm/xterm/css/xterm.css'
 
 // ── Terminal themes ──────────────────────────────────────────────────────
-// Background colors match the code editor and --wa-color-surface-default.
+// Background colors read from the active WA theme's --wa-color-surface-default.
 
-const THEMES = {
-    dark: {
-        background: '#1b2733',
+function getSurfaceColor() {
+    return getComputedStyle(document.documentElement).getPropertyValue('--wa-color-surface-default').trim()
+}
+
+function buildDarkTheme() {
+    const bg = getSurfaceColor()
+    return {
+        background: bg,
         foreground: '#e0e0e0',
         cursor: '#e0e0e0',
-        cursorAccent: '#1b2733',
+        cursorAccent: bg,
         selectionBackground: 'rgba(255, 255, 255, 0.15)',
         selectionForeground: '#ffffff',
         // ANSI colors (normal)
-        black: '#1b2733',
+        black: bg,
         red: '#f87171',
         green: '#4ade80',
         yellow: '#facc15',
@@ -40,7 +45,10 @@ const THEMES = {
         brightMagenta: '#d8b4fe',
         brightCyan: '#67e8f9',
         brightWhite: '#ffffff',
-    },
+    }
+}
+
+const THEMES = {
     light: {
         background: '#ffffff',
         foreground: '#24292e',
@@ -67,6 +75,10 @@ const THEMES = {
         brightCyan: '#3192aa',
         brightWhite: '#fafbfc',
     },
+}
+
+function getTerminalTheme(colorScheme) {
+    return colorScheme === 'dark' ? buildDarkTheme() : THEMES.light
 }
 
 // ── Mobile special-key handling ─────────────────────────────────────────
@@ -1352,12 +1364,12 @@ export function useTerminal(contextKey, terminalIndex = 0, { sessionId = null, p
     function initTerminal() {
         if (!containerRef.value || !contextKey) return
 
-        const effectiveTheme = settingsStore.getEffectiveTheme
+        const effectiveTheme = settingsStore.getEffectiveColorScheme
         terminal = new Terminal({
             cursorBlink: true,
             fontSize: settingsStore.getFontSize,
             fontFamily: '"Fira Code", "Cascadia Code", "JetBrains Mono", Menlo, Monaco, "Courier New", monospace',
-            theme: THEMES[effectiveTheme] || THEMES.dark,
+            theme: getTerminalTheme(effectiveTheme),
             scrollback: 5000,
             convertEol: true,
             scrollOnUserInput: true,
@@ -1783,10 +1795,10 @@ export function useTerminal(contextKey, terminalIndex = 0, { sessionId = null, p
         }
     })
 
-    // Switch theme live when the user toggles dark/light mode
-    watch(() => settingsStore.getEffectiveTheme, (newTheme) => {
+    // Switch theme live when the user toggles dark/light mode or WA theme
+    watch(() => [settingsStore.getEffectiveColorScheme, settingsStore.getWaTheme], ([newColorScheme]) => {
         if (terminal) {
-            terminal.options.theme = THEMES[newTheme] || THEMES.dark
+            terminal.options.theme = getTerminalTheme(newColorScheme)
         }
     })
 

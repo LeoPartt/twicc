@@ -392,7 +392,8 @@ body:not([data-display-mode="debug"]) .json-toggle {
         & > .session-item, & > .group-toggle {
 
             /* common styles */
-            --assistant-card-bg-color: oklch(from var(--assistant-card-base-color) calc(l*1.025) c h);
+            --assistant-card-bg-color: var(--assistant-card-base-color);
+            --xxxassistant-card-bg-color: oklch(from var(--assistant-card-base-color) calc(l*1.025) c h);
             --assistant-card-border-color: oklch(from var(--assistant-card-bg-color) calc(l / 1.05) c h);
             background: var(--assistant-card-bg-color);
             border-color: var(--assistant-card-border-color);

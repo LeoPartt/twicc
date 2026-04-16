@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDataStore, ALL_PROJECTS_ID } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
 import { useWorkspacesStore } from '../stores/workspaces'
-import { THEME_MODE } from '../constants'
+import { COLOR_SCHEME } from '../constants'
 import { useCommandRegistry } from '../composables/useCommandRegistry'
 import { useStartupPolling } from '../composables/useStartupPolling'
 import { toWorkspaceProjectId } from '../utils/workspaceIds'
@@ -42,7 +42,7 @@ const showCosts = computed(() => settingsStore.areCostsShown)
 // appearance to be readable on that dark background. In dark mode the tooltip is light and
 // outlined buttons work fine.
 const quotaButtonAppearance = computed(() =>
-    settingsStore.getEffectiveTheme === THEME_MODE.DARK ? 'outlined' : 'filled'
+    settingsStore.getEffectiveColorScheme === COLOR_SCHEME.DARK ? 'outlined' : 'filled'
 )
 
 // ═══════════════════════════════════════════════════════════════════════════

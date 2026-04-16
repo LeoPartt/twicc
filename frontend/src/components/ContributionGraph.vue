@@ -34,7 +34,7 @@ const graphContainer = ref(null)
 const { width: containerWidth } = useElementSize(graphContainer)
 const isVertical = computed(() => containerWidth.value > 0 && containerWidth.value < 600)
 
-const isDark = computed(() => settingsStore.getEffectiveTheme === 'dark')
+const isDark = computed(() => settingsStore.getEffectiveColorScheme === 'dark')
 
 /**
  * Read heatmap colors from CSS custom properties (--sparkline-project-gradient-color-0..4).

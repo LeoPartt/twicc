@@ -181,12 +181,14 @@ export async function resolveLanguage(filePath, languageOverride) {
 
 // ─── c) Theme extension ──────────────────────────────────────────────────────
 
-/** Background color for the dark theme, matching the app's dark bg. */
-const DARK_BG_COLOR = '#1b2733'
+/** Read the current surface background from the active WA theme. */
+function getSurfaceColor() {
+    return getComputedStyle(document.documentElement).getPropertyValue('--wa-color-surface-default').trim()
+}
 
 /**
  * Create a CodeMirror extension array for the given theme.
- * In dark mode, adds a background color override to match the app's dark bg.
+ * In dark mode, adds a background color override to match the app's surface color.
  *
  * @param {boolean} isDark - True for dark theme, false for light
  * @returns {import('@codemirror/state').Extension[]}
@@ -194,9 +196,10 @@ const DARK_BG_COLOR = '#1b2733'
 export function createThemeExtension(isDark) {
     if (!isDark) return [githubLight]
 
+    const bg = getSurfaceColor()
     const bgOverride = EditorView.theme({
-        '&.cm-editor': { backgroundColor: DARK_BG_COLOR },
-        '.cm-gutters': { backgroundColor: DARK_BG_COLOR },
+        '&.cm-editor': { backgroundColor: bg },
+        '.cm-gutters': { backgroundColor: bg },
     })
 
     return [githubDark, bgOverride]
@@ -478,8 +481,8 @@ export function useSettingsWatcher(getView, cmExtensions, overrides = {}) {
 
         if (!overrides.theme) {
             stops.push(watch(
-                () => settingsStore.getEffectiveTheme,
-                (theme) => {
+                () => [settingsStore.getEffectiveColorScheme, settingsStore.getWaTheme],
+                ([theme]) => {
                     const view = getView()
                     if (view) cmExtensions.reconfigure(view, 'theme', theme)
                 },

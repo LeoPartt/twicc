@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import { useSettingsStore, SETTINGS_SCHEMA } from '../stores/settings'
 import { useDataStore } from '../stores/data'
 import { useAuthStore } from '../stores/auth'
-import { DISPLAY_MODE, THEME_MODE, SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SESSIONS, PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, MODEL, MODEL_LABELS, EFFORT, EFFORT_LABELS, THINKING, THINKING_LABELS, CLAUDE_IN_CHROME, CLAUDE_IN_CHROME_LABELS, CONTEXT_MAX, CONTEXT_MAX_LABELS } from '../constants'
+import { DISPLAY_MODE, COLOR_SCHEME, SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SESSIONS, PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, MODEL, MODEL_LABELS, EFFORT, EFFORT_LABELS, THINKING, THINKING_LABELS, CLAUDE_IN_CHROME, CLAUDE_IN_CHROME_LABELS, CONTEXT_MAX, CONTEXT_MAX_LABELS, WA_THEME, WA_THEME_LABELS, WA_BRAND, WA_BRAND_LABELS } from '../constants'
 import NotificationSettings from './NotificationSettings.vue'
 import AppTooltip from './AppTooltip.vue'
 import ChangelogDialog from './ChangelogDialog.vue'
@@ -121,11 +121,22 @@ const shortcutGroups = computed(() => {
     ]
 })
 
-// Theme options for the select
-const themeOptions = [
-    { value: THEME_MODE.SYSTEM, label: 'System' },
-    { value: THEME_MODE.LIGHT, label: 'Light' },
-    { value: THEME_MODE.DARK, label: 'Dark' },
+// WA theme/palette/brand options
+const waThemeOptions = Object.values(WA_THEME).map(value => ({
+    value,
+    label: WA_THEME_LABELS[value],
+}))
+
+const waBrandOptions = Object.values(WA_BRAND).map(value => ({
+    value,
+    label: WA_BRAND_LABELS[value],
+}))
+
+// Color scheme options for the select
+const colorSchemeOptions = [
+    { value: COLOR_SCHEME.SYSTEM, label: 'System' },
+    { value: COLOR_SCHEME.LIGHT, label: 'Light' },
+    { value: COLOR_SCHEME.DARK, label: 'Dark' },
 ]
 
 // Session time format options for the select
@@ -142,7 +153,7 @@ const forcedChangelogOpen = ref(false)
 // Settings from store
 const displayMode = computed(() => store.getDisplayMode)
 const fontSize = computed(() => store.getFontSize)
-const themeMode = computed(() => store.getThemeMode)
+const colorScheme = computed(() => store.getColorScheme)
 const sessionTimeFormat = computed(() => store.getSessionTimeFormat)
 const showCosts = computed(() => store.areCostsShown)
 const extraUsageOnlyWhenNeeded = computed(() => store.isExtraUsageOnlyWhenNeeded)
@@ -159,6 +170,8 @@ const defaultEffort = computed(() => store.getDefaultEffort)
 const defaultThinking = computed(() => store.getDefaultThinking)
 const defaultClaudeInChrome = computed(() => store.getDefaultClaudeInChrome)
 const defaultContextMax = computed(() => store.getDefaultContextMax)
+const waTheme = computed(() => store.getWaTheme)
+const waBrand = computed(() => store.getWaBrand)
 const showDiffs = computed(() => store.isShowDiffs)
 const toolDiffWordWrap = computed(() => store.isToolDiffWordWrap)
 const toolDiffSideBySide = computed(() => store.isToolDiffSideBySide)
@@ -248,11 +261,16 @@ function onFontSizeChange(event) {
     store.setFontSize(event.target.value)
 }
 
-/**
- * Handle theme mode change.
- */
-function onThemeModeChange(event) {
-    store.setThemeMode(event.target.value)
+function onColorSchemeChange(event) {
+    store.setColorScheme(event.target.value)
+}
+
+function onWaThemeChange(event) {
+    store.setWaTheme(event.target.value)
+}
+
+function onWaBrandChange(event) {
+    store.setWaBrand(event.target.value)
 }
 
 /**
@@ -481,14 +499,42 @@ function onChangelogClose() {
                 <section v-if="activeSection === 'global'" class="settings-section">
                     <h3 class="settings-section-title">Global</h3>
                     <div class="setting-group">
-                        <label class="setting-group-label">Theme</label>
+                        <label class="setting-group-label">Color scheme</label>
                         <wa-select
-                            :value.prop="themeMode"
-                            @change="onThemeModeChange"
+                            :value.prop="colorScheme"
+                            @change="onColorSchemeChange"
                             size="small"
                         >
                             <wa-option
-                                v-for="option in themeOptions"
+                                v-for="option in colorSchemeOptions"
+                                :key="option.value"
+                                :value="option.value"
+                            >{{ option.label }}</wa-option>
+                        </wa-select>
+                    </div>
+                    <div class="setting-group">
+                        <label class="setting-group-label">Theme <wa-icon name="cloud" class="synced-icon"></wa-icon></label>
+                        <wa-select
+                            :value.prop="waTheme"
+                            @change="onWaThemeChange"
+                            size="small"
+                        >
+                            <wa-option
+                                v-for="option in waThemeOptions"
+                                :key="option.value"
+                                :value="option.value"
+                            >{{ option.label }}</wa-option>
+                        </wa-select>
+                    </div>
+                    <div class="setting-group">
+                        <label class="setting-group-label">Accent color <wa-icon name="cloud" class="synced-icon"></wa-icon></label>
+                        <wa-select
+                            :value.prop="waBrand"
+                            @change="onWaBrandChange"
+                            size="small"
+                        >
+                            <wa-option
+                                v-for="option in waBrandOptions"
                                 :key="option.value"
                                 :value="option.value"
                             >{{ option.label }}</wa-option>

@@ -6,7 +6,7 @@ import { useWebSocket, versionMismatchDetected } from './composables/useWebSocke
 import { useDataStore } from './stores/data'
 import { useSettingsStore } from './stores/settings'
 import { useAuthStore } from './stores/auth'
-import { THEME_MODE } from './constants'
+import { COLOR_SCHEME } from './constants'
 import { useFavicon } from './composables/useFavicon'
 import ConnectionIndicator from './components/ConnectionIndicator.vue'
 import CustomNotification from './components/CustomNotification.vue'
@@ -156,7 +156,7 @@ onBeforeUnmount(() => {
 
 // Notivue theme - inverted for contrast (dark theme when app is light, and vice-versa)
 const toastTheme = computed(() => {
-    const isDark = settingsStore.getEffectiveTheme === THEME_MODE.DARK
+    const isDark = settingsStore.getEffectiveColorScheme === COLOR_SCHEME.DARK
     // Invert: use light toast theme when app is dark, and vice-versa
     return {
         ...(isDark ? lightTheme : slateTheme),
@@ -265,8 +265,9 @@ body {
 :root {
     overflow-y: auto;
 
-    --user-card-base-color: var(--wa-color-indigo-95);
-    --assistant-card-base-color: var(--wa-color-gray-95);
+    --base-user-assistant-card-color: var(--wa-color-gray-95);
+    --user-card-base-color: oklch(from var(--base-user-assistant-card-color) calc(l + 0.015) c h);
+    --assistant-card-base-color: oklch(from var(--base-user-assistant-card-color) calc(l + 0.03) c h);
 
     --wa-font-size-3xs: round(calc(var(--wa-font-size-2xs) / 1.125), 1px);
 
@@ -323,7 +324,11 @@ body {
     --sparkline-pink-gradient-color-4: #880e4f;
     --sparkline-pink-stroke-color: #e57399;
 
-    --divider-size: 4px;
+    --divider-size: 1px;
+    &[data-theme="awesome"] {
+        --divider-size: 4px;
+    }
+
     --main-shadow-size: var(--wa-shadow-offset-y-s);
 
     /* Diff editor colors (light mode) */
@@ -335,15 +340,9 @@ body {
 }
 
 .wa-dark {
-    --wa-color-surface-default: #1b2733;
 
-    --wa-color-neutral-fill-quiet: #141d26;
-    --wa-color-surface-raised: #141d26;
-
+    --base-user-assistant-card-color: var(--wa-color-surface-raised);
     --wa-color-brand-border-loud: var(--wa-color-brand-50);
-
-    --user-card-base-color: #323b45;
-    --assistant-card-base-color: #252e38;
 
     /* Sparkline / heatmap graph colors (dark mode) — green (default) */
     --sparkline-project-gradient-color-0: #151b23;

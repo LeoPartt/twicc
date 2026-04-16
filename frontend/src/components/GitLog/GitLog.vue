@@ -13,7 +13,7 @@ import type {
   GraphOrientation,
   GraphPaging,
   ThemeColours,
-  ThemeMode,
+  ColorScheme,
 } from './types'
 import { DEFAULT_GRAPH_COLUMN_WIDTH, DEFAULT_NODE_SIZE, DEFAULT_HEADER_ROW_HEIGHT, DEFAULT_ROW_HEIGHT, DEFAULT_SCROLL_BUFFER } from './constants'
 import {
@@ -41,7 +41,7 @@ dayjs.extend(utc)
 const props = withDefaults(defineProps<{
   entries: GitLogEntry[]
   currentBranch: string
-  theme?: ThemeMode
+  colorScheme?: ColorScheme
   colours?: ThemeColours | string[]
   filter?: CommitFilter
   showGitIndex?: boolean
@@ -60,7 +60,7 @@ const props = withDefaults(defineProps<{
   enablePreviewedCommitStyling?: boolean
   classes?: GitLogStylingProps
 }>(), {
-  theme: 'light',
+  colorScheme: 'light',
   colours: 'rainbow-light',
   showGitIndex: true,
   showHeaders: false,
@@ -215,12 +215,12 @@ function handlePreviewCommit(commit?: Commit): void {
  * Blends an RGB colour with a background colour to simulate alpha.
  * Standalone version used during colour bootstrap (before ThemeContext exists).
  */
-function bootstrapShiftAlphaChannel(rgb: string, opacity: number, theme: ThemeMode): string {
+function bootstrapShiftAlphaChannel(rgb: string, opacity: number, colorScheme: ColorScheme): string {
   const matches = rgb?.match(/\d+/g)
 
   if (rgb && matches != null) {
     const [rFg, gFg, bFg] = matches.map(Number)
-    const backgroundRgb = theme === 'dark' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)'
+    const backgroundRgb = colorScheme === 'dark' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)'
     const [rBg, gBg, bBg] = backgroundRgb.match(/\d+/g)!.map(Number)
 
     const rNew = Math.round(rFg * opacity + rBg * (1 - opacity))
@@ -243,7 +243,7 @@ const resolvedColours = computed<string[]>(() => {
         return generateRainbowGradient(width + 1)
       case 'rainbow-dark':
         return generateRainbowGradient(width + 1)
-          .map(colour => bootstrapShiftAlphaChannel(colour, 0.6, props.theme))
+          .map(colour => bootstrapShiftAlphaChannel(colour, 0.6, props.colorScheme))
       case 'neon-aurora-dark':
         return neonAuroraDarkColours
       case 'neon-aurora-light':
@@ -252,11 +252,11 @@ const resolvedColours = computed<string[]>(() => {
   }
 
   // Custom array of colours
-  if (props.theme === 'light') {
+  if (props.colorScheme === 'light') {
     return coloursProp
   }
 
-  return coloursProp.map(colour => bootstrapShiftAlphaChannel(colour, 0.6, props.theme))
+  return coloursProp.map(colour => bootstrapShiftAlphaChannel(colour, 0.6, props.colorScheme))
 })
 
 // ---------------------------------------------------------------------------
@@ -264,7 +264,7 @@ const resolvedColours = computed<string[]>(() => {
 // ---------------------------------------------------------------------------
 
 const themeContextValue: ThemeContextBag = {
-  theme: computed(() => props.theme),
+  colorScheme: computed(() => props.colorScheme),
   colours: resolvedColours,
 }
 

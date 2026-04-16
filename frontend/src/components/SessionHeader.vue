@@ -400,15 +400,15 @@ defineExpose({
             <!-- Clickable zone: title + project + context ring + chevron toggle compact mode -->
             <div class="compact-toggle-zone" @click="isCompactExpanded = !isCompactExpanded">
                 <!-- Active tab label: shown only in compact collapsed mode, replacing action buttons -->
-                <span v-if="activeTabLabel" class="compact-active-tab-label">
-                    {{ activeTabLabel }}
+                <wa-button v-if="activeTabLabel" variant="brand" appearance="outlined" size="small" class="compact-active-tab-label">
+                    <span>{{ activeTabLabel }}</span>
                     <ProcessIndicator
                         v-if="activeTabProcessState"
                         :state="activeTabProcessState.state"
                         size="small"
                     />
                     <CodeCommentsIndicator :count="activeTabCommentsCount" :show-tooltip="false" class="compact-tab-comments-indicator" />
-                </span>
+                </wa-button>
 
                 <h2 :id="`session-header-${sessionId}-title`">{{ displayName }}</h2>
                 <AppTooltip :for="`session-header-${sessionId}-title`">{{ displayName }}</AppTooltip>
@@ -643,16 +643,10 @@ defineExpose({
 /* Active tab label: hidden by default, shown in compact collapsed mode */
 .compact-active-tab-label {
     display: none;
-    font-size: var(--wa-font-size-s);
-    font-weight: 700;
-    color: var(--wa-color-brand-on-quiet);
-    flex-shrink: 0;
-    border-color: var(--wa-color-brand-border-loud);
-    border-radius: var(--wa-form-control-border-radius);
-    border-style: var(--wa-border-style);
-    border-width: var(--wa-border-width-s);
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
-    box-shadow: var(--wa-shadow-offset-x-s) var(--wa-shadow-offset-y-s) 0 0 var(--wa-color-brand-border-loud);
+    font-size: var(--wa-font-size-3xs);
+    &::part(label) {
+        font-size: var(--wa-font-size-s);
+    }
 }
 .compact-tab-comments-indicator {
     font-size: var(--wa-font-size-xs);

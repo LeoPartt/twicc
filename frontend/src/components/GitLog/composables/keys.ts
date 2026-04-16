@@ -10,7 +10,7 @@ import type {
   GraphPaging,
   BreakPointTheme,
   NodeTheme,
-  ThemeMode,
+  ColorScheme,
 } from '../types'
 import type { GraphData } from '../data/types'
 import type { GraphMatrixColumns } from '../graph/GraphMatrixBuilder/GraphMatrixColumns'
@@ -61,7 +61,7 @@ export interface GitContextBag {
 // ---------------------------------------------------------------------------
 
 export interface ThemeContextBag {
-  theme: Readonly<Ref<ThemeMode>>
+  colorScheme: Readonly<Ref<ColorScheme>>
   colours: Readonly<Ref<string[]>>
 }
 

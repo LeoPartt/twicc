@@ -1,16 +1,16 @@
 /**
  * github-markdown-themes.css
  *
- * Override for github-markdown-css to support manual theme switching via data-theme attribute.
+ * Override for github-markdown-css to support manual theme switching via data-color-scheme attribute.
  * The original github-markdown.css defines color variables inside @media (prefers-color-scheme)
  * queries, which only works for system preference. This file defines the same variables
- * based on [data-theme] attribute, allowing user-controlled theme switching.
+ * based on [data-color-scheme] attribute, allowing user-controlled theme switching.
  *
  * Import this AFTER github-markdown-css to override the media query behavior.
  */
 
-/* Light theme - applied when data-theme="light" on html element */
-[data-theme="light"] .markdown-body {
+/* Light theme - applied when data-color-scheme="light" on html element */
+[data-color-scheme="light"] .markdown-body {
     color-scheme: light;
     --focus-outlineColor: #0969da;
     --fgColor-default: #1f2328;
@@ -64,8 +64,8 @@
     --color-prettylights-syntax-sublimelinter-gutter-mark: #818b98;
 }
 
-/* Dark theme - applied when data-theme="dark" on html element */
-[data-theme="dark"] .markdown-body {
+/* Dark theme - applied when data-color-scheme="dark" on html element */
+[data-color-scheme="dark"] .markdown-body {
     color-scheme: dark;
     --focus-outlineColor: #1f6feb;
     --fgColor-default: #f0f6fc;

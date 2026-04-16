@@ -27,7 +27,7 @@ const props = defineProps<{
 
 const { selectCommitHandler } = useSelectCommit()
 const { remoteProviderUrlBuilder } = useGitContext()
-const { textColour, theme, getCommitNodeColours } = useTheme()
+const { textColour, colorScheme, getCommitNodeColours } = useTheme()
 const { showCommitNodeTooltips, showCommitNodeHashes, nodeTheme, nodeSize, node, tooltip } = useGraphContext()
 
 // ---------------------------------------------------------------------------

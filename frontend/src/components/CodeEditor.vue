@@ -104,7 +104,7 @@ const insertTextAtCursor = inject('insertTextAtCursor', null)
 const { readOnly, wordWrap, lineNumbers } = toRefs(props)
 const cmExtensions = useCodeMirrorExtensions(
     { readOnly, wordWrap, lineNumbers },
-    { initialTheme: settingsStore.getEffectiveTheme, initialFontSize: settingsStore.getFontSize },
+    { initialTheme: settingsStore.getEffectiveColorScheme, initialFontSize: settingsStore.getFontSize },
 )
 
 const commentCompartment = new Compartment()

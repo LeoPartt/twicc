@@ -687,14 +687,14 @@ watch(selectedFile, (file) => {
 })
 
 // ---------------------------------------------------------------------------
-// Theme — follow app-wide effective theme
+// Color scheme — follow app-wide effective color scheme
 // ---------------------------------------------------------------------------
 
-const themeMode = computed(() => settingsStore.getEffectiveTheme)
+const colorScheme = computed(() => settingsStore.getEffectiveColorScheme)
 
-// Use a palette that matches the current theme
+// Use a palette that matches the current color scheme
 const colours = computed(() =>
-    themeMode.value === 'dark' ? 'neon-aurora-dark' : 'neon-aurora-light'
+    colorScheme.value === 'dark' ? 'neon-aurora-dark' : 'neon-aurora-light'
 )
 
 // ---------------------------------------------------------------------------
@@ -1304,7 +1304,7 @@ onMounted(() => {
                         :current-branch="currentBranch"
                         :head-commit-hash="headCommitHash"
                         :index-status="indexStatus"
-                        :theme="themeMode"
+                        :color-scheme="colorScheme"
                         :colours="colours"
                         :filter="commitFilter"
                         :show-headers="false"

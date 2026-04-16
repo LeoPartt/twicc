@@ -3,10 +3,10 @@
 
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { watch } from 'vue'
-import { DEFAULT_DISPLAY_MODE, DEFAULT_THEME_MODE, DEFAULT_SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SESSIONS, DISPLAY_MODE, THEME_MODE, SESSION_TIME_FORMAT, PERMISSION_MODE, MODEL, EFFORT, CONTEXT_MAX, SYNCED_SETTINGS_KEYS } from '../constants'
+import { DEFAULT_DISPLAY_MODE, DEFAULT_COLOR_SCHEME, DEFAULT_SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SESSIONS, DISPLAY_MODE, COLOR_SCHEME, SESSION_TIME_FORMAT, PERMISSION_MODE, MODEL, EFFORT, CONTEXT_MAX, SYNCED_SETTINGS_KEYS, WA_THEME, WA_BRAND, WA_THEME_DEFAULT_PALETTE } from '../constants'
 import { NOTIFICATION_SOUNDS } from '../utils/notificationSounds'
 // Note: useDataStore is imported lazily to avoid circular dependency (settings.js ↔ data.js)
-import { setThemeMode } from '../utils/theme'
+import { setColorScheme as setColorSchemeOnDom, setWaTheme, setWaBrand } from '../utils/theme'
 
 const STORAGE_KEY = 'twicc-settings'
 
@@ -23,7 +23,7 @@ export const SETTINGS_SCHEMA = {
     // --- Local-only settings (defaults defined here) ---
     displayMode: DEFAULT_DISPLAY_MODE,
     fontSize: 16,
-    themeMode: DEFAULT_THEME_MODE,
+    colorScheme: DEFAULT_COLOR_SCHEME,
     sessionTimeFormat: DEFAULT_SESSION_TIME_FORMAT,
     showCosts: false,
     extraUsageOnlyWhenNeeded: true,
@@ -53,9 +53,11 @@ export const SETTINGS_SCHEMA = {
     defaultThinking: null,
     defaultClaudeInChrome: null,
     defaultContextMax: null,
+    waTheme: null,
+    waBrand: null,
     // --- Not persisted - runtime state ---
     _devMode: false,
-    _effectiveTheme: null,
+    _effectiveColorScheme: null,
     _isTouchDevice: false,
     _isMac: false,
     _isApplyingRemoteSettings: false,
@@ -69,7 +71,7 @@ export const SETTINGS_SCHEMA = {
 const SETTINGS_VALIDATORS = {
     displayMode: (v) => [DISPLAY_MODE.CONVERSATION, DISPLAY_MODE.SIMPLIFIED, DISPLAY_MODE.NORMAL, DISPLAY_MODE.DEBUG].includes(v),
     fontSize: (v) => typeof v === 'number' && v >= 12 && v <= 32,
-    themeMode: (v) => [THEME_MODE.SYSTEM, THEME_MODE.LIGHT, THEME_MODE.DARK].includes(v),
+    colorScheme: (v) => [COLOR_SCHEME.SYSTEM, COLOR_SCHEME.LIGHT, COLOR_SCHEME.DARK].includes(v),
     sessionTimeFormat: (v) => [SESSION_TIME_FORMAT.TIME, SESSION_TIME_FORMAT.RELATIVE_SHORT, SESSION_TIME_FORMAT.RELATIVE_NARROW].includes(v),
     titleGenerationEnabled: (v) => typeof v === 'boolean',
     titleAutoApply: (v) => typeof v === 'boolean',
@@ -98,6 +100,8 @@ const SETTINGS_VALIDATORS = {
     notifUserTurnBrowser: (v) => typeof v === 'boolean',
     notifPendingRequestSound: (v) => Object.values(NOTIFICATION_SOUNDS).includes(v),
     notifPendingRequestBrowser: (v) => typeof v === 'boolean',
+    waTheme: (v) => Object.values(WA_THEME).includes(v),
+    waBrand: (v) => Object.values(WA_BRAND).includes(v),
 }
 
 /**
@@ -122,6 +126,11 @@ function loadSettings() {
                 parsed.displayMode = debugEnabled ? DISPLAY_MODE.DEBUG : baseMode
                 delete parsed.baseDisplayMode
                 delete parsed.debugEnabled
+            }
+
+            // Migrate themeMode → colorScheme
+            if (!('colorScheme' in parsed) && 'themeMode' in parsed) {
+                parsed.colorScheme = parsed.themeMode
             }
 
             // Only keep keys that exist in schema and have valid values
@@ -173,7 +182,7 @@ export const useSettingsStore = defineStore('settings', {
          */
         getDisplayMode: (state) => state.displayMode,
         getFontSize: (state) => state.fontSize,
-        getThemeMode: (state) => state.themeMode,
+        getColorScheme: (state) => state.colorScheme,
         getSessionTimeFormat: (state) => state.sessionTimeFormat,
         isTitleGenerationEnabled: (state) => state.titleGenerationEnabled,
         isTitleAutoApply: (state) => state.titleAutoApply,
@@ -202,15 +211,16 @@ export const useSettingsStore = defineStore('settings', {
         isNotifUserTurnBrowser: (state) => state.notifUserTurnBrowser,
         getNotifPendingRequestSound: (state) => state.notifPendingRequestSound,
         isNotifPendingRequestBrowser: (state) => state.notifPendingRequestBrowser,
+        getWaTheme: (state) => state.waTheme,
+        getWaBrand: (state) => state.waBrand,
         /**
          * Whether the backend is running in dev mode (source layout) vs installed package.
          */
         isDevMode: (state) => state._devMode,
         /**
-         * Effective theme: always returns 'light' or 'dark', never 'system'.
-         * Takes into account the system preference when themeMode is 'system'.
+         * Effective color scheme: always returns 'light' or 'dark', never 'system'.
          */
-        getEffectiveTheme: (state) => state._effectiveTheme,
+        getEffectiveColorScheme: (state) => state._effectiveColorScheme,
         /**
          * Whether the primary input device is touch (no hover support).
          * Detected once at startup. Used to disable tooltips on touch devices.
@@ -245,13 +255,9 @@ export const useSettingsStore = defineStore('settings', {
             }
         },
 
-        /**
-         * Set the theme mode.
-         * @param {string} mode - 'system' | 'light' | 'dark'
-         */
-        setThemeMode(mode) {
-            if (SETTINGS_VALIDATORS.themeMode(mode)) {
-                this.themeMode = mode
+        setColorScheme(mode) {
+            if (SETTINGS_VALIDATORS.colorScheme(mode)) {
+                this.colorScheme = mode
             }
         },
 
@@ -527,6 +533,18 @@ export const useSettingsStore = defineStore('settings', {
             }
         },
 
+        setWaTheme(theme) {
+            if (SETTINGS_VALIDATORS.waTheme(theme)) {
+                this.waTheme = theme
+            }
+        },
+
+        setWaBrand(brand) {
+            if (SETTINGS_VALIDATORS.waBrand(brand)) {
+                this.waBrand = brand
+            }
+        },
+
         /**
          * Apply synced settings received from the backend.
          * Merges with schema: validates each key, ignores unknown keys,
@@ -549,17 +567,13 @@ export const useSettingsStore = defineStore('settings', {
             this._isApplyingRemoteSettings = false
         },
 
-        /**
-         * Update the effective theme based on themeMode and system preference.
-         * Called internally when themeMode changes or system preference changes.
-         */
-        _updateEffectiveTheme() {
-            if (this.themeMode === THEME_MODE.SYSTEM) {
-                this._effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-                    ? THEME_MODE.DARK
-                    : THEME_MODE.LIGHT
+        _updateEffectiveColorScheme() {
+            if (this.colorScheme === COLOR_SCHEME.SYSTEM) {
+                this._effectiveColorScheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+                    ? COLOR_SCHEME.DARK
+                    : COLOR_SCHEME.LIGHT
             } else {
-                this._effectiveTheme = this.themeMode
+                this._effectiveColorScheme = this.colorScheme
             }
         },
     },
@@ -629,7 +643,7 @@ let _pendingSyncedSettings = null
  * Call this once after Pinia is installed.
  * Handles:
  * - localStorage persistence (auto-save on changes)
- * - Theme mode changes
+ * - Color scheme changes
  * - Font size application
  * - Display mode changes (triggers visual items recompute)
  *
@@ -649,12 +663,12 @@ export function initSettings() {
     document.documentElement.style.fontSize = `${store.fontSize}px`
 
     // Watch all state changes and save to localStorage
-    // Note: _effectiveTheme is excluded as it's computed at runtime
+    // Note: _effectiveColorScheme is excluded as it's computed at runtime
     watch(
         () => ({
             displayMode: store.displayMode,
             fontSize: store.fontSize,
-            themeMode: store.themeMode,
+            colorScheme: store.colorScheme,
             sessionTimeFormat: store.sessionTimeFormat,
             titleGenerationEnabled: store.titleGenerationEnabled,
             titleAutoApply: store.titleAutoApply,
@@ -683,6 +697,8 @@ export function initSettings() {
             notifUserTurnBrowser: store.notifUserTurnBrowser,
             notifPendingRequestSound: store.notifPendingRequestSound,
             notifPendingRequestBrowser: store.notifPendingRequestBrowser,
+            waTheme: store.waTheme,
+            waBrand: store.waBrand,
         }),
         (newSettings) => {
             saveSettings(newSettings)
@@ -690,10 +706,10 @@ export function initSettings() {
         { deep: true }
     )
 
-    // Watch for theme changes
-    watch(() => store.themeMode, (mode) => {
-        setThemeMode(mode)
-        store._updateEffectiveTheme()
+    // Watch for color scheme changes
+    watch(() => store.colorScheme, (mode) => {
+        setColorSchemeOnDom(mode)
+        store._updateEffectiveColorScheme()
     })
 
     // Detect touch device once at startup (primary input has no hover support)
@@ -701,11 +717,15 @@ export function initSettings() {
     // Detect macOS once at startup (for platform-appropriate key names)
     store._isMac = navigator.platform?.startsWith('Mac') || navigator.userAgent?.includes('Macintosh')
 
-    // Initialize effective theme and listen for system preference changes
-    store._updateEffectiveTheme()
+    // Initialize effective color scheme and listen for system preference changes
+    store._updateEffectiveColorScheme()
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        store._updateEffectiveTheme()
+        store._updateEffectiveColorScheme()
     })
+
+    // Watch for WA theme/palette/brand changes
+    watch(() => store.waTheme, (theme) => { if (theme) setWaTheme(theme) })
+    watch(() => store.waBrand, (brand) => { if (brand) setWaBrand(brand) })
 
     // Watch for font size changes
     watch(() => store.fontSize, (size) => {

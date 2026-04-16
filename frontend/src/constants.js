@@ -27,18 +27,18 @@ export const DISPLAY_MODE = {
 export const DEFAULT_DISPLAY_MODE = DISPLAY_MODE.NORMAL
 
 /**
- * Theme mode values.
+ * Color scheme values.
  * - system: Follow system preference (prefers-color-scheme)
  * - light: Force light mode
  * - dark: Force dark mode
  */
-export const THEME_MODE = {
+export const COLOR_SCHEME = {
     SYSTEM: 'system',
     LIGHT: 'light',
     DARK: 'dark',
 }
 
-export const DEFAULT_THEME_MODE = THEME_MODE.SYSTEM
+export const DEFAULT_COLOR_SCHEME = COLOR_SCHEME.SYSTEM
 
 /**
  * Session time format values.
@@ -302,6 +302,62 @@ export const CLAUDE_IN_CHROME_DISPLAY_LABELS = {
 }
 
 /**
+ * Web Awesome theme values.
+ * Controls the visual theme applied to Web Awesome components.
+ */
+export const WA_THEME = {
+    DEFAULT: 'default',
+    SHOELACE: 'shoelace',
+    AWESOME: 'awesome',
+}
+
+export const DEFAULT_WA_THEME = WA_THEME.DEFAULT
+
+export const WA_THEME_LABELS = {
+    [WA_THEME.DEFAULT]: 'Default',
+    [WA_THEME.SHOELACE]: 'Shoelace',
+    [WA_THEME.AWESOME]: 'Awesome',
+}
+
+export const WA_THEME_DEFAULT_PALETTE = {
+    [WA_THEME.AWESOME]: 'bright',
+    [WA_THEME.DEFAULT]: 'default',
+    [WA_THEME.SHOELACE]: 'shoelace',
+}
+
+/**
+ * Web Awesome brand color values.
+ * Controls the accent/brand color used throughout the UI.
+ */
+export const WA_BRAND = {
+    BLUE: 'blue',
+    RED: 'red',
+    ORANGE: 'orange',
+    YELLOW: 'yellow',
+    GREEN: 'green',
+    CYAN: 'cyan',
+    INDIGO: 'indigo',
+    PURPLE: 'purple',
+    PINK: 'pink',
+    GRAY: 'gray',
+}
+
+export const DEFAULT_WA_BRAND = WA_BRAND.CYAN
+
+export const WA_BRAND_LABELS = {
+    [WA_BRAND.BLUE]: 'Blue',
+    [WA_BRAND.RED]: 'Red',
+    [WA_BRAND.ORANGE]: 'Orange',
+    [WA_BRAND.YELLOW]: 'Yellow',
+    [WA_BRAND.GREEN]: 'Green',
+    [WA_BRAND.CYAN]: 'Cyan',
+    [WA_BRAND.INDIGO]: 'Indigo',
+    [WA_BRAND.PURPLE]: 'Purple',
+    [WA_BRAND.PINK]: 'Pink',
+    [WA_BRAND.GRAY]: 'Gray',
+}
+
+/**
  * Settings keys that are synced across devices via backend settings.json.
  * All other settings remain local to the browser (localStorage only).
  */
@@ -317,4 +373,6 @@ export const SYNCED_SETTINGS_KEYS = new Set([
     'defaultContextMax',
     'autoUnpinOnArchive',
     'terminalUseTmux',
+    'waTheme',
+    'waBrand',
 ])

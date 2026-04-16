@@ -14,7 +14,7 @@ import { useWorkspacesStore } from '../stores/workspaces'
 import { useRoute } from 'vue-router'
 import {
     DISPLAY_MODE,
-    THEME_MODE,
+    COLOR_SCHEME,
     PERMISSION_MODE,
     PERMISSION_MODE_LABELS,
     MODEL,
@@ -70,12 +70,12 @@ export function initStaticCommands(router) {
         [DISPLAY_MODE.DEBUG]: 'Debug',
     }
 
-    // ── Theme mode labels ─────────────────────────────────────────────────
+    // ── Color scheme labels ────────────────────────────────────────────────
 
-    const THEME_MODE_LABELS = {
-        [THEME_MODE.SYSTEM]: 'System',
-        [THEME_MODE.LIGHT]: 'Light',
-        [THEME_MODE.DARK]: 'Dark',
+    const COLOR_SCHEME_LABELS = {
+        [COLOR_SCHEME.SYSTEM]: 'System',
+        [COLOR_SCHEME.LIGHT]: 'Light',
+        [COLOR_SCHEME.DARK]: 'Dark',
     }
 
     // ── Commands ──────────────────────────────────────────────────────────
@@ -263,14 +263,14 @@ export function initStaticCommands(router) {
         // ── Display ───────────────────────────────────────────────────
 
         {
-            id: 'display.theme',
-            label: 'Change Theme\u2026',
+            id: 'display.color-scheme',
+            label: 'Change Color Scheme\u2026',
             icon: 'circle-half-stroke',
             category: 'display',
             items: () => [
-                { id: THEME_MODE.SYSTEM, label: THEME_MODE_LABELS[THEME_MODE.SYSTEM], action: () => settings.setThemeMode(THEME_MODE.SYSTEM), active: settings.themeMode === THEME_MODE.SYSTEM },
-                { id: THEME_MODE.LIGHT, label: THEME_MODE_LABELS[THEME_MODE.LIGHT], action: () => settings.setThemeMode(THEME_MODE.LIGHT), active: settings.themeMode === THEME_MODE.LIGHT },
-                { id: THEME_MODE.DARK, label: THEME_MODE_LABELS[THEME_MODE.DARK], action: () => settings.setThemeMode(THEME_MODE.DARK), active: settings.themeMode === THEME_MODE.DARK },
+                { id: COLOR_SCHEME.SYSTEM, label: COLOR_SCHEME_LABELS[COLOR_SCHEME.SYSTEM], action: () => settings.setColorScheme(COLOR_SCHEME.SYSTEM), active: settings.colorScheme === COLOR_SCHEME.SYSTEM },
+                { id: COLOR_SCHEME.LIGHT, label: COLOR_SCHEME_LABELS[COLOR_SCHEME.LIGHT], action: () => settings.setColorScheme(COLOR_SCHEME.LIGHT), active: settings.colorScheme === COLOR_SCHEME.LIGHT },
+                { id: COLOR_SCHEME.DARK, label: COLOR_SCHEME_LABELS[COLOR_SCHEME.DARK], action: () => settings.setColorScheme(COLOR_SCHEME.DARK), active: settings.colorScheme === COLOR_SCHEME.DARK },
             ],
         },
         {

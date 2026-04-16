@@ -14,7 +14,7 @@ import { fakeEntries, fakeIndexStatus } from '../components/GitLog/__tests__/fak
 // ---------------------------------------------------------------------------
 
 const isDark = ref(false)
-const themeMode = computed(() => (isDark.value ? 'dark' : 'light'))
+const colorScheme = computed(() => (isDark.value ? 'dark' : 'light'))
 
 // ---------------------------------------------------------------------------
 // Colour palette
@@ -196,7 +196,7 @@ const displayedCommitLabel = computed(() => {
             <GitLog
                 :entries="fakeEntries"
                 current-branch="main"
-                :theme="themeMode"
+                :color-scheme="colorScheme"
                 :colours="selectedPalette"
                 :filter="commitFilter"
                 :show-git-index="true"

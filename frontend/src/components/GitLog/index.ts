@@ -70,7 +70,7 @@ export type {
   GitLogIndexStatus,
 
   // Theme
-  ThemeMode,
+  ColorScheme,
   ThemeColours,
   NodeTheme,
   BreakPointTheme,

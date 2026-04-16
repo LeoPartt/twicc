@@ -4,20 +4,20 @@ import { useThemeContext } from './useThemeContext'
 import { useGitContext } from './useGitContext'
 
 export function useTheme(): ThemeFunctions {
-  const { theme: themeRef, colours: coloursRef } = useThemeContext()
+  const { colorScheme: colorSchemeRef, colours: coloursRef } = useThemeContext()
   const { graphData } = useGitContext()
 
-  const theme = computed(() => themeRef.value)
+  const colorScheme = computed(() => colorSchemeRef.value)
 
   const hoverColour = computed(() => {
-    if (themeRef.value === 'dark') {
+    if (colorSchemeRef.value === 'dark') {
       return 'rgba(70,70,70,0.8)'
     }
     return 'rgba(231, 231, 231, 0.5)'
   })
 
   const textColour = computed(() => {
-    if (themeRef.value === 'dark') {
+    if (colorSchemeRef.value === 'dark') {
       return 'rgb(255, 255, 255)'
     }
     return 'rgb(0, 0, 0)'
@@ -28,7 +28,7 @@ export function useTheme(): ThemeFunctions {
 
     if (rgb && matches != null) {
       const [r_fg, g_fg, b_fg] = matches.map(Number)
-      const backgroundRgb = themeRef.value === 'dark' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)'
+      const backgroundRgb = colorSchemeRef.value === 'dark' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)'
       const [r_bg, g_bg, b_bg] = backgroundRgb.match(/\d+/g)!.map(Number)
 
       const r_new = Math.round(r_fg * opacity + r_bg * (1 - opacity))
@@ -84,14 +84,14 @@ export function useTheme(): ThemeFunctions {
   }
 
   function getTooltipBackground(commit: Commit): string {
-    if (themeRef.value === 'dark') {
+    if (colorSchemeRef.value === 'dark') {
       return shiftAlphaChannel(getCommitColour(commit), 0.2)
     }
     return shiftAlphaChannel(getCommitColour(commit), 0.1)
   }
 
   return {
-    theme,
+    colorScheme,
     hoverColour,
     textColour,
     hoverTransitionDuration: 0.3,

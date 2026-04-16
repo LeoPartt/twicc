@@ -80,7 +80,7 @@ let _createGeneration = 0
 const settingsStore = useSettingsStore()
 const codeCommentsStore = useCodeCommentsStore()
 const insertTextAtCursor = inject('insertTextAtCursor', null)
-const initialSettings = { initialTheme: settingsStore.getEffectiveTheme, initialFontSize: settingsStore.getFontSize }
+const initialSettings = { initialTheme: settingsStore.getEffectiveColorScheme, initialFontSize: settingsStore.getFontSize }
 
 // Original side (a) — always read-only
 const cmA = useCodeMirrorExtensions({

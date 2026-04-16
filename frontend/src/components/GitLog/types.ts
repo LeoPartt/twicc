@@ -168,7 +168,7 @@ export type Commit<T = object> = CommitBase & T
 // Theme types
 // ---------------------------------------------------------------------------
 
-export type ThemeMode = 'light' | 'dark'
+export type ColorScheme = 'light' | 'dark'
 
 /**
  * The default theme renders merge nodes
@@ -199,9 +199,9 @@ export type ThemeColours =
 
 export interface ThemeFunctions {
   /**
-   * The current active theme mode.
+   * The current active color scheme.
    */
-  theme: ComputedRef<ThemeMode>
+  colorScheme: ComputedRef<ColorScheme>
 
   /**
    * An rgb() colour string for
@@ -458,10 +458,9 @@ export interface GitLogCommonProps<T = unknown> {
   filter?: CommitFilter<T>
 
   /**
-   * The variant of the default colour
-   * theme to apply to the log.
+   * The color scheme to apply to the log.
    */
-  theme?: ThemeMode
+  colorScheme?: ColorScheme
 
   /**
    * An array of colours used to colour the

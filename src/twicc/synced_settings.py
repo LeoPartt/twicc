@@ -44,6 +44,8 @@ SYNCED_SETTINGS_DEFAULTS: dict = {
     "defaultContextMax": 200_000,
     "autoUnpinOnArchive": True,
     "terminalUseTmux": True,
+    "waTheme": "default",
+    "waBrand": "cyan",
 }
 
 # Claude session settings: classification by when they can be applied to a live process.

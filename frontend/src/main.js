@@ -4,9 +4,11 @@
 import { initTheme } from './utils/theme'
 initTheme()
 
-// Web Awesome theme and components
+// Web Awesome base styles and themes (all free themes loaded for runtime switching)
 import '@awesome.me/webawesome/dist/styles/webawesome.css';
 import '@awesome.me/webawesome/dist/styles/themes/awesome.css'
+import '@awesome.me/webawesome/dist/styles/themes/default.css'
+import '@awesome.me/webawesome/dist/styles/themes/shoelace.css'
 import '@awesome.me/webawesome/dist/components/badge/badge.js'
 import '@awesome.me/webawesome/dist/components/button/button.js'
 import '@awesome.me/webawesome/dist/components/callout/callout.js'
