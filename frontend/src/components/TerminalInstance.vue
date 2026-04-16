@@ -33,7 +33,7 @@ const props = defineProps({
 
 const {
     containerRef, isConnected, started, ptyExited, start, reconnect, disconnect, focus,
-    touchMode, hasSelection, copySelection,
+    touchMode, hasSelection, copySelection, getSelectionText,
     paneAlternate,
     canScrollUp, canScrollDown,
     scrollToEdge, scrollingToEdge, cancelScrollToEdge,
@@ -72,6 +72,7 @@ const terminalApi = {
     scrollToEdge,
     cancelScrollToEdge,
     copySelection,
+    getSelectionText,
     disconnect,
     reconnect,
     focus,

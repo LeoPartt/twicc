@@ -1569,12 +1569,18 @@ export function useTerminal(contextKey, terminalIndex = 0, { sessionId = null, p
     }
 
     /**
+     * Return the current terminal selection text without clearing it.
+     */
+    function getSelectionText() {
+        if (!terminal) return ''
+        return getTmuxScrollSelectionText() || terminal.getSelection() || ''
+    }
+
+    /**
      * Copy the current terminal selection to clipboard, clear selection, and show a toast.
-     * Used by the explicit copy button on mobile.
      */
     function copySelection() {
-        if (!terminal) return
-        const selection = getTmuxScrollSelectionText() || terminal.getSelection()
+        const selection = getSelectionText()
         if (!selection) return
         clipboardWrite(selection)
         terminal.clearSelection()
@@ -1817,7 +1823,7 @@ export function useTerminal(contextKey, terminalIndex = 0, { sessionId = null, p
     return {
         containerRef, isConnected, started, ptyExited, start, reconnect, disconnect, focus,
         // Touch mode (mobile)
-        touchMode, hasSelection, copySelection,
+        touchMode, hasSelection, copySelection, getSelectionText,
         // Scroll state
         paneAlternate, canScrollUp, canScrollDown,
         scrollToEdge, scrollingToEdge, cancelScrollToEdge,

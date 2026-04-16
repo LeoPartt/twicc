@@ -397,7 +397,7 @@ const baseTheme = EditorView.baseTheme({
         transform: 'scale(0.8)',
     },
     '& .cm-code-comment-add-btn-icon': {
-        transform: 'scale(1.4)',
+        transform: 'scale(1.2)',
     },
     '& .cm-code-comment-wrap': {
         padding: '6px 12px 6px 8px',

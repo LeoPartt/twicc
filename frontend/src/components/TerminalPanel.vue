@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSettingsStore } from '../stores/settings'
 import { useDataStore } from '../stores/data'
@@ -16,6 +16,7 @@ import TerminalExtraKeysBar from './TerminalExtraKeysBar.vue'
 import TerminalCombosDialog from './TerminalCombosDialog.vue'
 import TerminalSnippetsDialog from './TerminalSnippetsDialog.vue'
 import TerminalSnippetSendDialog from './TerminalSnippetSendDialog.vue'
+import TextSelectionComment from './TextSelectionComment.vue'
 
 const props = defineProps({
     contextKey: {
@@ -46,6 +47,7 @@ const dataStore = useDataStore()
 const terminalConfigStore = useTerminalConfigStore()
 const workspacesStore = useWorkspacesStore()
 const terminalTabsStore = useTerminalTabsStore()
+const insertTextAtCursor = inject('insertTextAtCursor', null)
 
 const session = computed(() => props.sessionId ? dataStore.getSession(props.sessionId) : null)
 const resolvedProjectId = computed(() => props.projectId || session.value?.project_id)
@@ -391,6 +393,37 @@ function handleCopy() {
     activeApi.value?.copySelection?.()
 }
 
+// --- Text selection comment ---
+
+const terminalCommentRef = ref(null)
+const terminalCommentText = ref('')
+const terminalCommentPosition = ref(null)
+const commentButtonRef = ref(null)
+
+function handleComment() {
+    const api = activeApi.value
+    if (!api) return
+    const text = api.getSelectionText?.()
+    if (!text) return
+
+    // Position below the comment button
+    const btn = commentButtonRef.value
+    if (btn) {
+        const rect = btn.getBoundingClientRect()
+        terminalCommentPosition.value = {
+            top: rect.bottom,
+            left: rect.left + rect.width / 2,
+            above: false,
+        }
+    }
+    terminalCommentText.value = text
+}
+
+function closeTerminalComment() {
+    terminalCommentPosition.value = null
+    terminalCommentText.value = ''
+}
+
 function handlePaste() {
     activeApi.value?.handleExtraKeyPaste?.()
 }
@@ -643,6 +676,21 @@ onBeforeUnmount(() => {
                     </wa-button>
                     <AppTooltip v-if="tb.hasSelection" for="terminal-copy-button">Copy selection</AppTooltip>
 
+                    <!-- Comment button (only when a message input is available) -->
+                    <wa-button
+                        v-if="tb.hasSelection && insertTextAtCursor"
+                        ref="commentButtonRef"
+                        id="terminal-comment-button"
+                        variant="brand"
+                        appearance="filled-outlined"
+                        size="small"
+                        class="comment-button reduced-height"
+                        @click="handleComment"
+                    >
+                        <wa-icon name="comment" variant="regular"></wa-icon>
+                    </wa-button>
+                    <AppTooltip v-if="tb.hasSelection && insertTextAtCursor" for="terminal-comment-button">Comment on selection</AppTooltip>
+
                     <!-- Paste button -->
                     <wa-button
                         id="terminal-paste-button"
@@ -747,6 +795,18 @@ onBeforeUnmount(() => {
             ref="renameDialogRef"
             @save="handleRename"
         />
+
+        <!-- Ephemeral text selection comment widget (teleported to body to avoid overflow clipping) -->
+        <Teleport to="body">
+            <TextSelectionComment
+                v-if="terminalCommentPosition"
+                ref="terminalCommentRef"
+                :selected-text="terminalCommentText"
+                :position="terminalCommentPosition"
+                auto-expand
+                @close="closeTerminalComment"
+            />
+        </Teleport>
     </div>
 </template>
 

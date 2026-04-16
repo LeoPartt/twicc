@@ -13,6 +13,8 @@ const props = defineProps({
     selectedText: { type: String, required: true },
     /** Viewport-relative position: { top, left, above } — anchored at selection edge. */
     position: { type: Object, required: true },
+    /** When true, skip the collapsed button and open the panel immediately on mount. */
+    autoExpand: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['close'])
@@ -173,6 +175,7 @@ function handleDocumentMousedown(e) {
 
 onMounted(() => {
     document.addEventListener('mousedown', handleDocumentMousedown, true)
+    if (props.autoExpand) expand()
 })
 
 onBeforeUnmount(() => {

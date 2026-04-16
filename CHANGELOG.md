@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Text selection comments now also work in the terminal tab
 - Project, workspace, and all-projects home views now have their own Files, Git (projects only), and Terminal tabs
 - Pan/zoom on all image displays
 - Right-click context menu in file browser for file operations (Files tab) and git operations (Git tab)
