@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Text selection comment panel is now draggable via the quote handle
 - Snippet buttons show a scope indicator
 - Re-clicking the active project/workspace in the sidebar deselects the current session and navigates to the home view (to access the new tabs)
+- On small-height screens, tabs can be switched directly from the compact header via a dropdown without expanding it first
 - Bump `claude-agent-sdk` from 0.1.58 to 0.1.59 (bundled Claude Code CLI: 2.1.97 → 2.1.105)
 
 ### Fixed
