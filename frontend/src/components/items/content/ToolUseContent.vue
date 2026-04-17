@@ -8,7 +8,7 @@ import { useSettingsStore } from '../../../stores/settings'
 import { apiFetch } from '../../../utils/api'
 import { getIconUrl, getFileIconId } from '../../../utils/fileIcons'
 import { getLanguageFromPath } from '../../../utils/languages'
-import { AGENT_TOOL_NAMES } from '../../../constants'
+import { AGENT_TOOL_NAMES, PROCESS_STATE, PROCESS_STATE_COLORS } from '../../../constants'
 import { stopAgent } from '../../../composables/useWebSocket'
 import { getSessionCutoffMs } from '../../../utils/sessions'
 import { getParsedContent, hasContent } from '../../../utils/parsedContent'
@@ -929,7 +929,7 @@ function handleStopAgent() {
                         appearance="outlined"
                         @click.stop="navigateToSubagent"
                     >
-                        <wa-icon v-if="isAgentRunning" slot="start" name="robot" class="agent-running-icon"></wa-icon>
+                        <wa-icon v-if="isAgentRunning" slot="start" name="robot" class="agent-running-icon" :style="{ color: PROCESS_STATE_COLORS[PROCESS_STATE.ASSISTANT_TURN] }"></wa-icon>
                         View Agent
                         <CodeCommentsIndicator slot="end" :count="agentCommentsCount" :show-tooltip="false" class="agent-comments-indicator" />
                     </wa-button>

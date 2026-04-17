@@ -157,7 +157,7 @@ export const PROCESS_STATE_NAMES = {
  */
 export const PROCESS_STATE_COLORS = {
     [PROCESS_STATE.STARTING]: 'var(--wa-color-warning-60)',
-    [PROCESS_STATE.ASSISTANT_TURN]: 'var(--wa-color-brand-60)',
+    [PROCESS_STATE.ASSISTANT_TURN]: 'var(--wa-color-blue-60)',
     [PROCESS_STATE.USER_TURN]: 'var(--wa-color-success-60)',
     [PROCESS_STATE.DEAD]: 'var(--wa-color-danger-60)',
 }
