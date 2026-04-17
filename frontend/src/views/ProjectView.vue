@@ -103,12 +103,19 @@ function formatResetTime(resetsAt) {
     if (diffHours < 24) {
         return reset.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
     }
-    // < 7 days: weekday only
+    // < 7 days: weekday + time
     if (diffHours < 7 * 24) {
-        return reset.toLocaleDateString(locale, { weekday: 'long' })
+        return reset.toLocaleDateString(locale, { weekday: 'long', hour: '2-digit', minute: '2-digit' })
     }
     // >= 7 days: weekday + day/month
     return reset.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'numeric' })
+}
+
+function formatResetTimePrecise(resetsAt) {
+    if (!resetsAt) return ''
+    const reset = resetsAt instanceof Date ? resetsAt : new Date(resetsAt)
+    const locale = navigator.language
+    return reset.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
 }
 
 // Stale data detection: data older than 15 minutes
@@ -1442,7 +1449,7 @@ function updateSidebarClosedClass(closed) {
                             <div class="quota-tooltip-note quota-tooltip-row-danger" v-if="quotaSevenDayCost?.cutoffAt"><wa-icon name="triangle-exclamation"></wa-icon> Quota will be exhausted at current pace</div>
                             <div class="quota-tooltip-row" v-if="quotaSevenDay.recentLong.rate != null && !quotaSevenDay.recentLong.isFallback"><span class="quota-tooltip-label" style="margin-left: .5rem;"> - last {{ formatRecentDelta(quotaSevenDay.recentLong.deltaMs, true, quotaSevenDay.recentLong.lookbackMs) }}</span><span>{{ (quotaSevenDay.recentLong.rate * 100).toFixed(0) }}%</span></div>
                             <div class="quota-tooltip-row" v-if="quotaSevenDay.recentShort.rate != null && !quotaSevenDay.recentShort.isFallback"><span class="quota-tooltip-label" style="margin-left: .5rem;"> - last {{ formatRecentDelta(quotaSevenDay.recentShort.deltaMs, true, quotaSevenDay.recentShort.lookbackMs) }}</span><span>{{ (quotaSevenDay.recentShort.rate * 100).toFixed(0) }}%</span></div>
-                            <div class="quota-tooltip-row" v-if="quotaSevenDay.resetsAt"><span class="quota-tooltip-label">Reset</span><span>{{ formatResetTime(quotaSevenDay.resetsAt) }}</span></div>
+                            <div class="quota-tooltip-row" v-if="quotaSevenDay.resetsAt"><span class="quota-tooltip-label">Reset</span><span :title="formatResetTimePrecise(quotaSevenDay.resetsAt)">{{ formatResetTime(quotaSevenDay.resetsAt) }}</span></div>
                             <template v-if="showCosts && quotaSevenDayCost && quotaSevenDayCost.spent != null">
                                 <wa-divider class="quota-tooltip-divider"></wa-divider>
                                 <div class="quota-tooltip-row"><span class="quota-tooltip-label">Spent</span><CostDisplay :cost="quotaSevenDayCost.spent" /></div>
