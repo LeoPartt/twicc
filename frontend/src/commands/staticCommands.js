@@ -56,6 +56,16 @@ export function initStaticCommands(router) {
         return route.params.projectId || null
     }
 
+    const PROJECT_DETAIL_ROUTES = new Set([
+        'project', 'project-files', 'project-git', 'project-terminal',
+        'projects-all', 'projects-files', 'projects-git', 'projects-terminal',
+    ])
+
+    /** Whether the current route is on a project detail panel (not a session) */
+    function isOnProjectDetail() {
+        return PROJECT_DETAIL_ROUTES.has(route.name)
+    }
+
     /** Non-archived projects sorted by display name */
     function activeProjects() {
         return data.getProjects.filter(p => !p.archived)
@@ -209,6 +219,58 @@ export function initStaticCommands(router) {
             action: () => {
                 const name = isAllProjectsMode() ? 'projects-session-terminal' : 'session-terminal'
                 router.push({ name, params: route.params })
+            },
+        },
+
+        // Project detail panel tabs
+        {
+            id: 'nav.project-tab.stats',
+            label: 'Switch to Stats Tab',
+            icon: 'chart-line',
+            category: 'navigation',
+            when: () => isOnProjectDetail(),
+            action: () => {
+                const name = isAllProjectsMode() ? 'projects-all' : 'project'
+                router.push({ name, params: route.params, query: route.query })
+            },
+        },
+        {
+            id: 'nav.project-tab.files',
+            label: 'Switch to Files Tab (Project)',
+            icon: 'file-code',
+            category: 'navigation',
+            when: () => isOnProjectDetail(),
+            action: () => {
+                const name = isAllProjectsMode() ? 'projects-files' : 'project-files'
+                router.push({ name, params: route.params, query: route.query })
+            },
+        },
+        {
+            id: 'nav.project-tab.git',
+            label: 'Switch to Git Tab (Project)',
+            icon: 'code-branch',
+            category: 'navigation',
+            when: () => {
+                if (!isOnProjectDetail()) return false
+                // Git tab only available in single-project mode with a git root
+                const projectId = routeProjectId()
+                if (!projectId) return false
+                return !!data.getProject(projectId)?.git_root
+            },
+            action: () => {
+                const name = isAllProjectsMode() ? 'projects-git' : 'project-git'
+                router.push({ name, params: route.params, query: route.query })
+            },
+        },
+        {
+            id: 'nav.project-tab.terminal',
+            label: 'Switch to Terminal Tab (Project)',
+            icon: 'terminal',
+            category: 'navigation',
+            when: () => isOnProjectDetail(),
+            action: () => {
+                const name = isAllProjectsMode() ? 'projects-terminal' : 'project-terminal'
+                router.push({ name, params: route.params, query: route.query })
             },
         },
 

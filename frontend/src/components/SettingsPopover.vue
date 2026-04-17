@@ -92,6 +92,14 @@ const shortcutGroups = computed(() => {
             ]
         },
         {
+            label: 'Project home tabs',
+            shortcuts: [
+                { keys: ['Alt', 'Shift', '1–4'], description: 'Jump to tab (Stats, Files, Git, Terminal)' },
+                { keys: ['Alt', 'Shift', '←/→'], description: 'Previous / next tab' },
+                { keys: ['Alt', 'Shift', '↑/↓'], description: 'Last visited tab' },
+            ]
+        },
+        {
             label: 'Terminal tabs',
             shortcuts: [
                 { keys: ['Alt', 'Ctrl', 'Shift', '1–9'], description: 'Jump to terminal tab N' },
