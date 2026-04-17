@@ -139,7 +139,7 @@ def _build_reference_snapshots(snapshot: UsageSnapshot) -> dict | None:
     # For each lookback, we provide two snapshots from the previous period:
     #   prev_ref: closest to (now - lookback), to measure old-period consumption
     #   prev_end: last snapshot before the current window started
-    def _find_cross_period(window_start, lookback):
+    def _find_cross_period(window_start, lookback, resets_at_field):
         if window_start is None:
             return None
         elapsed = (now - window_start).total_seconds()
@@ -157,10 +157,12 @@ def _build_reference_snapshots(snapshot: UsageSnapshot) -> dict | None:
         if not prev_ref:
             return None
 
-        # Most recent snapshot before window_start
+        # Most recent snapshot before window_start that still belongs to the
+        # previous period (resets_at is not null — excludes the gap between
+        # periods where the API reports utilization=0 with resets_at=None).
         prev_end = (
             UsageSnapshot.objects
-            .filter(fetched_at__lt=window_start)
+            .filter(fetched_at__lt=window_start, **{f"{resets_at_field}__isnull": False})
             .order_by("-fetched_at")
             .first()
         )
@@ -170,7 +172,7 @@ def _build_reference_snapshots(snapshot: UsageSnapshot) -> dict | None:
         return prev_ref, prev_end
 
     def _serialize_fh_cross(key, window_start, lookback):
-        result = _find_cross_period(window_start, lookback)
+        result = _find_cross_period(window_start, lookback, "five_hour_resets_at")
         if result:
             prev_ref, prev_end = result
             refs[key] = {
@@ -179,7 +181,7 @@ def _build_reference_snapshots(snapshot: UsageSnapshot) -> dict | None:
             }
 
     def _serialize_sd_cross(key, window_start, lookback):
-        result = _find_cross_period(window_start, lookback)
+        result = _find_cross_period(window_start, lookback, "seven_day_resets_at")
         if result:
             prev_ref, prev_end = result
             def _sd_fields(snap):

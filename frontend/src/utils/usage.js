@@ -271,28 +271,15 @@ function formatDuration(ms, roundToHour) {
 
 /**
  * Format a recent burn rate time delta for display in tooltips.
- * When maxMs is provided and the formatted delta differs from the formatted max,
- * shows "delta/max" (e.g. "2h/24h", "10min/1h").
  *
  * @param {number|null} deltaMs - Time span in milliseconds
  * @param {boolean} roundToHour - If true, round to nearest hour (for 7d window).
  *                                 If false, round to nearest 10 minutes (for 5h window).
- * @param {number|null} [maxMs] - Maximum lookback duration in milliseconds
- * @returns {string|null} Formatted duration, e.g. "2h/24h", "50min", "1h", or null
+ * @returns {string|null} Formatted duration, e.g. "2h", "50min", "1h", or null
  */
-export function formatRecentDelta(deltaMs, roundToHour, maxMs) {
+export function formatRecentDelta(deltaMs, roundToHour) {
     if (deltaMs == null || deltaMs <= 0) return null
-
-    const deltaStr = formatDuration(deltaMs, roundToHour)
-
-    if (maxMs != null && maxMs > 0) {
-        const maxStr = formatDuration(maxMs, roundToHour)
-        if (deltaStr !== maxStr) {
-            return `${deltaStr}/${maxStr}`
-        }
-    }
-
-    return deltaStr
+    return formatDuration(deltaMs, roundToHour)
 }
 
 /**
