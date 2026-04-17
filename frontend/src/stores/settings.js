@@ -16,7 +16,7 @@ const STORAGE_KEY = 'twicc-settings'
  * When removing settings: just remove them from here (they'll be cleaned from localStorage).
  *
  * Synced settings (those in SYNCED_SETTINGS_KEYS) use null as placeholder here.
- * Their real defaults are provided by the backend via /api/settings/ and injected
+ * Their real defaults are provided by the backend via /api/bootstrap/ and injected
  * into this object by applyDefaultSettings() before the store is initialized.
  */
 export const SETTINGS_SCHEMA = {

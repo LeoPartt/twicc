@@ -1926,17 +1926,29 @@ def usage_history(request):
     return JsonResponse({"snapshots": data})
 
 
-def synced_settings(request):
-    """GET /api/settings/ - Current synced settings, defaults, and Claude settings categories."""
+def bootstrap(request):
+    """GET /api/bootstrap/ - All data needed before the app can mount.
+
+    Returns synced settings (with defaults and categories), workspaces,
+    terminal config, and message snippets in a single response so the
+    frontend doesn't have to wait for the WebSocket connection.
+    """
+    from twicc.message_snippets import read_message_snippets_config
     from twicc.synced_settings import CLAUDE_SETTINGS_CATEGORIES, SYNCED_SETTINGS_DEFAULTS, prepare_settings_for_client, read_synced_settings
+    from twicc.terminal_config import read_terminal_config
+    from twicc.workspaces import read_workspaces
 
     clean_settings, version = prepare_settings_for_client(read_synced_settings())
+    workspaces_data = read_workspaces()
     return JsonResponse({
         "settings": clean_settings,
-        "version": version,
+        "settings_version": version,
         "default_settings": SYNCED_SETTINGS_DEFAULTS,
         "claude_settings_categories": CLAUDE_SETTINGS_CATEGORIES,
         "dev_mode": settings.DEV_MODE,
+        "workspaces": workspaces_data.get("workspaces", []),
+        "terminal_config": read_terminal_config(),
+        "message_snippets": read_message_snippets_config(),
     })
 
 

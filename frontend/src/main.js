@@ -49,6 +49,9 @@ import App from './App.vue'
 import { applyDefaultSettings, initSettings } from './stores/settings'
 import { useDataStore } from './stores/data'
 import { useCodeCommentsStore } from './stores/codeComments'
+import { useWorkspacesStore } from './stores/workspaces'
+import { useTerminalConfigStore } from './stores/terminalConfig'
+import { useMessageSnippetsStore } from './stores/messageSnippets'
 
 // Notivue CSS
 import 'notivue/notification.css'
@@ -91,23 +94,25 @@ const notivue = createNotivue({
 })
 app.use(notivue)
 
-// Fetch synced settings defaults from backend before initializing the store.
-// This ensures SETTINGS_SCHEMA has backend-provided defaults before loadSettings()
-// runs, making the backend the single source of truth for synced setting defaults.
+// Fetch bootstrap data from backend before initializing stores.
+// This single call returns settings, workspaces, terminal config, and message snippets
+// so the UI has everything it needs before mount (without waiting for the WebSocket).
+let bootstrapData
 {
-    let settingsFailed = false
+    let bootstrapFailed = false
     try {
-        const resp = await fetch('/api/settings/')
+        const resp = await fetch('/api/bootstrap/')
         if (resp.ok) {
-            const { settings, version, default_settings, claude_settings_categories, dev_mode } = await resp.json()
-            applyDefaultSettings(default_settings, settings, claude_settings_categories, dev_mode, version)
+            bootstrapData = await resp.json()
+            const { settings, settings_version, default_settings, claude_settings_categories, dev_mode } = bootstrapData
+            applyDefaultSettings(default_settings, settings, claude_settings_categories, dev_mode, settings_version)
         } else {
-            settingsFailed = true
+            bootstrapFailed = true
         }
     } catch {
-        settingsFailed = true
+        bootstrapFailed = true
     }
-    if (settingsFailed) {
+    if (bootstrapFailed) {
         document.getElementById('app').innerHTML = `
             <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;font-family:system-ui,sans-serif">
                 <div style="max-width:480px;padding:2rem;border-radius:12px;background:#451a1a;border:1px solid #7f1d1d;color:#fca5a5">
@@ -118,12 +123,18 @@ app.use(notivue)
                     </p>
                 </div>
             </div>`
-        throw new Error('Backend unreachable — cannot fetch settings')
+        throw new Error('Backend unreachable — cannot fetch bootstrap data')
     }
 }
 
 // Initialize settings (localStorage persistence, theme, font size, display mode watchers)
 initSettings()
+
+// Apply bootstrap data to stores so the UI has workspaces, snippets, and terminal config
+// immediately available. The WebSocket will re-push these on (re)connect for live updates.
+useWorkspacesStore().applyWorkspaces(bootstrapData.workspaces)
+useTerminalConfigStore().applyConfig(bootstrapData.terminal_config)
+useMessageSnippetsStore().applyConfig(bootstrapData.message_snippets)
 
 // Hydrate drafts from IndexedDB (async, non-blocking)
 // Order matters: sessions first so draft messages have their session available
