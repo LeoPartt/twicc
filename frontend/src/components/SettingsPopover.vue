@@ -9,7 +9,7 @@ import { DISPLAY_MODE, COLOR_SCHEME, SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SES
 import NotificationSettings from './NotificationSettings.vue'
 import AppTooltip from './AppTooltip.vue'
 import ChangelogDialog from './ChangelogDialog.vue'
-import { sendChangelogSeen } from '../composables/useWebSocket'
+import { sendChangelogSeen, sendValidateUsageFile, sendValidateUsageDumpPath } from '../composables/useWebSocket'
 import { vPopoverFocusFix } from '../directives/vPopoverFocusFix'
 
 const router = useRouter()
@@ -38,6 +38,7 @@ const sections = [
     { id: 'title',         label: 'Title suggestion', navLabel: 'Titles', synced: true },
     { id: 'editor',        label: 'Editor' },
     { id: 'terminal',      label: 'Terminal' },
+    { id: 'usage',         label: 'Claude quotas/usage', navLabel: 'Usage' },
 ]
 
 const activeSection = ref('global')
@@ -57,6 +58,12 @@ function selectSection(id) {
     mobileShowContent.value = true
     if (id === 'notifications') {
         nextTick(() => notificationSettingsRef.value?.sync())
+    }
+    if (id === 'usage') {
+        usageFilePathInput.value = usageJsonFilePath.value || ''
+        usageFileValidation.value = null
+        usageDumpPathInput.value = usageDumpFilePath.value || ''
+        usageDumpValidation.value = null
     }
 }
 
@@ -177,6 +184,31 @@ const toolDiffWordWrap = computed(() => store.isToolDiffWordWrap)
 const toolDiffSideBySide = computed(() => store.isToolDiffSideBySide)
 const diffSideBySide = computed(() => store.isDiffSideBySide)
 const editorWordWrap = computed(() => store.isEditorWordWrap)
+const usageJsonFileEnabled = computed(() => store.isUsageJsonFileEnabled)
+const usageJsonFilePath = computed(() => store.getUsageJsonFilePath)
+const usageDumpFileEnabled = computed(() => store.isUsageDumpFileEnabled)
+const usageDumpFilePath = computed(() => store.getUsageDumpFilePath)
+
+// Usage file — local input + validation state
+const usageFilePathInput = ref('')
+const usageFileValidating = ref(false)
+const usageFileValidation = ref(null) // { valid: boolean, message: string } | null
+const usageFilePathModified = computed(() => usageFilePathInput.value.trim() !== (usageJsonFilePath.value || ''))
+const usageFileApplyIcon = computed(() => {
+    if (usageFileValidation.value?.valid === false) return 'x-circle'
+    if (usageFilePathModified.value) return 'triangle-exclamation'
+    return 'check'
+})
+
+const usageDumpPathInput = ref('')
+const usageDumpValidating = ref(false)
+const usageDumpValidation = ref(null) // { valid: boolean, message: string } | null
+const usageDumpPathModified = computed(() => usageDumpPathInput.value.trim() !== (usageDumpFilePath.value || ''))
+const usageDumpApplyIcon = computed(() => {
+    if (usageDumpValidation.value?.valid === false) return 'x-circle'
+    if (usageDumpPathModified.value) return 'triangle-exclamation'
+    return 'check'
+})
 
 // Check if the current prompt is the default
 const isDefaultPrompt = computed(() => titleSystemPrompt.value === SETTINGS_SCHEMA.titleSystemPrompt)
@@ -292,6 +324,67 @@ function onShowCostsChange(event) {
  */
 function onExtraUsageOnlyWhenNeededChange(event) {
     store.setExtraUsageOnlyWhenNeeded(event.target.checked)
+}
+
+function onUsageFileEnabledChange(event) {
+    store.setUsageJsonFileEnabled(event.target.checked)
+}
+
+function onUsageFilePathInputChange(event) {
+    usageFilePathInput.value = event.target.value
+    // Clear previous validation error when user edits
+    if (usageFileValidation.value) usageFileValidation.value = null
+}
+
+async function onUsageFilePathApply() {
+    const path = usageFilePathInput.value.trim()
+    if (!path) {
+        usageFileValidation.value = null
+        store.setUsageJsonFilePath('')
+        return
+    }
+    usageFileValidating.value = true
+    usageFileValidation.value = null
+    try {
+        const result = await sendValidateUsageFile(path)
+        if (result.valid) {
+            store.setUsageJsonFilePath(path)
+        } else {
+            usageFileValidation.value = result
+        }
+    } finally {
+        usageFileValidating.value = false
+    }
+}
+
+function onUsageDumpEnabledChange(event) {
+    store.setUsageDumpFileEnabled(event.target.checked)
+}
+
+function onUsageDumpPathInputChange(event) {
+    usageDumpPathInput.value = event.target.value
+    if (usageDumpValidation.value) usageDumpValidation.value = null
+}
+
+async function onUsageDumpPathApply() {
+    const path = usageDumpPathInput.value.trim()
+    if (!path) {
+        usageDumpValidation.value = null
+        store.setUsageDumpFilePath('')
+        return
+    }
+    usageDumpValidating.value = true
+    usageDumpValidation.value = null
+    try {
+        const result = await sendValidateUsageDumpPath(path)
+        if (result.valid) {
+            store.setUsageDumpFilePath(path)
+        } else {
+            usageDumpValidation.value = result
+        }
+    } finally {
+        usageDumpValidating.value = false
+    }
 }
 
 /**
@@ -559,14 +652,6 @@ function onChangelogClose() {
                             size="small"
                         >Enabled</wa-switch>
                     </div>
-                    <div class="setting-group" v-if="showExtraUsageSetting">
-                        <label class="setting-group-label">Show extra usage quota</label>
-                        <wa-switch
-                            :checked="extraUsageOnlyWhenNeeded"
-                            @change="onExtraUsageOnlyWhenNeededChange"
-                            size="small"
-                        >Only when needed</wa-switch>
-                    </div>
                 </section>
 
                 <!-- Claude Settings Section -->
@@ -825,6 +910,104 @@ function onChangelogClose() {
                             size="small"
                         >Enabled</wa-switch>
                         <span class="setting-group-hint">Tmux sessions are destroyed when Claude sessions are archived.</span>
+                    </div>
+                </section>
+
+                <!-- Claude quotas/usage Section -->
+                <section v-if="activeSection === 'usage'" class="settings-section">
+                    <h3 class="settings-section-title">Claude quotas/usage</h3>
+                    <div class="setting-group" v-if="showExtraUsageSetting">
+                        <label class="setting-group-label">Show extra usage quota</label>
+                        <wa-switch
+                            :checked="extraUsageOnlyWhenNeeded"
+                            @change="onExtraUsageOnlyWhenNeededChange"
+                            size="small"
+                        >Only when needed</wa-switch>
+                    </div>
+                    <div class="setting-group">
+                        <label class="setting-group-label">Read usage from file <wa-icon name="cloud" class="synced-icon"></wa-icon></label>
+                        <wa-switch
+                            :checked="usageJsonFileEnabled"
+                            @change="onUsageFileEnabledChange"
+                            size="small"
+                            :disabled="usageDumpFileEnabled"
+                        >Enabled</wa-switch>
+                        <span class="setting-group-hint">
+                            The Anthropic usage API is heavily rate-limited. If you already fetch usage data
+                            from your own script and save the raw API response to a JSON file, you can provide
+                            its path here. TwiCC will read from this file instead of calling the API directly.
+                        </span>
+                        <template v-if="usageJsonFileEnabled">
+                            <div class="usage-file-input-row">
+                                <wa-input
+                                    :value="usageFilePathInput"
+                                    @input="onUsageFilePathInputChange"
+                                    @keydown.enter="onUsageFilePathApply"
+                                    placeholder="/path/to/usage.json"
+                                    size="small"
+                                    :disabled="usageFileValidating"
+                                ></wa-input>
+                                <wa-button
+                                    size="small"
+                                    variant="neutral"
+                                    @click="onUsageFilePathApply"
+                                    :disabled="usageFileValidating"
+                                >
+                                    <wa-spinner v-if="usageFileValidating" slot="start"></wa-spinner>
+                                    <wa-icon v-else :name="usageFileApplyIcon" slot="start"></wa-icon>
+                                    Apply
+                                </wa-button>
+                            </div>
+                            <span class="setting-group-hint">Press Apply or Enter to validate and save the path.</span>
+                            <wa-callout
+                                v-if="usageFileValidation && !usageFileValidation.valid"
+                                variant="danger"
+                                size="small"
+                                class="usage-file-validation"
+                            >{{ usageFileValidation.message }}</wa-callout>
+                        </template>
+                    </div>
+                    <div class="setting-group">
+                        <label class="setting-group-label">Dump usage to file <wa-icon name="cloud" class="synced-icon"></wa-icon></label>
+                        <wa-switch
+                            :checked="usageDumpFileEnabled"
+                            @change="onUsageDumpEnabledChange"
+                            size="small"
+                            :disabled="usageJsonFileEnabled"
+                        >Enabled</wa-switch>
+                        <span class="setting-group-hint">
+                            Save the raw API response to a JSON file each time TwiCC fetches usage data.
+                            Useful if you want to share the data with other tools without extra API calls.
+                        </span>
+                        <template v-if="usageDumpFileEnabled">
+                            <div class="usage-file-input-row">
+                                <wa-input
+                                    :value="usageDumpPathInput"
+                                    @input="onUsageDumpPathInputChange"
+                                    @keydown.enter="onUsageDumpPathApply"
+                                    placeholder="/path/to/usage-dump.json"
+                                    size="small"
+                                    :disabled="usageDumpValidating"
+                                ></wa-input>
+                                <wa-button
+                                    size="small"
+                                    variant="neutral"
+                                    @click="onUsageDumpPathApply"
+                                    :disabled="usageDumpValidating"
+                                >
+                                    <wa-spinner v-if="usageDumpValidating" slot="start"></wa-spinner>
+                                    <wa-icon v-else :name="usageDumpApplyIcon" slot="start"></wa-icon>
+                                    Apply
+                                </wa-button>
+                            </div>
+                            <span class="setting-group-hint">Press Apply or Enter to validate and save the path.</span>
+                            <wa-callout
+                                v-if="usageDumpValidation && !usageDumpValidation.valid"
+                                variant="danger"
+                                size="small"
+                                class="usage-file-validation"
+                            >{{ usageDumpValidation.message }}</wa-callout>
+                        </template>
                     </div>
                 </section>
 
@@ -1382,6 +1565,25 @@ wa-popover > wa-divider {
     font-size: var(--wa-font-size-s);
     color: var(--wa-color-text-quiet);
     font-style: italic;
+}
+
+.usage-file-input-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--wa-space-xs);
+    align-items: center;
+
+    wa-input {
+        flex: 1;
+    }
+
+    wa-button {
+        margin-left: auto;
+    }
+}
+
+.usage-file-validation {
+    margin-top: var(--wa-space-2xs);
 }
 
 @media (width < 640px) {

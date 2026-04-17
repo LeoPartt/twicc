@@ -647,6 +647,8 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         - mark_session_read_state: explicitly mark a session as read or unread
         - list_terminals: list active tmux terminal indices for a terminal context
         - kill_terminal: kill a secondary terminal's tmux session and broadcast
+        - validate_usage_file: validate a usage JSON file path (read mode) and return result
+        - validate_usage_dump_path: validate a usage dump file path (write mode) and return result
         - changelog_seen: acknowledge that the user has seen the changelog for a version
         """
         msg_type = content.get("type")
@@ -702,6 +704,12 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
         elif msg_type == "rename_terminal":
             await self._handle_rename_terminal(content)
+
+        elif msg_type == "validate_usage_file":
+            await self._handle_validate_usage_file(content)
+
+        elif msg_type == "validate_usage_dump_path":
+            await self._handle_validate_usage_dump_path(content)
 
         elif msg_type == "changelog_seen":
             await self._handle_changelog_seen(content)
@@ -1213,6 +1221,30 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
                 "data": {"type": "synced_settings_updated", "settings": synced_settings},
             },
         )
+
+    async def _handle_validate_usage_file(self, content: dict) -> None:
+        """Validate a usage JSON file path and return the result to the client."""
+        file_path = content.get("file_path", "")
+        if not isinstance(file_path, str) or not file_path.strip():
+            await self.send_json({"type": "usage_file_validated", "valid": False, "message": "No file path provided"})
+            return
+
+        from twicc.core.usage import validate_usage_file
+
+        valid, message = await sync_to_async(validate_usage_file)(file_path.strip())
+        await self.send_json({"type": "usage_file_validated", "valid": valid, "message": message})
+
+    async def _handle_validate_usage_dump_path(self, content: dict) -> None:
+        """Validate a usage dump file path and return the result to the client."""
+        file_path = content.get("file_path", "")
+        if not isinstance(file_path, str) or not file_path.strip():
+            await self.send_json({"type": "usage_dump_path_validated", "valid": False, "message": "No file path provided"})
+            return
+
+        from twicc.core.usage import validate_usage_dump_path
+
+        valid, message = await sync_to_async(validate_usage_dump_path)(file_path.strip())
+        await self.send_json({"type": "usage_dump_path_validated", "valid": valid, "message": message})
 
     async def _handle_update_workspaces(self, content: dict) -> None:
         """Handle workspace definitions update from a client."""

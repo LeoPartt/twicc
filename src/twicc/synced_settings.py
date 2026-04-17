@@ -46,6 +46,10 @@ SYNCED_SETTINGS_DEFAULTS: dict = {
     "terminalUseTmux": True,
     "waTheme": "default",
     "waBrand": "cyan",
+    "usageJsonFileEnabled": False,
+    "usageJsonFilePath": "",
+    "usageDumpFileEnabled": False,
+    "usageDumpFilePath": "",
 }
 
 # Claude session settings: classification by when they can be applied to a live process.

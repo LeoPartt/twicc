@@ -375,4 +375,8 @@ export const SYNCED_SETTINGS_KEYS = new Set([
     'terminalUseTmux',
     'waTheme',
     'waBrand',
+    'usageJsonFileEnabled',
+    'usageJsonFilePath',
+    'usageDumpFileEnabled',
+    'usageDumpFilePath',
 ])

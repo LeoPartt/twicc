@@ -55,6 +55,10 @@ export const SETTINGS_SCHEMA = {
     defaultContextMax: null,
     waTheme: null,
     waBrand: null,
+    usageJsonFileEnabled: null,
+    usageJsonFilePath: null,
+    usageDumpFileEnabled: null,
+    usageDumpFilePath: null,
     // --- Not persisted - runtime state ---
     _devMode: false,
     _effectiveColorScheme: null,
@@ -102,6 +106,10 @@ const SETTINGS_VALIDATORS = {
     notifPendingRequestBrowser: (v) => typeof v === 'boolean',
     waTheme: (v) => Object.values(WA_THEME).includes(v),
     waBrand: (v) => Object.values(WA_BRAND).includes(v),
+    usageJsonFileEnabled: (v) => typeof v === 'boolean',
+    usageJsonFilePath: (v) => typeof v === 'string',
+    usageDumpFileEnabled: (v) => typeof v === 'boolean',
+    usageDumpFilePath: (v) => typeof v === 'string',
 }
 
 /**
@@ -213,6 +221,10 @@ export const useSettingsStore = defineStore('settings', {
         isNotifPendingRequestBrowser: (state) => state.notifPendingRequestBrowser,
         getWaTheme: (state) => state.waTheme,
         getWaBrand: (state) => state.waBrand,
+        isUsageJsonFileEnabled: (state) => state.usageJsonFileEnabled,
+        getUsageJsonFilePath: (state) => state.usageJsonFilePath,
+        isUsageDumpFileEnabled: (state) => state.usageDumpFileEnabled,
+        getUsageDumpFilePath: (state) => state.usageDumpFilePath,
         /**
          * Whether the backend is running in dev mode (source layout) vs installed package.
          */
@@ -542,6 +554,34 @@ export const useSettingsStore = defineStore('settings', {
         setWaBrand(brand) {
             if (SETTINGS_VALIDATORS.waBrand(brand)) {
                 this.waBrand = brand
+            }
+        },
+
+        setUsageJsonFileEnabled(enabled) {
+            if (SETTINGS_VALIDATORS.usageJsonFileEnabled(enabled)) {
+                this.usageJsonFileEnabled = enabled
+                // Mutually exclusive: disable dump mode
+                if (enabled) this.usageDumpFileEnabled = false
+            }
+        },
+
+        setUsageJsonFilePath(path) {
+            if (SETTINGS_VALIDATORS.usageJsonFilePath(path)) {
+                this.usageJsonFilePath = path
+            }
+        },
+
+        setUsageDumpFileEnabled(enabled) {
+            if (SETTINGS_VALIDATORS.usageDumpFileEnabled(enabled)) {
+                this.usageDumpFileEnabled = enabled
+                // Mutually exclusive: disable read mode
+                if (enabled) this.usageJsonFileEnabled = false
+            }
+        },
+
+        setUsageDumpFilePath(path) {
+            if (SETTINGS_VALIDATORS.usageDumpFilePath(path)) {
+                this.usageDumpFilePath = path
             }
         },
 

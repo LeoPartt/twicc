@@ -12,6 +12,7 @@ SessionItem costs within the relevant time windows.
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -273,14 +274,128 @@ def save_usage_snapshot(raw: dict) -> UsageSnapshot:
     return UsageSnapshot.objects.create(**fields)
 
 
+def read_usage_from_file(file_path: str) -> dict | None:
+    """
+    Read usage data from a local JSON file instead of calling the API.
+
+    The file should contain raw JSON in the same format as the Anthropic
+    usage API response (keys like "five_hour", "seven_day", etc.).
+
+    Args:
+        file_path: Absolute path to the JSON file.
+
+    Returns:
+        The parsed JSON dict, or None on failure.
+    """
+    path = Path(file_path)
+    if not path.is_file():
+        logger.warning("Usage JSON file not found: %s", file_path)
+        return None
+
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        logger.warning("Usage JSON file is not valid JSON: %s — %s", file_path, e)
+        return None
+    except OSError as e:
+        logger.warning("Failed to read usage JSON file: %s — %s", file_path, e)
+        return None
+
+
+# Required top-level keys in the usage API response
+USAGE_REQUIRED_KEYS = {"five_hour", "seven_day"}
+
+
+def validate_usage_file(file_path: str) -> tuple[bool, str]:
+    """
+    Validate that a file exists, is readable, and contains the expected keys.
+
+    Checks: file exists, valid JSON object, has "five_hour" and "seven_day" keys.
+
+    Returns:
+        A (valid, message) tuple. If valid is False, message explains the problem.
+    """
+    path = Path(file_path)
+
+    if not path.is_file():
+        return False, "File not found"
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError as e:
+        return False, f"Cannot read file: {e}"
+
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as e:
+        return False, f"Invalid JSON: {e}"
+
+    if not isinstance(data, dict):
+        return False, "JSON root must be an object"
+
+    missing = USAGE_REQUIRED_KEYS - data.keys()
+    if missing:
+        return False, f"Missing required keys: {', '.join(sorted(missing))}"
+
+    return True, "Valid usage file"
+
+
+def dump_usage_to_file(raw: dict, file_path: str) -> None:
+    """
+    Write raw usage API response to a JSON file.
+
+    Args:
+        raw: The raw JSON response from the usage API.
+        file_path: Absolute path to write to.
+    """
+    try:
+        Path(file_path).write_text(json.dumps(raw, indent=2), encoding="utf-8")
+    except OSError as e:
+        logger.warning("Failed to dump usage to file: %s — %s", file_path, e)
+
+
+def validate_usage_dump_path(file_path: str) -> tuple[bool, str]:
+    """
+    Validate that a dump file path is usable (parent directory exists and is writable).
+
+    Returns:
+        A (valid, message) tuple.
+    """
+    path = Path(file_path)
+
+    if not path.parent.is_dir():
+        return False, f"Directory does not exist: {path.parent}"
+
+    if not os.access(path.parent, os.W_OK):
+        return False, f"Directory is not writable: {path.parent}"
+
+    return True, "Valid dump path"
+
+
 def fetch_and_save_usage() -> UsageSnapshot | None:
     """
-    Fetch usage data from the API and save a snapshot.
+    Fetch usage data from the API (or from a local JSON file if configured)
+    and save a snapshot. Optionally dumps the raw API response to a file.
 
     Returns:
         The created UsageSnapshot, or None if fetch failed.
     """
-    raw = fetch_usage()
+    from twicc.synced_settings import read_synced_settings
+
+    settings = read_synced_settings()
+    read_enabled = settings.get("usageJsonFileEnabled", False)
+    read_path = settings.get("usageJsonFilePath", "")
+    dump_enabled = settings.get("usageDumpFileEnabled", False)
+    dump_path = settings.get("usageDumpFilePath", "")
+
+    if read_enabled and read_path:
+        raw = read_usage_from_file(read_path)
+    else:
+        raw = fetch_usage()
+        # Dump raw response to file if enabled (only when fetching from API)
+        if raw is not None and dump_enabled and dump_path:
+            dump_usage_to_file(raw, dump_path)
+
     if raw is None:
         return None
 
