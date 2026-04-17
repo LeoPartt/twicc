@@ -92,7 +92,7 @@ async def _call_haiku(
         permission_mode="default",
         extra_args={"no-session-persistence": None},
         allowed_tools=[],
-        max_buffer_size=10 * 1024 * 1024,  # 10 MB
+        effort='low',
     )
 
     client = ClaudeSDKClient(options=options)

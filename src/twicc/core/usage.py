@@ -9,6 +9,7 @@ Also provides cost estimation for quota periods by summing
 SessionItem costs within the relevant time windows.
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -34,6 +35,13 @@ USAGE_API_HEADERS = {
 # Credentials file path (cross-platform)
 CREDENTIALS_PATH = Path.home() / ".claude" / ".credentials.json"
 
+# Track expiresAt values for which a token refresh has already been attempted
+# (and failed), to avoid retrying the SDK call for the same stale token.
+_failed_refresh_expires: set[int] = set()
+
+# Timeout for the SDK token refresh call
+_TOKEN_REFRESH_TIMEOUT = 30
+
 
 def has_oauth_credentials() -> bool:
     """
@@ -53,12 +61,12 @@ def has_oauth_credentials() -> bool:
     return bool(data.get("claudeAiOauth"))
 
 
-def _get_access_token() -> str | None:
+def _get_credentials() -> tuple[str, int] | None:
     """
-    Read the OAuth access token from ~/.claude/.credentials.json.
+    Read the OAuth access token and expiresAt from ~/.claude/.credentials.json.
 
     Returns:
-        The access token string, or None if not found.
+        A (token, expires_at_ms) tuple, or None if not found.
     """
     if not CREDENTIALS_PATH.is_file():
         logger.warning("Credentials file not found: %s", CREDENTIALS_PATH)
@@ -70,25 +78,101 @@ def _get_access_token() -> str | None:
         logger.warning("Failed to read credentials file: %s", e)
         return None
 
-    token = data.get("claudeAiOauth", {}).get("accessToken")
+    oauth = data.get("claudeAiOauth", {})
+    token = oauth.get("accessToken")
     if not token:
         logger.warning("No OAuth access token found in credentials file")
         return None
 
-    return token
+    expires_at = oauth.get("expiresAt", 0)
+    return token, expires_at
 
 
-def fetch_usage() -> dict | None:
+def _get_expires_at() -> int:
+    """Read the current expiresAt value from credentials. Returns 0 if unavailable."""
+    try:
+        data = json.loads(CREDENTIALS_PATH.read_text(encoding="utf-8"))
+        return data.get("claudeAiOauth", {}).get("expiresAt", 0)
+    except (json.JSONDecodeError, OSError):
+        return 0
+
+
+def _refresh_token_via_sdk(expires_at: int) -> bool:
+    """
+    Attempt to refresh the OAuth token by making a throwaway SDK call.
+
+    The SDK automatically refreshes the token in ~/.claude/.credentials.json
+    when it connects. We send a trivial prompt and discard the response.
+
+    Returns True if the token was refreshed (expiresAt changed), False otherwise.
+    """
+    if expires_at in _failed_refresh_expires:
+        logger.info("Token refresh already attempted for expiresAt=%d, skipping", expires_at)
+        return False
+
+    _failed_refresh_expires.add(expires_at)
+
+    logger.info("Attempting token refresh via SDK (current expiresAt=%d)", expires_at)
+
+    try:
+        asyncio.run(_sdk_throwaway_call())
+    except Exception as e:
+        logger.warning("SDK token refresh call failed: %s", e)
+        return False
+
+    new_expires_at = _get_expires_at()
+    if new_expires_at == expires_at:
+        logger.warning("Token was not refreshed by SDK (expiresAt unchanged: %d)", expires_at)
+        return False
+
+    logger.info("Token refreshed via SDK: expiresAt %d → %d", expires_at, new_expires_at)
+    return True
+
+
+async def _sdk_throwaway_call() -> None:
+    """Make a minimal SDK call to trigger token refresh."""
+    from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ResultMessage
+
+    options = ClaudeAgentOptions(
+        model="haiku",
+        permission_mode="default",
+        extra_args={"no-session-persistence": None},
+        allowed_tools=[],
+        effort='low',
+    )
+    client = ClaudeSDKClient(options=options)
+
+    async def _execute():
+        await client.connect()
+        await client.query("What model are you?")
+        async for msg in client.receive_messages():
+            if isinstance(msg, ResultMessage):
+                break
+
+    try:
+        await asyncio.wait_for(_execute(), timeout=_TOKEN_REFRESH_TIMEOUT)
+    finally:
+        try:
+            await client.disconnect()
+        except Exception:
+            pass
+
+
+def fetch_usage(*, refresh_token_if_needed: bool = True) -> dict | None:
     """
     Fetch usage data from the Anthropic OAuth usage API.
+
+    On 401/403, attempts to refresh the token via a throwaway SDK call,
+    then retries the fetch once if the token was actually refreshed.
 
     Returns:
         The raw JSON response as a dict, or None on failure.
     """
-    token = _get_access_token()
-    if token is None:
+    creds = _get_credentials()
+    if creds is None:
         return None
 
+    token, expires_at = creds
     headers = {
         **USAGE_API_HEADERS,
         "Authorization": f"Bearer {token}",
@@ -99,6 +183,11 @@ def fetch_usage() -> dict | None:
         response.raise_for_status()
         return response.json()
     except httpx.HTTPStatusError as e:
+        if e.response.status_code in (401, 403) and refresh_token_if_needed:
+            logger.warning("Usage API returned %d, attempting token refresh", e.response.status_code)
+            if _refresh_token_via_sdk(expires_at):
+                return fetch_usage(refresh_token_if_needed=False)
+            return None
         logger.warning("Usage API HTTP error: %s", e)
         return None
     except httpx.TimeoutException:
