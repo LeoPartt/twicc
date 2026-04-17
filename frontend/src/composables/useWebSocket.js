@@ -270,10 +270,11 @@ export function clearUserTurnToast(sessionId) {
  * Send synced settings to the backend for persistence in settings.json.
  * The backend will broadcast the updated settings to all connected clients.
  * @param {Object} settings - The synced settings key-value pairs
+ * @param {number} baseVersion - The current settings version (for optimistic concurrency)
  * @returns {boolean} - True if message was sent, false if not connected
  */
-export function sendSyncedSettings(settings) {
-    return sendWsMessage({ type: 'update_synced_settings', settings })
+export function sendSyncedSettings(settings, baseVersion) {
+    return sendWsMessage({ type: 'update_synced_settings', settings, baseVersion })
 }
 
 /**
@@ -816,7 +817,7 @@ export function useWebSocket() {
                 // Apply synced settings from backend (on connect or when another client updates)
                 // Lazy import to avoid circular dependency (useWebSocket.js → settings.js)
                 import('../stores/settings').then(({ useSettingsStore }) => {
-                    useSettingsStore().applySyncedSettings(msg.settings)
+                    useSettingsStore().applySyncedSettings(msg.settings, msg.version)
                 })
                 break
             case 'workspaces_updated':

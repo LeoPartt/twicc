@@ -2,7 +2,7 @@
 // Persistent settings store with localStorage + backend sync for global settings
 
 import { defineStore, acceptHMRUpdate } from 'pinia'
-import { watch } from 'vue'
+import { watch, nextTick } from 'vue'
 import { DEFAULT_DISPLAY_MODE, DEFAULT_COLOR_SCHEME, DEFAULT_SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SESSIONS, DISPLAY_MODE, COLOR_SCHEME, SESSION_TIME_FORMAT, PERMISSION_MODE, MODEL, EFFORT, CONTEXT_MAX, SYNCED_SETTINGS_KEYS, WA_THEME, WA_BRAND, WA_THEME_DEFAULT_PALETTE } from '../constants'
 import { NOTIFICATION_SOUNDS } from '../utils/notificationSounds'
 // Note: useDataStore is imported lazily to avoid circular dependency (settings.js ↔ data.js)
@@ -593,8 +593,13 @@ export const useSettingsStore = defineStore('settings', {
          * sending these values back to the backend.
          * @param {Object} remoteSettings - Settings object from backend
          */
-        applySyncedSettings(remoteSettings) {
+        applySyncedSettings(remoteSettings, version) {
             if (!remoteSettings || typeof remoteSettings !== 'object') return
+            // Reject incoming settings with a version older than what we already have.
+            // This closes the HTTP/WS ordering gap: if the WebSocket pushes version 5
+            // before initSettings() applies the HTTP-fetched version 3, the stale
+            // HTTP data is silently dropped.
+            if (version !== undefined && version < _settingsVersion) return
             this._isApplyingRemoteSettings = true
             for (const key of SYNCED_SETTINGS_KEYS) {
                 if (key in remoteSettings) {
@@ -604,7 +609,14 @@ export const useSettingsStore = defineStore('settings', {
                     }
                 }
             }
-            this._isApplyingRemoteSettings = false
+            if (version !== undefined) {
+                _settingsVersion = version
+            }
+            // Clear the guard AFTER Vue has flushed the watchers scheduled by the
+            // mutations above. Vue's nextTick resolves after the current job flush,
+            // so any watcher triggered by the mutations will still see the flag as
+            // true and skip the outgoing send.
+            nextTick(() => { this._isApplyingRemoteSettings = false })
         },
 
         _updateEffectiveColorScheme() {
@@ -663,7 +675,7 @@ export function classifyClaudeSettingsChanges(current, requested) {
  * @param {Object} claudeSettingsCategories - Claude settings categories from the backend
  * @param {boolean} devMode - Whether the backend is running in dev mode
  */
-export function applyDefaultSettings(defaultSettings, currentSettings, claudeSettingsCategories, devMode) {
+export function applyDefaultSettings(defaultSettings, currentSettings, claudeSettingsCategories, devMode, version) {
     if (defaultSettings && typeof defaultSettings === 'object') {
         Object.assign(SETTINGS_SCHEMA, defaultSettings)
     }
@@ -673,10 +685,16 @@ export function applyDefaultSettings(defaultSettings, currentSettings, claudeSet
     SETTINGS_SCHEMA._devMode = !!devMode
     // Store current settings for applySyncedSettings() to use after store init
     _pendingSyncedSettings = currentSettings
+    _pendingSettingsVersion = version
 }
 
 // Pending synced settings to apply once the store is initialized
 let _pendingSyncedSettings = null
+
+// Current settings version from backend (for optimistic concurrency).
+// Module-level (not in store state) to avoid unnecessary reactivity.
+let _settingsVersion = 0
+let _pendingSettingsVersion = undefined
 
 /**
  * Initialize settings store: apply initial values and set up watchers.
@@ -695,8 +713,9 @@ export function initSettings() {
 
     // Apply synced settings fetched from the API before mount
     if (_pendingSyncedSettings) {
-        store.applySyncedSettings(_pendingSyncedSettings)
+        store.applySyncedSettings(_pendingSyncedSettings, _pendingSettingsVersion)
         _pendingSyncedSettings = null
+        _pendingSettingsVersion = undefined
     }
 
     // Apply initial font size (theme is already applied in main.js)
@@ -787,7 +806,7 @@ export function initSettings() {
         async (newSynced) => {
             if (store._isApplyingRemoteSettings) return
             const { sendSyncedSettings } = await import('../composables/useWebSocket')
-            sendSyncedSettings(newSynced)
+            sendSyncedSettings(newSynced, _settingsVersion)
         },
         { deep: true }
     )

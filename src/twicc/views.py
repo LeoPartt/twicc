@@ -1928,10 +1928,12 @@ def usage_history(request):
 
 def synced_settings(request):
     """GET /api/settings/ - Current synced settings, defaults, and Claude settings categories."""
-    from twicc.synced_settings import CLAUDE_SETTINGS_CATEGORIES, SYNCED_SETTINGS_DEFAULTS, read_synced_settings
+    from twicc.synced_settings import CLAUDE_SETTINGS_CATEGORIES, SYNCED_SETTINGS_DEFAULTS, prepare_settings_for_client, read_synced_settings
 
+    clean_settings, version = prepare_settings_for_client(read_synced_settings())
     return JsonResponse({
-        "settings": read_synced_settings(),
+        "settings": clean_settings,
+        "version": version,
         "default_settings": SYNCED_SETTINGS_DEFAULTS,
         "claude_settings_categories": CLAUDE_SETTINGS_CATEGORIES,
         "dev_mode": settings.DEV_MODE,

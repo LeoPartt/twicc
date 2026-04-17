@@ -25,7 +25,7 @@ from claude_agent_sdk.types import PermissionResultAllow, PermissionResultDeny, 
 
 from twicc.agent.manager import get_process_manager
 from twicc.agent.states import ProcessInfo, ProcessState, serialize_process_info
-from twicc.synced_settings import read_synced_settings, write_synced_settings
+from twicc.synced_settings import _settings_lock, prepare_settings_for_client, read_synced_settings, write_synced_settings
 from twicc.workspaces import read_workspaces, write_workspaces
 from twicc.message_snippets import read_message_snippets_config, write_message_snippets_config
 from twicc.terminal_config import read_terminal_config, write_terminal_config
@@ -437,47 +437,51 @@ def _resolve_changelog_versions() -> tuple[str, str, bool]:
         A tuple of (previous_last_changelog_version_seen, last_changelog_version_seen, show_forced).
         ``show_forced`` is True when the user should be presented with the changelog dialog.
     """
-    all_settings = read_synced_settings()
-    last = all_settings.get("lastChangelogVersionSeen")
-    previous = all_settings.get("previousLastChangelogVersionSeen")
+    with _settings_lock:
+        all_settings = read_synced_settings()
+        last = all_settings.get("lastChangelogVersionSeen")
+        previous = all_settings.get("previousLastChangelogVersionSeen")
 
-    # --- Step 1: Normalize / initialize the two variables ---
+        # --- Step 1: Normalize / initialize the two variables ---
 
-    if not all_settings:
-        # No settings or empty → first install
-        all_settings["lastChangelogVersionSeen"] = settings.APP_VERSION
-        all_settings["previousLastChangelogVersionSeen"] = settings.APP_VERSION
-        write_synced_settings(all_settings)
-        return settings.APP_VERSION, settings.APP_VERSION, False
+        if not all_settings:
+            # No settings or empty → first install
+            all_settings["lastChangelogVersionSeen"] = settings.APP_VERSION
+            all_settings["previousLastChangelogVersionSeen"] = settings.APP_VERSION
+            all_settings["_version"] = all_settings.get("_version", 0) + 1
+            write_synced_settings(all_settings)
+            return settings.APP_VERSION, settings.APP_VERSION, False
 
-    if last is None and previous is None:
-        # Settings exist but no changelog tracking → user was on ≤ 1.2.1
-        last = VERSION_BEFORE_LAST_CHANGELOG_VERSION_SEEN
-        previous = VERSION_BEFORE_LAST_CHANGELOG_VERSION_SEEN
-    elif last is not None and previous is None:
-        # last exists but no previous → user was on 1.3.0 (first version with lastChangelogVersionSeen)
-        previous = VERSION_BEFORE_PREVIOUS_LAST_CHANGELOG_VERSION_SEEN
-    elif previous is not None and last is None:
-        # Bad manual edit → force last = previous
-        last = previous
+        if last is None and previous is None:
+            # Settings exist but no changelog tracking → user was on ≤ 1.2.1
+            last = VERSION_BEFORE_LAST_CHANGELOG_VERSION_SEEN
+            previous = VERSION_BEFORE_LAST_CHANGELOG_VERSION_SEEN
+        elif last is not None and previous is None:
+            # last exists but no previous → user was on 1.3.0 (first version with lastChangelogVersionSeen)
+            previous = VERSION_BEFORE_PREVIOUS_LAST_CHANGELOG_VERSION_SEEN
+        elif previous is not None and last is None:
+            # Bad manual edit → force last = previous
+            last = previous
 
-    # --- Step 2: Update previous based on upgrade detection ---
+        # --- Step 2: Update previous based on upgrade detection ---
 
-    if last == previous:
-        # Historical / fresh-install case → no change to previous
-        pass
-    elif last == settings.APP_VERSION:
-        # No upgrade → no change to previous
-        pass
-    else:
-        # New upgrade: previous != last AND last != currentVersion
-        previous = last
+        if last == previous:
+            # Historical / fresh-install case → no change to previous
+            pass
+        elif last == settings.APP_VERSION:
+            # No upgrade → no change to previous
+            pass
+        else:
+            # New upgrade: previous != last AND last != currentVersion
+            previous = last
 
-    # --- Persist ---
+        # --- Persist (only if values actually changed) ---
 
-    all_settings["lastChangelogVersionSeen"] = last
-    all_settings["previousLastChangelogVersionSeen"] = previous
-    write_synced_settings(all_settings)
+        if last != all_settings.get("lastChangelogVersionSeen") or previous != all_settings.get("previousLastChangelogVersionSeen"):
+            all_settings["lastChangelogVersionSeen"] = last
+            all_settings["previousLastChangelogVersionSeen"] = previous
+            all_settings["_version"] = all_settings.get("_version", 0) + 1
+            write_synced_settings(all_settings)
 
     # --- Determine if forced show is needed ---
 
@@ -593,8 +597,9 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
         # Send synced settings to the connecting client
         if self._should_send("synced_settings_updated"):
-            synced_settings = await sync_to_async(read_synced_settings)()
-            await self.send_json({"type": "synced_settings_updated", "settings": synced_settings})
+            raw_settings = await sync_to_async(read_synced_settings)()
+            clean_settings, version = prepare_settings_for_client(raw_settings)
+            await self.send_json({"type": "synced_settings_updated", "settings": clean_settings, "version": version})
 
         if self._should_send("terminal_config_updated"):
             terminal_config = await sync_to_async(read_terminal_config)()
@@ -1197,30 +1202,52 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
     async def _handle_update_synced_settings(self, content: dict) -> None:
         """Handle update_synced_settings request from client.
 
-        Writes the received settings to settings.json and broadcasts
-        the updated settings to all connected clients.
+        Uses optimistic concurrency: if the client's baseVersion is behind
+        the current version, the write is rejected and the client is resynced.
         """
         synced_settings = content.get("settings")
         if not isinstance(synced_settings, dict):
             return
+        base_version = content.get("baseVersion")  # None for old clients
 
         def _merge_and_write():
-            # Merge with existing settings to preserve backend-only keys
-            # (e.g., lastChangelogVersionSeen) that the frontend doesn't know about.
-            existing = read_synced_settings()
-            existing.update(synced_settings)
-            write_synced_settings(existing)
+            with _settings_lock:
+                existing = read_synced_settings()
+                current_version = existing.get("_version", 0)
 
-        await sync_to_async(_merge_and_write)()
+                # Reject stale writes (accept if baseVersion is None — safety for rolling upgrades)
+                if base_version is not None and base_version < current_version:
+                    clean, ver = prepare_settings_for_client(existing)
+                    return None, clean, ver  # rejected
 
-        # Broadcast to all clients (including the sender — harmless, same values)
-        await self.channel_layer.group_send(
-            "updates",
-            {
-                "type": "broadcast",
-                "data": {"type": "synced_settings_updated", "settings": synced_settings},
-            },
-        )
+                # Accepted — merge, increment version, write
+                existing.update(synced_settings)
+                existing["_version"] = current_version + 1
+                write_synced_settings(existing)
+                return current_version + 1, None, None  # accepted
+
+        new_version, reject_settings, reject_version = await sync_to_async(_merge_and_write)()
+
+        if new_version is not None:
+            # Accepted — broadcast to all clients
+            await self.channel_layer.group_send(
+                "updates",
+                {
+                    "type": "broadcast",
+                    "data": {
+                        "type": "synced_settings_updated",
+                        "settings": synced_settings,
+                        "version": new_version,
+                    },
+                },
+            )
+        else:
+            # Rejected — resync only this client
+            await self.send_json({
+                "type": "synced_settings_updated",
+                "settings": reject_settings,
+                "version": reject_version,
+            })
 
     async def _handle_validate_usage_file(self, content: dict) -> None:
         """Validate a usage JSON file path and return the result to the client."""
@@ -1423,11 +1450,13 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
             return
 
         def _persist():
-            from twicc.synced_settings import read_synced_settings, write_synced_settings
+            from twicc.synced_settings import _settings_lock, read_synced_settings, write_synced_settings
 
-            all_settings = read_synced_settings()
-            all_settings["lastChangelogVersionSeen"] = version
-            write_synced_settings(all_settings)
+            with _settings_lock:
+                all_settings = read_synced_settings()
+                all_settings["lastChangelogVersionSeen"] = version
+                all_settings["_version"] = all_settings.get("_version", 0) + 1
+                write_synced_settings(all_settings)
 
         await sync_to_async(_persist)()
 

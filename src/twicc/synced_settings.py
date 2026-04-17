@@ -15,6 +15,7 @@ backend code can access settings without re-reading the file every time.
 
 import os
 import tempfile
+import threading
 
 import orjson
 
@@ -93,6 +94,9 @@ def classify_claude_settings_changes(current: dict, requested: dict) -> dict[str
 # Empty dict means not yet initialized (initialized cache always has at least the defaults).
 _cache: dict = {}
 
+# Lock to serialize concurrent writes (and cache updates) to settings.json.
+_settings_lock = threading.Lock()
+
 
 def read_synced_settings() -> dict:
     """Read synced settings, using the in-memory cache when available.
@@ -110,6 +114,7 @@ def read_synced_settings() -> dict:
         except (FileNotFoundError, orjson.JSONDecodeError):
             file_data = {}
         _cache.update({**SYNCED_SETTINGS_DEFAULTS, **file_data})
+        _cache.setdefault("_version", 0)
     return _cache.copy()
 
 
@@ -137,3 +142,14 @@ def write_synced_settings(data: dict) -> None:
     # Update the in-memory cache.
     _cache.clear()
     _cache.update({**SYNCED_SETTINGS_DEFAULTS, **data})
+
+
+def prepare_settings_for_client(settings: dict) -> tuple[dict, int]:
+    """Strip _version from settings and return (clean_settings, version).
+
+    Used by all code paths that send settings to the frontend to avoid
+    repeating the _version stripping logic.
+    """
+    clean = settings.copy()
+    version = clean.pop("_version", 0)
+    return clean, version
