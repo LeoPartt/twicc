@@ -28,6 +28,7 @@ import { debounce } from '../utils/debounce'
 import { apiFetch } from '../utils/api'
 import { isWorkspaceProjectId, extractWorkspaceId } from '../utils/workspaceIds'
 import { getParsedContent, setParsedContent, clearParsedContent, hasContent } from '../utils/parsedContent'
+import { initBuffer, feedDelta, flushBuffer, destroySessionBuffers, destroyAllBuffers } from '../utils/streamingBuffer'
 // Note: respondToPendingRequest is imported lazily to avoid circular dependency
 // (data.js ↔ useWebSocket.js)
 
@@ -1269,9 +1270,10 @@ export const useDataStore = defineStore('data', {
                 for (const block of streaming.blocks) {
                     if (!block.stopped) hasActiveStreamingBlock = true
                     const lineNum = baseLineNum - block.blockIndex
+                    const displayText = block.displayedText ?? block.text
                     const contentBlock = block.blockType === 'thinking'
-                        ? { type: 'thinking', thinking: block.text, streaming: !block.stopped }
-                        : { type: 'text', text: block.text }
+                        ? { type: 'thinking', thinking: displayText, streaming: !block.stopped }
+                        : { type: 'text', text: displayText }
                     const streamItem = {
                         line_num: lineNum,
                         content: null,
@@ -1993,7 +1995,8 @@ export const useDataStore = defineStore('data', {
             if (state === 'dead') {
                 // Remove dead processes from the map
                 delete this.processStates[sessionId]
-                // Clean up any lingering streaming blocks
+                // Clean up any lingering streaming blocks and buffers
+                destroySessionBuffers(sessionId)
                 delete this.localState.streamingBlocks[sessionId]
             } else {
                 this.processStates[sessionId] = {
@@ -2033,7 +2036,8 @@ export const useDataStore = defineStore('data', {
         setActiveProcesses(processes) {
             // Clear existing states and rebuild from server data
             this.processStates = {}
-            // Clear stale streaming blocks from previous connection
+            // Clear stale streaming blocks and buffers from previous connection
+            destroyAllBuffers()
             this.localState.streamingBlocks = {}
             for (const p of processes) {
                 // Only add non-dead processes
@@ -2070,22 +2074,29 @@ export const useDataStore = defineStore('data', {
         streamBlockStart(sessionId, messageId, blockIndex, blockType) {
             const existing = this.localState.streamingBlocks[sessionId]
             if (!existing || existing.messageId !== messageId) {
-                // New message — start fresh
+                // New message — start fresh (destroy any old buffers)
+                destroySessionBuffers(sessionId)
                 this.localState.streamingBlocks[sessionId] = {
                     messageId,
-                    blocks: [{ blockIndex, blockType, text: '', stopped: false, uuid: null }],
+                    blocks: [{ blockIndex, blockType, text: '', displayedText: '', stopped: false, uuid: null }],
                 }
             } else {
                 // Same message, additional block (e.g. thinking then text)
-                existing.blocks.push({ blockIndex, blockType, text: '', stopped: false, uuid: null })
+                existing.blocks.push({ blockIndex, blockType, text: '', displayedText: '', stopped: false, uuid: null })
             }
+
+            // Initialize the adaptive buffer for this block
+            initBuffer(sessionId, blockIndex, (displayedText) => {
+                this._onBufferDrain(sessionId, blockIndex, displayedText)
+            })
+
             this.recomputeVisualItems(sessionId)
         },
 
         /**
          * Handle a stream_block_delta event — append text to the current block.
-         * Instead of recomputing all visual items, directly patches the
-         * parsedContent of the existing streaming visual item for efficiency.
+         * Feeds the delta into the adaptive buffer which drains it smoothly
+         * via requestAnimationFrame, patching the visual item on each frame.
          */
         streamBlockDelta(sessionId, messageId, blockIndex, text) {
             const streaming = this.localState.streamingBlocks[sessionId]
@@ -2094,8 +2105,23 @@ export const useDataStore = defineStore('data', {
             if (!block) return
 
             block.text += text
+            feedDelta(sessionId, blockIndex, text)
+        },
 
-            // Fast path: patch the visual item in-place instead of full recompute.
+        /**
+         * Buffer drain callback — patches the streaming visual item with
+         * the currently displayed text. Called from requestAnimationFrame
+         * by the adaptive buffer.
+         * @private
+         */
+        _onBufferDrain(sessionId, blockIndex, displayedText) {
+            const streaming = this.localState.streamingBlocks[sessionId]
+            if (!streaming) return
+            const block = streaming.blocks.find(b => b.blockIndex === blockIndex)
+            if (!block) return
+
+            block.displayedText = displayedText
+
             const { baseLineNum, kind: streamingSyntheticKind } = SYNTHETIC_ITEM.STREAMING_BLOCK
             const targetLineNum = baseLineNum - blockIndex
             const visualItems = this.localState.sessionVisualItems[sessionId]
@@ -2105,34 +2131,36 @@ export const useDataStore = defineStore('data', {
             if (idx === -1) return
 
             const contentBlock = block.blockType === 'thinking'
-                ? { type: 'thinking', thinking: block.text, streaming: true }
-                : { type: 'text', text: block.text }
+                ? { type: 'thinking', thinking: displayedText, streaming: !block.stopped }
+                : { type: 'text', text: displayedText }
             const newParsed = {
                 type: 'assistant',
                 syntheticKind: streamingSyntheticKind,
                 message: { role: 'assistant', content: [contentBlock] },
             }
 
-            // Replace the visual item reference to trigger Vue reactivity
             const newVi = { ...visualItems[idx] }
             setParsedContent(newVi, newParsed)
             visualItems[idx] = newVi
 
-            // Update the cache so the next recomputeVisualItems doesn't clobber
             const cache = this.localState.visualItemCache[sessionId]
             if (cache) cache.set(targetLineNum, newVi)
         },
 
         /**
          * Handle a stream_block_stop event — mark the block as stopped (text
-         * is final but uuid not yet known). Triggers recompute because the
-         * WorkingAssistantMessage visibility depends on this flag.
+         * is final but uuid not yet known). Flushes the buffer then triggers
+         * recompute because the WorkingAssistantMessage visibility depends
+         * on this flag.
          */
         streamBlockStop(sessionId, messageId, blockIndex) {
             const streaming = this.localState.streamingBlocks[sessionId]
             if (!streaming || streaming.messageId !== messageId) return
             const block = streaming.blocks.find(b => b.blockIndex === blockIndex)
             if (block) {
+                // Don't flush the buffer here — let it keep draining naturally.
+                // The remaining chars will be displayed over the next few hundred ms
+                // before the real item arrives and retires the block.
                 block.stopped = true
                 this.recomputeVisualItems(sessionId)
             }
@@ -2214,12 +2242,14 @@ export const useDataStore = defineStore('data', {
                         }
                     }
 
+                    flushBuffer(sessionId, block.blockIndex)
                     streaming.blocks.splice(idx, 1)
                 }
             }
 
             // If all blocks retired, clean up
             if (streaming.blocks.length === 0) {
+                destroySessionBuffers(sessionId)
                 delete this.localState.streamingBlocks[sessionId]
             }
         },
