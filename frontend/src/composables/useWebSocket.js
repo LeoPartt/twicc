@@ -865,6 +865,18 @@ export function useWebSocket() {
                     useTerminalTabsStore().setLabel(msg.terminal_context, msg.terminal_index, msg.label)
                 })
                 break
+            case 'stream_block_start':
+                store.streamBlockStart(msg.session_id, msg.message_id, msg.block_index, msg.block_type)
+                break
+            case 'stream_block_delta':
+                store.streamBlockDelta(msg.session_id, msg.message_id, msg.block_index, msg.text)
+                break
+            case 'stream_block_stop':
+                store.streamBlockStop(msg.session_id, msg.message_id, msg.block_index)
+                break
+            case 'stream_block_end':
+                store.streamBlockEnd(msg.session_id, msg.message_id, msg.block_index, msg.uuid)
+                break
             case 'startup_progress':
                 store.setStartupProgress(msg.phase, msg.current, msg.total, msg.completed)
                 break

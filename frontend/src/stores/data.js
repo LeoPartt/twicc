@@ -213,6 +213,15 @@ export const useDataStore = defineStore('data', {
             // { sessionId: { syntheticKind, content, kind } }
             // Cleared when the real user_message arrives in addSessionItems.
             optimisticMessages: {},
+
+            // Streaming blocks - live text/thinking deltas from the SDK stream.
+            // { sessionId: { messageId, blocks: [{ blockIndex, blockType, text, stopped, uuid }] } }
+            // Each block is rendered as a synthetic visual item until the real
+            // SessionItem (matched by message_id + uuid) arrives from the watcher.
+            // `stopped` is set to true when content_block_stop fires (text is final
+            // but uuid not yet known). While any block has stopped=false, the
+            // WorkingAssistantMessage is hidden (streaming is actively showing content).
+            streamingBlocks: {},
         }
     }),
 
@@ -743,6 +752,9 @@ export const useDataStore = defineStore('data', {
                 delete this.localState.optimisticMessages[sessionId]
             }
 
+            // Retire streaming blocks whose real items have arrived
+            this._retireStreamingBlocks(sessionId, newItems)
+
             this.recomputeVisualItems(sessionId)
         },
 
@@ -1247,12 +1259,46 @@ export const useDataStore = defineStore('data', {
                 allItems = allItems === items ? [...items, startingMessage] : [...allItems, startingMessage]
             }
 
+            // Inject streaming blocks as synthetic items (one per active block).
+            // Streaming blocks appear BEFORE the working message in the list.
+            const streaming = this.localState.streamingBlocks[sessionId]
+            const streamingItems = []
+            let hasActiveStreamingBlock = false
+            if (streaming?.blocks.length) {
+                const { baseLineNum, kind: streamingSyntheticKind } = SYNTHETIC_ITEM.STREAMING_BLOCK
+                for (const block of streaming.blocks) {
+                    if (!block.stopped) hasActiveStreamingBlock = true
+                    const lineNum = baseLineNum - block.blockIndex
+                    const contentBlock = block.blockType === 'thinking'
+                        ? { type: 'thinking', thinking: block.text, streaming: !block.stopped }
+                        : { type: 'text', text: block.text }
+                    const streamItem = {
+                        line_num: lineNum,
+                        content: null,
+                        kind: 'assistant_message',
+                        syntheticKind: streamingSyntheticKind,
+                        display_level: DISPLAY_LEVEL.ALWAYS,
+                        group_head: null,
+                        group_tail: null,
+                    }
+                    setParsedContent(streamItem, {
+                        type: 'assistant',
+                        syntheticKind: streamingSyntheticKind,
+                        message: { role: 'assistant', content: [contentBlock] },
+                    })
+                    streamingItems.push(streamItem)
+                    allItems = allItems === items ? [...items, streamItem] : [...allItems, streamItem]
+                }
+            }
+
             // Append a synthetic "working" assistant message when in assistant_turn.
+            // Hidden when streaming blocks are actively receiving deltas (stopped=false),
+            // shown when all blocks are stopped (waiting for real items to arrive).
             // Injected into allItems so computeVisualItems handles it like any other item.
             // computeVisualItems knows to always let synthetic items (line_num < 0) through,
             // even in conversation mode which normally filters assistant messages.
             let workingMessage = null
-            if (isAssistantTurn) {
+            if (isAssistantTurn && !hasActiveStreamingBlock) {
                 const { lineNum, kind: syntheticKind } = SYNTHETIC_ITEM.WORKING_ASSISTANT_MESSAGE
 
                 // Walk backwards through items to find the most recent tool_use.
@@ -1315,6 +1361,9 @@ export const useDataStore = defineStore('data', {
 
             // Propagate syntheticKind to visual items for synthetic messages.
             // computeVisualItems doesn't know about syntheticKind, so we add it here.
+            const streamingLineNums = streamingItems.length
+                ? new Set(streamingItems.map(si => si.line_num))
+                : null
             for (let i = visualItems.length - 1; i >= 0; i--) {
                 const vi = visualItems[i]
                 if (vi.lineNum === SYNTHETIC_ITEM.OPTIMISTIC_USER_MESSAGE.lineNum && optimistic) {
@@ -1323,6 +1372,8 @@ export const useDataStore = defineStore('data', {
                     vi.syntheticKind = startingMessage.syntheticKind
                 } else if (vi.lineNum === SYNTHETIC_ITEM.WORKING_ASSISTANT_MESSAGE.lineNum && workingMessage) {
                     vi.syntheticKind = workingMessage.syntheticKind
+                } else if (streamingLineNums?.has(vi.lineNum)) {
+                    vi.syntheticKind = SYNTHETIC_ITEM.STREAMING_BLOCK.kind
                 }
                 // Synthetic items are always at the end, stop as soon as we hit a real item
                 if (vi.lineNum >= 0) break
@@ -1942,6 +1993,8 @@ export const useDataStore = defineStore('data', {
             if (state === 'dead') {
                 // Remove dead processes from the map
                 delete this.processStates[sessionId]
+                // Clean up any lingering streaming blocks
+                delete this.localState.streamingBlocks[sessionId]
             } else {
                 this.processStates[sessionId] = {
                     state,
@@ -1980,6 +2033,8 @@ export const useDataStore = defineStore('data', {
         setActiveProcesses(processes) {
             // Clear existing states and rebuild from server data
             this.processStates = {}
+            // Clear stale streaming blocks from previous connection
+            this.localState.streamingBlocks = {}
             for (const p of processes) {
                 // Only add non-dead processes
                 if (p.state !== 'dead') {
@@ -2002,6 +2057,133 @@ export const useDataStore = defineStore('data', {
                         this.setSessionArchived(p.project_id, p.session_id, false)
                     }
                 }
+            }
+        },
+
+        // ── Streaming blocks ─────────────────────────────────────────────
+
+        /**
+         * Handle a stream_block_start event from the SDK.
+         * Creates or resets the streaming state for this session/message,
+         * then adds the new block entry.
+         */
+        streamBlockStart(sessionId, messageId, blockIndex, blockType) {
+            const existing = this.localState.streamingBlocks[sessionId]
+            if (!existing || existing.messageId !== messageId) {
+                // New message — start fresh
+                this.localState.streamingBlocks[sessionId] = {
+                    messageId,
+                    blocks: [{ blockIndex, blockType, text: '', stopped: false, uuid: null }],
+                }
+            } else {
+                // Same message, additional block (e.g. thinking then text)
+                existing.blocks.push({ blockIndex, blockType, text: '', stopped: false, uuid: null })
+            }
+            this.recomputeVisualItems(sessionId)
+        },
+
+        /**
+         * Handle a stream_block_delta event — append text to the current block.
+         * Instead of recomputing all visual items, directly patches the
+         * parsedContent of the existing streaming visual item for efficiency.
+         */
+        streamBlockDelta(sessionId, messageId, blockIndex, text) {
+            const streaming = this.localState.streamingBlocks[sessionId]
+            if (!streaming || streaming.messageId !== messageId) return
+            const block = streaming.blocks.find(b => b.blockIndex === blockIndex)
+            if (!block) return
+
+            block.text += text
+
+            // Fast path: patch the visual item in-place instead of full recompute.
+            const { baseLineNum, kind: streamingSyntheticKind } = SYNTHETIC_ITEM.STREAMING_BLOCK
+            const targetLineNum = baseLineNum - blockIndex
+            const visualItems = this.localState.sessionVisualItems[sessionId]
+            if (!visualItems) return
+
+            const idx = visualItems.findIndex(vi => vi.lineNum === targetLineNum)
+            if (idx === -1) return
+
+            const contentBlock = block.blockType === 'thinking'
+                ? { type: 'thinking', thinking: block.text, streaming: true }
+                : { type: 'text', text: block.text }
+            const newParsed = {
+                type: 'assistant',
+                syntheticKind: streamingSyntheticKind,
+                message: { role: 'assistant', content: [contentBlock] },
+            }
+
+            // Replace the visual item reference to trigger Vue reactivity
+            const newVi = { ...visualItems[idx] }
+            setParsedContent(newVi, newParsed)
+            visualItems[idx] = newVi
+
+            // Update the cache so the next recomputeVisualItems doesn't clobber
+            const cache = this.localState.visualItemCache[sessionId]
+            if (cache) cache.set(targetLineNum, newVi)
+        },
+
+        /**
+         * Handle a stream_block_stop event — mark the block as stopped (text
+         * is final but uuid not yet known). Triggers recompute because the
+         * WorkingAssistantMessage visibility depends on this flag.
+         */
+        streamBlockStop(sessionId, messageId, blockIndex) {
+            const streaming = this.localState.streamingBlocks[sessionId]
+            if (!streaming || streaming.messageId !== messageId) return
+            const block = streaming.blocks.find(b => b.blockIndex === blockIndex)
+            if (block) {
+                block.stopped = true
+                this.recomputeVisualItems(sessionId)
+            }
+        },
+
+        /**
+         * Handle a stream_block_end event — record the uuid so we can match
+         * the real SessionItem when it arrives from the watcher.
+         * No recomputeVisualItems here: the uuid is internal metadata for
+         * matching, the displayed text hasn't changed.
+         */
+        streamBlockEnd(sessionId, messageId, blockIndex, uuid) {
+            const streaming = this.localState.streamingBlocks[sessionId]
+            if (!streaming || streaming.messageId !== messageId) return
+            const block = streaming.blocks.find(b => b.blockIndex === blockIndex)
+            if (block) {
+                block.uuid = uuid
+            }
+        },
+
+        /**
+         * Try to retire streaming blocks whose real SessionItem has arrived.
+         * Called from addSessionItems after new items are placed in the array.
+         *
+         * Match strategy: for each new item of kind assistant_message or
+         * content_items, check parsed content's message.id against the streaming
+         * messageId, then match uuid (top-level in parsed JSON) against block uuid.
+         */
+        _retireStreamingBlocks(sessionId, newItems) {
+            const streaming = this.localState.streamingBlocks[sessionId]
+            if (!streaming) return
+
+            for (const item of newItems) {
+                if (item.kind !== 'assistant_message' && item.kind !== 'content_items') continue
+                const parsed = getParsedContent(item)
+                if (!parsed) continue
+                const itemMessageId = parsed.message?.id
+                if (itemMessageId !== streaming.messageId) continue
+                const itemUuid = parsed.uuid
+                if (!itemUuid) continue
+
+                // Find and remove the matching block
+                const idx = streaming.blocks.findIndex(b => b.uuid === itemUuid)
+                if (idx !== -1) {
+                    streaming.blocks.splice(idx, 1)
+                }
+            }
+
+            // If all blocks retired, clean up
+            if (streaming.blocks.length === 0) {
+                delete this.localState.streamingBlocks[sessionId]
             }
         },
 

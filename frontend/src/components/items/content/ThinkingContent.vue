@@ -17,6 +17,10 @@ const props = defineProps({
     detailKey: {
         type: String,
         required: true
+    },
+    streaming: {
+        type: Boolean,
+        default: false
     }
 })
 
@@ -48,6 +52,7 @@ function onHide() {
     <wa-details ref="detailsRef" class="item-details thinking-content" icon-placement="start" @wa-show="onShow" @wa-hide="onHide">
         <span slot="summary" class="items-details-summary">
             <strong class="items-details-summary-name">Thinking</strong>
+            <wa-spinner v-if="streaming"></wa-spinner>
         </span>
         <div v-if="isOpen" class="thinking-body">
             <MarkdownContent :source="thinking" />
@@ -56,8 +61,23 @@ function onHide() {
 </template>
 
 <style scoped>
-wa-details::part(content) {
-    padding-top: 0;
+wa-details {
+    &::part(content) {
+        padding-top: 0;
+    }
+
+    .items-details-summary {
+        display: flex !important;
+        gap: var(--wa-space-s);
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        margin-right: var(--wa-space-xs);
+
+        wa-spinner {
+            font-size: 1.2em;
+        }
+    }
 }
 
 .thinking-body {

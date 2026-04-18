@@ -128,7 +128,9 @@ export const DISPLAY_LEVEL = {
 export const SYNTHETIC_ITEM = {
     OPTIMISTIC_USER_MESSAGE: { lineNum: -2000, kind: 'optimistic-user-message' },
     STARTING_ASSISTANT_MESSAGE: { lineNum: -1500, kind: 'starting-assistant-message' },
-    WORKING_ASSISTANT_MESSAGE: { lineNum: -1000, kind: 'working-assistant-message' },
+    // Streaming blocks use baseLineNum - blockIndex as their lineNum (e.g., -1000, -1001, ...)
+    STREAMING_BLOCK: { baseLineNum: -1000, kind: 'streaming-block' },
+    WORKING_ASSISTANT_MESSAGE: { lineNum: -500, kind: 'working-assistant-message' },
 }
 
 /**

@@ -15,15 +15,17 @@ from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Any
 
 from claude_agent_sdk import (
-    ClaudeAgentOptions,
+    AssistantMessage, ClaudeAgentOptions,
     ClaudeSDKClient,
     ClaudeSDKError,
     HookMatcher,
     PermissionResultAllow,
     PermissionResultDeny,
-    PermissionUpdate, ResultMessage, SystemMessage, ThinkingConfigAdaptive, ThinkingConfigDisabled,
+    PermissionUpdate, ResultMessage, StreamEvent, SystemMessage, ThinkingConfigAdaptive, ThinkingConfigDisabled,
     ToolPermissionContext, UserMessage,
 )
+
+from channels.layers import get_channel_layer
 
 from twicc.claude_plugin import get_plugin_dir
 
@@ -807,6 +809,7 @@ class ClaudeProcess:
                     "allow-dangerously-skip-permissions": None,
                     "no-chrome": None,
                 },
+                include_partial_messages=True,
             )
 
             if resume:
@@ -1163,9 +1166,104 @@ class ClaudeProcess:
 
         logger.debug("Entering message loop for session %s", self.session_id)
 
+        current_stream_message_id: str | None = None
+        current_stream_block_index: int | None = None
+        current_stream_block_type: str | None = None
+        # Fallback: if AssistantMessage arrives after content_block_stop,
+        # the current_stream_block_* vars are already cleared. We keep the
+        # last finished block info so we can still send the END event.
+        last_finished_block_index: int | None = None
+        last_finished_block_type: str | None = None
+
         try:
             async for msg in self._client.receive_messages():
                 self.last_activity = time.time()
+
+                if isinstance(msg, StreamEvent):
+                    event = msg.event
+                    event_type = event.get("type")
+                    match event_type:
+                        case "message_start" if (
+                            (message := event.get("message") or {})
+                            and message.get("type") == "message"
+                            and message.get("role") == "assistant"
+                            and (message_id := message.get("id"))
+                        ):
+                            # entering a new streaming message with id
+                            current_stream_message_id = message_id
+                        case "content_block_start" if (
+                            current_stream_message_id
+                            and (block_index := event.get("index")) is not None
+                            and (block_type := (event.get("content_block") or {}).get("type"))
+                            and block_type in ("text", "thinking")
+                        ):
+                            current_stream_block_index = block_index
+                            current_stream_block_type = block_type
+                            last_finished_block_index = None
+                            last_finished_block_type = None
+                            # logger.debug(f"[Stream {current_stream_block_type} msg_id={current_stream_message_id} index={current_stream_block_index}] => START")
+                            await self._broadcast_stream_event({
+                                "type": "stream_block_start",
+                                "session_id": self.session_id,
+                                "message_id": current_stream_message_id,
+                                "block_index": current_stream_block_index,
+                                "block_type": current_stream_block_type,
+                            })
+                        case "content_block_delta" if (
+                            current_stream_block_type
+                            and (delta := event.get("delta") or {})
+                            and delta.get("type") == f"{current_stream_block_type}_delta"
+                            and (delta_text := delta.get(current_stream_block_type))
+                        ):
+                            # logger.debug(f"[Stream {current_stream_block_type} msg_id={current_stream_message_id} index={current_stream_block_index}] `{delta_text}`")
+                            await self._broadcast_stream_event({
+                                "type": "stream_block_delta",
+                                "session_id": self.session_id,
+                                "message_id": current_stream_message_id,
+                                "block_index": current_stream_block_index,
+                                "block_type": current_stream_block_type,
+                                "text": delta_text,
+                            })
+                        case "content_block_stop" if current_stream_block_type:
+                            # logger.debug(f"[Stream {current_stream_block_type} msg_id={current_stream_message_id} index={current_stream_block_index}] => STOP")
+                            await self._broadcast_stream_event({
+                                "type": "stream_block_stop",
+                                "session_id": self.session_id,
+                                "message_id": current_stream_message_id,
+                                "block_index": current_stream_block_index,
+                                "block_type": current_stream_block_type,
+                            })
+                            last_finished_block_index = current_stream_block_index
+                            last_finished_block_type = current_stream_block_type
+                            current_stream_block_index = None
+                            current_stream_block_type = None
+                        case "message_stop" if current_stream_message_id:
+                            current_stream_message_id = None
+                            last_finished_block_index = None
+                            last_finished_block_type = None
+
+                elif (
+                    isinstance(msg, AssistantMessage)
+                    and msg.message_id == current_stream_message_id
+                    and (current_stream_block_type or last_finished_block_type)
+                ):
+                    # AssistantMessage usually arrives before content_block_stop (current_stream_block_*
+                    # still set), but may arrive after (fallback to last_finished_block_*).
+                    end_block_index = current_stream_block_index if current_stream_block_type else last_finished_block_index
+                    end_block_type = current_stream_block_type or last_finished_block_type
+
+                    # logger.debug(f"[Stream {end_block_type} msg_id={current_stream_message_id} index={end_block_index}] => END: uuid = {msg.uuid}")
+                    await self._broadcast_stream_event({
+                        "type": "stream_block_end",
+                        "session_id": self.session_id,
+                        "message_id": current_stream_message_id,
+                        "block_index": end_block_index,
+                        "block_type": end_block_type,
+                        "uuid": msg.uuid,
+                    })
+                    # Clear last_finished so we don't re-match on a subsequent AssistantMessage
+                    last_finished_block_index = None
+                    last_finished_block_type = None
 
                 if isinstance(msg, ResultMessage):
                     # Claude finished responding, ready for user input
@@ -1376,6 +1474,14 @@ class ClaudeProcess:
                 self.session_id,
                 e,
             )
+
+    async def _broadcast_stream_event(self, data: dict) -> None:
+        """Broadcast a streaming event to all connected WebSocket clients."""
+        channel_layer = get_channel_layer()
+        await channel_layer.group_send(
+            "updates",
+            {"type": "broadcast", "data": data},
+        )
 
     async def _notify_state_change(self) -> None:
         """Invoke the state change callback if set."""

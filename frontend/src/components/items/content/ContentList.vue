@@ -280,6 +280,7 @@ const parentRangeCommentsCount = computed(() => {
                 :thinking="entry.item.thinking"
                 :session-id="sessionId"
                 :detail-key="`line:${lineNum}:${entry.index}`"
+                :streaming="entry.item.streaming || false"
             />
             <UnknownEntry
                 v-else
