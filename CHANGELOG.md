@@ -8,24 +8,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Text selection comments now also work in the terminal tab
+- Real-time streaming of assistant text and thinking content during active sessions
 - Project, workspace, and all-projects home views now have their own Files, Git (projects only), and Terminal tabs
-- Pan/zoom on all image displays
-- Right-click context menu in file browser for file operations (Files tab) and git operations (Git tab)
+- Quotas/usage settings section with JSON file read and dump modes
+- Text selection comments now also work in the terminal tab
 - New default theme (simpler), with a choice of 3 visual themes (customizable accent color); "Theme" (dark/light) setting renamed to "Color scheme"
+- Right-click context menu in file browser for file operations (Files tab) and git operations (Git tab)
+- Pan/zoom on all image displays
 
 ### Changed
 
-- Text selection comment panel is now draggable via the panel background (quote is scrollable)
-- Snippet buttons show a scope indicator
+- Text selection can now be added to the message input without requiring a comment
+- Improved usage tooltip rendering: better recent burn rate computation and display, more visible buttons in dark mode
+- Better initial page load with consolidated config loading and eliminated background flash
+- Improved text selection comment UX: better overflow handling, keyboard shortcut so add to message, button positioning based on selection direction, and panel now draggable via the panel background
+- Snippet buttons show a scope (workspace ou project) indicator
 - Re-clicking the active project/workspace in the sidebar deselects the current session and navigates to the home view (to access the new tabs)
 - On small-height screens, tabs can be switched directly from the compact header via a dropdown without expanding it first
 - Bump `claude-agent-sdk` from 0.1.58 to 0.1.59 (bundled Claude Code CLI: 2.1.97 → 2.1.105)
 
 ### Fixed
 
-- Text selection comments now detected on mobile
-- Text selection comment panel repositions when the mobile keyboard opens
+- More reliable usage quota retrieval (auto-refresh OAuth token on API errors, macOS Keychain support for reading OAuth credentials)
+- Fixed settings sync race condition between multiple clients
+- Unified text selection color across the app
+- Text selection comments now detected on mobile and the panel repositions when the keyboard opens
 - Process indicator aggregation (workspaces and projects) fixed: priority corrected and missing indicators restored in sidebar
 - Edit/Write diffs auto-close when the tool result is an error
 - Some sessions were incorrectly marked as read
