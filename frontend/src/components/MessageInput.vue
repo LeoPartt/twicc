@@ -343,7 +343,7 @@ const startupSettingsWarning = computed(() => {
     const _processActive = processIsActive.value
     const _dropdownsChanged = hasDropdownsChanged.value
     if (!_processActive || !_dropdownsChanged) {
-        console.debug('[startupWarning] early exit:', { processIsActive: _processActive, hasDropdownsChanged: _dropdownsChanged, processState: processState.value?.state, sessionId: props.sessionId })
+        // console.debug('[startupWarning] early exit:', { processIsActive: _processActive, hasDropdownsChanged: _dropdownsChanged, processState: processState.value?.state, sessionId: props.sessionId })
         return null
     }
 

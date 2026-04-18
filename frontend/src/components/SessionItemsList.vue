@@ -569,6 +569,49 @@ watch(
 )
 
 /**
+ * Keep the scroller pinned to the bottom while streaming blocks are actively
+ * receiving deltas. stickToBottom ensures that every ResizeObserver callback
+ * (triggered by the growing streaming content) scrolls to bottom automatically.
+ * Disabled when streaming ends or the user scrolls away from the bottom.
+ */
+let streamingStickToBottom = false
+watch(
+    () => store.hasActiveStreaming(props.sessionId),
+    (active) => {
+        const scroller = scrollerRef.value
+        if (!scroller) return
+        if (active && !streamingStickToBottom) {
+            if (isAutoScrollingToBottom.value || scroller.isAtBottom(AUTO_SCROLL_THRESHOLD)) {
+                streamingStickToBottom = true
+                scroller.enableStickToBottom()
+            }
+        } else if (!active && streamingStickToBottom) {
+            streamingStickToBottom = false
+            scroller.disableStickToBottom()
+        }
+    }
+)
+
+/**
+ * Sync stickToBottom with user scroll position during active streaming.
+ * - Scrolls away from bottom → disable stickToBottom (user wants to read)
+ * - Scrolls back to bottom → re-enable stickToBottom (user wants to follow)
+ */
+function onStreamingScrollCheck() {
+    if (!store.hasActiveStreaming(props.sessionId)) return
+    const scroller = scrollerRef.value
+    if (!scroller) return
+    const atBottom = scroller.isAtBottom(AUTO_SCROLL_THRESHOLD)
+    if (streamingStickToBottom && !atBottom) {
+        streamingStickToBottom = false
+        scroller.disableStickToBottom()
+    } else if (!streamingStickToBottom && atBottom) {
+        streamingStickToBottom = true
+        scroller.enableStickToBottom()
+    }
+}
+
+/**
  * Handle item resize events from VirtualScroller.
  * Used to detect when items have finished resizing for scroll stability detection.
  */
@@ -1515,6 +1558,7 @@ defineExpose({
             @update="onScrollerUpdate"
             @item-resized="onItemResized"
             @became-visible="onScrollerBecameVisible"
+            @scroll="onStreamingScrollCheck"
         >
             <template #default="{ item, index }">
                 <!-- Placeholder (no content loaded yet) -->

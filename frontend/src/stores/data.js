@@ -260,6 +260,12 @@ export const useDataStore = defineStore('data', {
         // Process state getter - returns { state, error?, pending_request? } or null if no active process
         getProcessState: (state) => (sessionId) => state.processStates[sessionId] || null,
 
+        // Whether a session has active (non-stopped) streaming blocks
+        hasActiveStreaming: (state) => (sessionId) => {
+            const streaming = state.localState.streamingBlocks[sessionId]
+            return streaming?.blocks.some(b => !b.stopped) ?? false
+        },
+
         // Pending request getter - returns the pending_request object or null
         getPendingRequest: (state) => (sessionId) =>
             state.processStates[sessionId]?.pending_request || null,

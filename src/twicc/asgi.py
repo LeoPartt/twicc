@@ -390,8 +390,8 @@ async def broadcast_process_state(info: ProcessInfo) -> None:
     before the frontend learns that the turn ended. This prevents a brief flash
     of an intermediate assistant message in conversation display mode.
     """
-    if info.previous_state == ProcessState.ASSISTANT_TURN and info.state != ProcessState.ASSISTANT_TURN:
-        await asyncio.sleep(1)
+    # if info.previous_state == ProcessState.ASSISTANT_TURN and info.state != ProcessState.ASSISTANT_TURN:
+    #     await asyncio.sleep(1)
 
     channel_layer = get_channel_layer()
     message = serialize_process_info(info)
