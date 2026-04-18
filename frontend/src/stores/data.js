@@ -2141,15 +2141,33 @@ export const useDataStore = defineStore('data', {
         /**
          * Handle a stream_block_end event — record the uuid so we can match
          * the real SessionItem when it arrives from the watcher.
-         * No recomputeVisualItems here: the uuid is internal metadata for
-         * matching, the displayed text hasn't changed.
+         *
+         * Also handles a race condition: the watcher's session_items_added may
+         * arrive BEFORE this end event. In that case, _retireStreamingBlocks
+         * already ran but couldn't match (uuid was null). We scan existing
+         * session items for a retroactive match.
          */
         streamBlockEnd(sessionId, messageId, blockIndex, uuid) {
             const streaming = this.localState.streamingBlocks[sessionId]
             if (!streaming || streaming.messageId !== messageId) return
             const block = streaming.blocks.find(b => b.blockIndex === blockIndex)
-            if (block) {
-                block.uuid = uuid
+            if (!block) return
+            block.uuid = uuid
+
+            // Retroactive match: the real item may already be in sessionItems
+            const items = this.sessionItems[sessionId]
+            if (!items) return
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i]
+                if (item.kind !== 'assistant_message' && item.kind !== 'content_items') continue
+                const parsed = getParsedContent(item)
+                if (!parsed) continue
+                if (parsed.message?.id !== messageId) continue
+                if (parsed.uuid === uuid) {
+                    this._retireStreamingBlocks(sessionId, [item])
+                    this.recomputeVisualItems(sessionId)
+                    return
+                }
             }
         },
 
@@ -2177,6 +2195,25 @@ export const useDataStore = defineStore('data', {
                 // Find and remove the matching block
                 const idx = streaming.blocks.findIndex(b => b.uuid === itemUuid)
                 if (idx !== -1) {
+                    const block = streaming.blocks[idx]
+
+                    // Transfer wa-details open state from streaming to real item
+                    if (block.blockType === 'thinking') {
+                        const { baseLineNum } = SYNTHETIC_ITEM.STREAMING_BLOCK
+                        const streamingDetailKey = `line:${baseLineNum - block.blockIndex}:0`
+                        if (this.isDetailOpen(sessionId, streamingDetailKey)) {
+                            // Find the thinking block's index in the real item's content
+                            const content = parsed.message?.content
+                            if (Array.isArray(content)) {
+                                const thinkingIdx = content.findIndex(c => c.type === 'thinking')
+                                if (thinkingIdx !== -1) {
+                                    this.setDetailOpen(sessionId, `line:${item.line_num}:${thinkingIdx}`, true)
+                                }
+                            }
+                            this.setDetailOpen(sessionId, streamingDetailKey, false)
+                        }
+                    }
+
                     streaming.blocks.splice(idx, 1)
                 }
             }

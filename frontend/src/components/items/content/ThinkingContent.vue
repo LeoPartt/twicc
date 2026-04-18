@@ -30,10 +30,13 @@ const detailsRef = ref(null)
 // Initialized from the store to restore state across virtual scroller mount/unmount cycles.
 const isOpen = ref(dataStore.isDetailOpen(props.sessionId, props.detailKey))
 
-// Restore wa-details open state on mount (when re-entering virtual scroller viewport)
+// Skip open animation when mounting already-open (virtual scroller restoration,
+// or state transferred from a streaming block). Same pattern as ToolUseContent.
+const instantOpen = ref(isOpen.value)
+
 onMounted(() => {
-    if (isOpen.value) {
-        nextTick(() => detailsRef.value?.show())
+    if (instantOpen.value) {
+        nextTick(() => { instantOpen.value = false })
     }
 })
 
@@ -49,7 +52,7 @@ function onHide() {
 </script>
 
 <template>
-    <wa-details ref="detailsRef" class="item-details thinking-content" icon-placement="start" @wa-show="onShow" @wa-hide="onHide">
+    <wa-details ref="detailsRef" :open="isOpen" :style="instantOpen ? { '--show-duration': '0ms', '--hide-duration': '0ms' } : null" class="item-details thinking-content" icon-placement="start" @wa-show="onShow" @wa-hide="onHide">
         <span slot="summary" class="items-details-summary">
             <strong class="items-details-summary-name">Thinking</strong>
             <wa-spinner v-if="streaming"></wa-spinner>
