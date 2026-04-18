@@ -1270,11 +1270,11 @@ export const useDataStore = defineStore('data', {
             // Streaming blocks appear BEFORE the working message in the list.
             const streaming = this.localState.streamingBlocks[sessionId]
             const streamingItems = []
-            let hasActiveStreamingBlock = false
+            let hasActiveTextStreaming = false
             if (streaming?.blocks.length) {
                 const { baseLineNum, kind: streamingSyntheticKind } = SYNTHETIC_ITEM.STREAMING_BLOCK
                 for (const block of streaming.blocks) {
-                    if (!block.stopped) hasActiveStreamingBlock = true
+                    if (!block.stopped && block.blockType === 'text') hasActiveTextStreaming = true
                     const lineNum = baseLineNum - block.blockIndex
                     const displayText = block.displayedText ?? block.text
                     const contentBlock = block.blockType === 'thinking'
@@ -1306,7 +1306,7 @@ export const useDataStore = defineStore('data', {
             // computeVisualItems knows to always let synthetic items (line_num < 0) through,
             // even in conversation mode which normally filters assistant messages.
             let workingMessage = null
-            if (isAssistantTurn && !hasActiveStreamingBlock) {
+            if (isAssistantTurn && !hasActiveTextStreaming) {
                 const { lineNum, kind: syntheticKind } = SYNTHETIC_ITEM.WORKING_ASSISTANT_MESSAGE
 
                 // Walk backwards through items to find the most recent tool_use.
