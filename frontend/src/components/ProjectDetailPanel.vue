@@ -9,6 +9,7 @@ import { useWorkspacesStore } from '../stores/workspaces'
 import { isWorkspaceProjectId, extractWorkspaceId } from '../utils/workspaceIds'
 import ProjectDetailHeader from './ProjectDetailHeader.vue'
 import { apiFetch } from '../utils/api'
+import ProjectDetailNavList from './ProjectDetailNavList.vue'
 import ContributionGraphs from './ContributionGraphs.vue'
 import FilesPanel from './FilesPanel.vue'
 import GitPanel from './GitPanel.vue'
@@ -366,6 +367,8 @@ onBeforeUnmount(() => {
             </wa-tab>
 
             <wa-tab-panel name="stats">
+                <ProjectDetailNavList :project-id="projectId" class="stats-nav-list" />
+                <wa-divider class="stats-nav-list-divider"></wa-divider>
                 <ContributionGraphs :project-id="projectId" :project-ids="workspaceProjectIds" />
             </wa-tab-panel>
 
@@ -468,6 +471,10 @@ wa-tab::part(base) {
     padding-bottom: 0;
 }
 
+.stats-nav-list, .stats-nav-list-divider {
+    display: none;
+}
+
 /* Compact tab nav: hidden by default, shown in compact overlay */
 .compact-tab-nav {
     display: none;
@@ -485,6 +492,16 @@ wa-tab::part(base) {
 
     .detail-tabs::part(nav) {
         display: none;
+    }
+
+    .stats-nav-list {
+        display: flex;
+        padding: var(--wa-space-s) var(--wa-space-m);
+    }
+    .stats-nav-list-divider {
+        display: block;
+        --spacing: 0;
+        --width: var(--divider-size);
     }
 
     /* Show the compact tab nav inside the header overlay */

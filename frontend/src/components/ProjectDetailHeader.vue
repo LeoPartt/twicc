@@ -24,6 +24,7 @@ import WorkspaceManageDialog from './WorkspaceManageDialog.vue'
 import ActivitySparkline from './ActivitySparkline.vue'
 import CostDisplay from './CostDisplay.vue'
 import AppTooltip from './AppTooltip.vue'
+import ProjectDetailNavList from './ProjectDetailNavList.vue'
 
 const props = defineProps({
     /** Project ID or ALL_PROJECTS_ID for aggregate view */
@@ -291,6 +292,9 @@ function handleEditClick() {
                 <AppTooltip v-if="mtime" for="detail-mtime">{{ useRelativeTime ? `Last activity: ${formatDate(mtime)}` : 'Last activity' }}</AppTooltip>
             </div>
 
+            <!-- Navigation list of workspaces/projects (aggregate modes only) -->
+            <ProjectDetailNavList :project-id="projectId" class="detail-nav-list" />
+
             <!-- Slot for extra compact-mode content (e.g. tab nav from ProjectDetailPanel) -->
             <slot name="compact-extra"></slot>
         </div>
@@ -402,6 +406,12 @@ function handleEditClick() {
     display: flex;
     flex-wrap: wrap;
     gap: var(--wa-space-m);
+}
+
+.detail-meta:not(:has(+ .detail-nav-list)) {
+    padding-bottom: var(--wa-space-s);
+}
+.detail-nav-list {
     padding-bottom: var(--wa-space-s);
 }
 
@@ -506,14 +516,14 @@ function handleEditClick() {
         padding-block: var(--wa-space-xs);
     }
 
-    .detail-meta {
-        padding-bottom: 0;
+    .detail-meta, .detail-nav-list {
+        padding-bottom: 0 !important;
     }
     .detail-sparkline-row {
         padding-top: var(--wa-space-s);
     }
 
-    .detail-meta, .detail-sparkline-row {
+    .detail-meta, .detail-sparkline-row, .detail-directory, .detail-nav-list {
         padding-inline: var(--wa-space-m);
     }
 }

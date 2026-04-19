@@ -12,6 +12,10 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    gap: {
+        type: String,
+        default: null,
+    },
 })
 
 const store = useDataStore()
@@ -27,7 +31,7 @@ const color = computed(() => project.value?.color || null)
 </script>
 
 <template>
-    <span class="project-badge">
+    <span class="project-badge" :style="gap ? { '--badge-gap': gap } : null">
         <span
             class="project-badge-dot"
             :style="color ? { '--dot-color': color } : null"
@@ -40,7 +44,7 @@ const color = computed(() => project.value?.color || null)
 .project-badge {
     display: inline-flex;
     align-items: center;
-    gap: var(--wa-space-xs);
+    gap: var(--badge-gap, var(--wa-space-xs));
     min-width: 0;
 }
 
