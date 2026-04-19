@@ -33,6 +33,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - ![Compact summary](frontend/public/whats-new/v1.5/compact-rendering.webp)
 - Click the commit hash in the Git tab header to view commit details and easily copy the hash
   - ![Commit details](frontend/public/whats-new/v1.5/commit-details.webp)
+- Message history picker: in addition to typing `!` at start of input or press PageUp on the first line to browse and reuse previous messages from the current session, you can now also use the Up arrow key, or click on the Up arrow under the textarea.
+- Add a `claude` subcommand to the TwiCC CLI to run the Claude CLI that is bundled with the Claude Agent SDK
 
 ### Changed
 
@@ -46,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - ![Compact header with dropdown](frontend/public/whats-new/v1.5/compact-header-tabs-dropdown.webp)
 - Image diffs in git now show side-by-side comparison instead of "binary file cannot be diffed"
   - ![Git diff comparison](frontend/public/whats-new/v1.5/git-image-diff.webp)
+- Creating a new project inside TwiCC now allows you to pick a non existent directory that will be created after confirmation 
 - Bump `claude-agent-sdk` from 0.1.58 to 0.1.59 (bundled Claude Code CLI: 2.1.97 → 2.1.105)
 
 ### Fixed
