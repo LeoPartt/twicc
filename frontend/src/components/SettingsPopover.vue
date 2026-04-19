@@ -1,6 +1,6 @@
 <script setup>
 // SettingsPopover.vue - Settings button with popover panel
-import { computed, nextTick, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSettingsStore, SETTINGS_SCHEMA } from '../stores/settings'
 import { useDataStore } from '../stores/data'
@@ -523,9 +523,15 @@ function onPopoverShow() {
     }
 }
 
-function openChangelog() {
-    changelogDialogRef.value?.open()
+function openChangelog(options) {
+    changelogDialogRef.value?.open(options)
 }
+
+function onOpenChangelogEvent() {
+    openChangelog({ skipCombined: true })
+}
+window.addEventListener('open-changelog', onOpenChangelogEvent)
+onBeforeUnmount(() => window.removeEventListener('open-changelog', onOpenChangelogEvent))
 
 watch(() => dataStore.pendingChangelogVersion, (version) => {
     if (version) {
@@ -1057,7 +1063,7 @@ function onChangelogClose() {
                 </template>
             </span>
             ·
-            <a href="#" class="settings-footer-changes" @click.prevent="openChangelog">Changes</a>
+            <a href="#" class="settings-footer-changes" @click.prevent="openChangelog()">Changes</a>
             ·
             <a href="https://github.com/sponsors/twidi" target="_blank" rel="noopener" class="settings-footer-sponsor">
                 <span class="settings-footer-sponsor-icon"></span>

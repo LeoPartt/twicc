@@ -163,7 +163,7 @@ function versionOptionLabel(v) {
     return /^\d/.test(v.version) ? `v${v.version}` : v.version
 }
 
-async function open() {
+async function open({ skipCombined = false } = {}) {
     loading.value = true
     error.value = null
     versions.value = []
@@ -175,10 +175,15 @@ async function open() {
 
     try {
         const data = await fetchChangelog(settingsStore.isDevMode)
-        // Build combined entry if we have a previous version different from current
-        const combined = buildCombinedVersion(data, store.previousChangelogVersion, store.currentVersion)
-        versions.value = combined ? [combined, ...data] : data
-        selectedVersion.value = findInitialVersion(versions.value)
+        if (skipCombined) {
+            versions.value = data
+            // Select the first (latest) version directly
+            selectedVersion.value = data.length ? data[0].version : ''
+        } else {
+            const combined = buildCombinedVersion(data, store.previousChangelogVersion, store.currentVersion)
+            versions.value = combined ? [combined, ...data] : data
+            selectedVersion.value = findInitialVersion(versions.value)
+        }
         await nextTick()
         await renderCurrentEntry()
     } catch (e) {
