@@ -1145,11 +1145,11 @@ onMounted(() => {
                                 </wa-callout>
                             </div>
 
-                            <!-- Binary image diff (both sides) -->
+                            <!-- Binary image diff (both sides) Logically inverted for a more logical visual rendering for the user -->
                             <div v-else-if="diffData?.image && diffData.original && diffData.modified" ref="imageDiffContainerRef" class="image-diff-container">
                                 <wa-comparison>
-                                    <img ref="diffBeforeImageRef" slot="before" :src="diffData.original" :alt="selectedFile" style="width: 100%; height: 100%; object-fit: contain;" />
-                                    <img ref="diffAfterImageRef" slot="after" :src="diffData.modified" :alt="selectedFile" style="width: 100%; height: 100%; object-fit: contain;" />
+                                    <img ref="diffAfterImageRef" slot="before" :src="diffData.modified" :alt="selectedFile" style="width: 100%; height: 100%; object-fit: contain;" />
+                                    <img ref="diffBeforeImageRef" slot="after" :src="diffData.original" :alt="selectedFile" style="width: 100%; height: 100%; object-fit: contain;" />
                                 </wa-comparison>
                             </div>
 
