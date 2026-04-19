@@ -413,7 +413,7 @@ defineExpose({
                 <!-- Compact tab dropdown: shown only in compact collapsed mode, replacing action buttons -->
                 <wa-dropdown v-if="tabs.length" class="compact-tab-dropdown" placement="bottom-start" @wa-select="handleCompactTabSelect" @click.stop>
                     <wa-button slot="trigger" variant="brand" appearance="outlined" size="small" class="compact-active-tab-label" with-caret>
-                        <span>{{ activeTab?.label }}</span>
+                        <span class="compact-active-tab-label-text">{{ activeTab?.label }}</span>
                         <ProcessIndicator
                             v-if="activeTab?.processState"
                             :state="activeTab.processState.state"
@@ -677,6 +677,15 @@ defineExpose({
     font-size: var(--wa-font-size-3xs);
     &::part(label) {
         font-size: var(--wa-font-size-s);
+        display: flex;
+        align-items: center;
+        column-gap: var(--wa-space-xs);
+    }
+    .compact-active-tab-label-text {
+        max-width: max(4rem, 20vw);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 }
 .compact-tab-comments-indicator {
@@ -686,7 +695,7 @@ defineExpose({
 .compact-tab-dropdown-item-content {
     display: inline-flex;
     align-items: center;
-    gap: var(--wa-space-2xs);
+    column-gap: var(--wa-space-xs);
 }
 .active-tab-item {
     opacity: 0.5;
