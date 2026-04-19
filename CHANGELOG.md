@@ -28,6 +28,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Right-click context menu in file browser for file operations (Files tab) and git operations (Git tab)
   - ![Right click on files tab](frontend/public/whats-new/v1.5/files-right-click.webp)
   - ![Right click on git tab](frontend/public/whats-new/v1.5/git-right-click.webp)
+- Added support for selecting older Claude model versions (Opus 4.5, Sonnet 4.5) with automatic upgrade on retirement
+  - ![Claude model picker](frontend/public/whats-new/v1.5/claude-models-versions.webp)
 - Pan/zoom on all image displays
 - "Compacting" status indicator during live sessions (and better rendering of compaction summaries)
   - ![Compact summary](frontend/public/whats-new/v1.5/compact-rendering.webp)

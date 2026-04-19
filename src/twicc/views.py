@@ -1966,6 +1966,7 @@ def bootstrap(request):
     frontend doesn't have to wait for the WebSocket connection.
     """
     from twicc.message_snippets import read_message_snippets_config
+    from twicc.model_registry import serialize_model_registry
     from twicc.synced_settings import CLAUDE_SETTINGS_CATEGORIES, SYNCED_SETTINGS_DEFAULTS, prepare_settings_for_client, read_synced_settings
     from twicc.terminal_config import read_terminal_config
     from twicc.workspaces import read_workspaces
@@ -1982,6 +1983,7 @@ def bootstrap(request):
         "workspaces": workspaces_data.get("workspaces", []),
         "terminal_config": read_terminal_config(),
         "message_snippets": read_message_snippets_config(),
+        "model_registry": serialize_model_registry(),
     })
 
 

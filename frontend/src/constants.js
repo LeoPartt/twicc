@@ -182,20 +182,16 @@ export const PERMISSION_MODE_DESCRIPTIONS = {
 }
 
 /**
- * Model values (matches SDK model parameter).
- * Controls which model Claude Code uses.
+ * Build a human-friendly label for a selected_model value.
+ * "opus" → "Opus", "opus-4.5" → "Opus 4.5", "sonnet" → "Sonnet"
  */
-export const MODEL = {
-    OPUS: 'opus',
-    SONNET: 'sonnet',
-}
-
-/**
- * Human-friendly labels for each model.
- */
-export const MODEL_LABELS = {
-    [MODEL.OPUS]: 'Opus',
-    [MODEL.SONNET]: 'Sonnet',
+export function getModelLabel(selectedModel) {
+    if (!selectedModel) return ''
+    if (selectedModel.includes('-')) {
+        const [model, version] = selectedModel.split('-', 2)
+        return `${model.charAt(0).toUpperCase() + model.slice(1)} ${version}`
+    }
+    return selectedModel.charAt(0).toUpperCase() + selectedModel.slice(1)
 }
 
 /**

@@ -2,10 +2,10 @@
 // SettingsPopover.vue - Settings button with popover panel
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useSettingsStore, SETTINGS_SCHEMA } from '../stores/settings'
+import { useSettingsStore, SETTINGS_SCHEMA, getModelRegistry, modelSupports1m } from '../stores/settings'
 import { useDataStore } from '../stores/data'
 import { useAuthStore } from '../stores/auth'
-import { DISPLAY_MODE, COLOR_SCHEME, SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SESSIONS, PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, MODEL, MODEL_LABELS, EFFORT, EFFORT_LABELS, THINKING, THINKING_LABELS, CLAUDE_IN_CHROME, CLAUDE_IN_CHROME_LABELS, CONTEXT_MAX, CONTEXT_MAX_LABELS, WA_THEME, WA_THEME_LABELS, WA_BRAND, WA_BRAND_LABELS } from '../constants'
+import { DISPLAY_MODE, COLOR_SCHEME, SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SESSIONS, PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, getModelLabel, EFFORT, EFFORT_LABELS, THINKING, THINKING_LABELS, CLAUDE_IN_CHROME, CLAUDE_IN_CHROME_LABELS, CONTEXT_MAX, CONTEXT_MAX_LABELS, WA_THEME, WA_THEME_LABELS, WA_BRAND, WA_BRAND_LABELS } from '../constants'
 import NotificationSettings from './NotificationSettings.vue'
 import AppTooltip from './AppTooltip.vue'
 import ChangelogDialog from './ChangelogDialog.vue'
@@ -257,11 +257,14 @@ const permissionModeOptions = Object.values(PERMISSION_MODE).map(value => ({
     description: PERMISSION_MODE_DESCRIPTIONS[value],
 }))
 
-// Model options for the select
-const modelOptions = Object.values(MODEL).map(value => ({
-    value,
-    label: MODEL_LABELS[value],
-}))
+// Model options for the select — built from the registry
+const modelRegistryOptions = computed(() => {
+    const registry = getModelRegistry()
+    return {
+        latest: registry.filter(e => e.latest),
+        older: registry.filter(e => !e.latest),
+    }
+})
 
 // Effort options for the select
 const effortOptions = Object.values(EFFORT).map(value => ({
@@ -286,6 +289,14 @@ const contextMaxOptions = Object.values(CONTEXT_MAX).map(value => ({
     value: String(value),
     label: CONTEXT_MAX_LABELS[value],
 }))
+
+function formatRetirementDate(isoDate) {
+    return new Date(isoDate + 'T00:00:00').toLocaleDateString(undefined, {
+        month: 'short', day: 'numeric', year: 'numeric',
+    })
+}
+
+const defaultModelSupports1m = computed(() => modelSupports1m(defaultModel.value))
 
 /**
  * Handle display mode change.
@@ -445,7 +456,11 @@ function onDefaultPermissionModeChange(event) {
 }
 
 function onDefaultModelChange(event) {
-    store.setDefaultModel(event.target.value)
+    const newModel = event.target.value
+    store.setDefaultModel(newModel)
+    if (!modelSupports1m(newModel) && store.getDefaultContextMax === CONTEXT_MAX.EXTENDED) {
+        store.setDefaultContextMax(CONTEXT_MAX.DEFAULT)
+    }
 }
 
 function onDefaultEffortChange(event) {
@@ -697,11 +712,19 @@ function onChangelogClose() {
                             size="small"
                         >
                             <wa-option
-                                v-for="option in modelOptions"
-                                :key="option.value"
-                                :value="option.value"
+                                v-for="entry in modelRegistryOptions.latest"
+                                :key="entry.selectedModel"
+                                :value="entry.selectedModel"
                             >
-                                {{ option.label }}
+                                {{ getModelLabel(entry.selectedModel) }} (latest: {{ entry.version }})
+                            </wa-option>
+                            <wa-divider v-if="modelRegistryOptions.older.length"></wa-divider>
+                            <wa-option
+                                v-for="entry in modelRegistryOptions.older"
+                                :key="entry.selectedModel"
+                                :value="entry.selectedModel"
+                            >
+                                {{ getModelLabel(entry.selectedModel) }} (until {{ formatRetirementDate(entry.retirementDate) }})
                             </wa-option>
                         </wa-select>
                     </div>
@@ -716,8 +739,9 @@ function onChangelogClose() {
                                 v-for="option in contextMaxOptions"
                                 :key="option.value"
                                 :value="option.value"
+                                :disabled="option.value === String(CONTEXT_MAX.EXTENDED) && !defaultModelSupports1m"
                             >
-                                {{ option.label }}
+                                {{ option.label }}{{ option.value === String(CONTEXT_MAX.EXTENDED) && !defaultModelSupports1m ? ' (not available)' : '' }}
                             </wa-option>
                         </wa-select>
                     </div>

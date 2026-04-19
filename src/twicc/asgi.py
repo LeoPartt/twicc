@@ -872,6 +872,15 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
                     "context_max": context_max if context_max is not None else defaults.get("defaultContextMax", 200_000),
                 }
 
+                # Safety net: auto-upgrade retired models (frontend should have corrected, but just in case)
+                from twicc.model_registry import enforce_1m_consistency, get_upgrade_target, is_model_retired
+                if is_model_retired(effective["selected_model"]):
+                    target = get_upgrade_target(effective["selected_model"])
+                    if target:
+                        effective["selected_model"] = target
+                # Enforce 1M consistency
+                effective["context_max"] = enforce_1m_consistency(effective["selected_model"], effective["context_max"])
+
                 # Session exists: send message to it
                 await manager.send_to_session(
                     session_id, project_id, cwd, text,
@@ -920,6 +929,15 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
                     "claude_in_chrome": claude_in_chrome if claude_in_chrome is not None else defaults.get("defaultClaudeInChrome", True),
                     "context_max": context_max if context_max is not None else defaults.get("defaultContextMax", 200_000),
                 }
+
+                # Safety net: auto-upgrade retired models (frontend should have corrected, but just in case)
+                from twicc.model_registry import enforce_1m_consistency, get_upgrade_target, is_model_retired
+                if is_model_retired(effective["selected_model"]):
+                    target = get_upgrade_target(effective["selected_model"])
+                    if target:
+                        effective["selected_model"] = target
+                # Enforce 1M consistency
+                effective["context_max"] = enforce_1m_consistency(effective["selected_model"], effective["context_max"])
 
                 await manager.create_session(
                     session_id, project_id, cwd, text,
@@ -1222,6 +1240,15 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
                 # Accepted — merge, increment version, write
                 existing.update(synced_settings)
+
+                # Enforce 1M consistency when defaultModel changes
+                if "defaultModel" in synced_settings:
+                    from twicc.model_registry import selected_model_supports_1m
+                    from twicc.synced_settings import SYNCED_SETTINGS_DEFAULTS
+                    new_model = existing.get("defaultModel", SYNCED_SETTINGS_DEFAULTS["defaultModel"])
+                    if not selected_model_supports_1m(new_model) and existing.get("defaultContextMax", 200_000) == 1_000_000:
+                        existing["defaultContextMax"] = 200_000
+
                 existing["_version"] = current_version + 1
                 write_synced_settings(existing)
                 return current_version + 1, None, None  # accepted

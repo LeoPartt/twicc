@@ -1025,6 +1025,10 @@ class ProcessManager:
             "context_max": session.context_max if session.context_max is not None else defaults.get("defaultContextMax", 200_000),
         }
 
+        # Enforce 1M consistency
+        from twicc.model_registry import enforce_1m_consistency
+        requested["context_max"] = enforce_1m_consistency(requested["selected_model"], requested["context_max"])
+
         changes = classify_claude_settings_changes(process.get_claude_settings(), requested)
         if not any(changes.values()):
             return

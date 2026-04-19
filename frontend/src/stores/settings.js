@@ -3,7 +3,7 @@
 
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { watch, nextTick } from 'vue'
-import { DEFAULT_DISPLAY_MODE, DEFAULT_COLOR_SCHEME, DEFAULT_SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SESSIONS, DISPLAY_MODE, COLOR_SCHEME, SESSION_TIME_FORMAT, PERMISSION_MODE, MODEL, EFFORT, CONTEXT_MAX, SYNCED_SETTINGS_KEYS, WA_THEME, WA_BRAND, WA_THEME_DEFAULT_PALETTE } from '../constants'
+import { DEFAULT_DISPLAY_MODE, DEFAULT_COLOR_SCHEME, DEFAULT_SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SESSIONS, DISPLAY_MODE, COLOR_SCHEME, SESSION_TIME_FORMAT, PERMISSION_MODE, EFFORT, CONTEXT_MAX, SYNCED_SETTINGS_KEYS, WA_THEME, WA_BRAND, WA_THEME_DEFAULT_PALETTE } from '../constants'
 import { NOTIFICATION_SOUNDS } from '../utils/notificationSounds'
 // Note: useDataStore is imported lazily to avoid circular dependency (settings.js ↔ data.js)
 import { setColorScheme as setColorSchemeOnDom, setWaTheme, setWaBrand } from '../utils/theme'
@@ -96,7 +96,7 @@ const SETTINGS_VALIDATORS = {
     showArchivedProjects: (v) => typeof v === 'boolean',
     showArchivedWorkspaces: (v) => typeof v === 'boolean',
     defaultPermissionMode: (v) => Object.values(PERMISSION_MODE).includes(v),
-    defaultModel: (v) => Object.values(MODEL).includes(v),
+    defaultModel: (v) => typeof v === 'string' && v.length > 0,
     defaultEffort: (v) => Object.values(EFFORT).includes(v),
     defaultThinking: (v) => typeof v === 'boolean',
     defaultClaudeInChrome: (v) => typeof v === 'boolean',
@@ -180,6 +180,49 @@ function saveSettings(settings) {
     } catch (e) {
         console.warn('Failed to save settings to localStorage:', e)
     }
+}
+
+let _modelRegistry = []
+
+export function setModelRegistry(registry) {
+    _modelRegistry = registry
+}
+
+export function getModelRegistry() {
+    return _modelRegistry
+}
+
+export function modelSupports1m(selectedModel) {
+    if (!selectedModel) return true  // null = default = latest = supports 1M
+    const entry = _modelRegistry.find(e => e.selectedModel === selectedModel)
+    return entry ? entry.supports1m : true
+}
+
+/**
+ * If selectedModel is retired, return the upgrade target. Otherwise null.
+ * Used by frontend to correct stale session settings at render/send time.
+ */
+export function getRetiredModelUpgrade(selectedModel) {
+    if (!selectedModel) return null
+    const entry = _modelRegistry.find(e => e.selectedModel === selectedModel)
+    if (!entry || entry.latest || !entry.retirementDate) return null
+    if (new Date(entry.retirementDate + 'T00:00:00') >= new Date()) return null
+    // Find next higher version in same family
+    const family = _modelRegistry
+        .filter(e => e.model === entry.model)
+        .sort((a, b) => {
+            const av = a.version.split('.').map(Number)
+            const bv = b.version.split('.').map(Number)
+            return av[0] - bv[0] || (av[1] ?? 0) - (bv[1] ?? 0)
+        })
+    const currentParts = entry.version.split('.').map(Number)
+    for (const candidate of family) {
+        const cp = candidate.version.split('.').map(Number)
+        if (cp[0] > currentParts[0] || (cp[0] === currentParts[0] && (cp[1] ?? 0) > (currentParts[1] ?? 0))) {
+            return candidate.selectedModel
+        }
+    }
+    return null
 }
 
 export const useSettingsStore = defineStore('settings', {

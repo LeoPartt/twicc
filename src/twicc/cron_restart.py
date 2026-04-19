@@ -57,7 +57,7 @@ def _collect_restart_data(session_id: str) -> dict | None:
         logger.warning("Cron restart for session %s: cwd '%s' does not exist on disk", session_id, cwd)
         return None
 
-    return {
+    data = {
         "session_id": session_id,
         "project_id": session.project_id,
         "cwd": cwd,
@@ -72,6 +72,12 @@ def _collect_restart_data(session_id: str) -> dict | None:
         "claude_in_chrome": session.claude_in_chrome if session.claude_in_chrome is not None else defaults.get("defaultClaudeInChrome", True),
         "context_max": session.context_max if session.context_max is not None else defaults.get("defaultContextMax", 200_000),
     }
+
+    # Enforce 1M consistency
+    from twicc.model_registry import enforce_1m_consistency
+    data["context_max"] = enforce_1m_consistency(data["selected_model"], data["context_max"])
+
+    return data
 
 
 async def restart_all_session_crons(stop_event: asyncio.Event) -> None:

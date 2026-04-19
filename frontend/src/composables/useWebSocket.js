@@ -11,6 +11,7 @@ import { computeUsageData } from '../utils/usage'
 import { useSettingsStore } from '../stores/settings'
 import { playNotificationSound, sendBrowserNotification } from '../utils/notificationSounds'
 import { truncateTitle } from '../utils/truncate'
+import { getModelLabel } from '../constants'
 
 // WebSocket close code sent by backend when authentication fails
 const WS_CLOSE_AUTH_FAILURE = 4001
@@ -908,6 +909,20 @@ export function useWebSocket() {
                 store.setClaudeStatus(msg.status)
                 handleClaudeStatus(msg)
                 break
+            case 'model_retirement': {
+                const { retired_models } = msg
+
+                // Show persistent warning toast
+                const retiredList = Object.entries(retired_models)
+                    .map(([old, newM]) => `${getModelLabel(old)} → ${getModelLabel(newM)}`)
+                    .join(', ')
+
+                toast.warning(
+                    `Model version retired: ${retiredList}. Settings updated automatically.`,
+                    { duration: Infinity }
+                )
+                break
+            }
         }
     }
 

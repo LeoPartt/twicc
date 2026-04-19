@@ -3,12 +3,12 @@
 import { ref, computed, watch, nextTick, useId } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useDataStore } from '../stores/data'
-import { useSettingsStore, classifyClaudeSettingsChanges } from '../stores/settings'
+import { useSettingsStore, classifyClaudeSettingsChanges, getModelRegistry, modelSupports1m, getRetiredModelUpgrade } from '../stores/settings'
 import { sendWsMessage, notifyUserDraftUpdated } from '../composables/useWebSocket'
 import { isSupportedMimeType, MAX_FILE_SIZE, SUPPORTED_IMAGE_TYPES, draftMediaToMediaItem } from '../utils/fileUtils'
 import { toast } from '../composables/useToast'
 import { vPopoverFocusFix } from '../directives/vPopoverFocusFix'
-import { PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, MODEL, MODEL_LABELS, EFFORT, EFFORT_LABELS, EFFORT_DISPLAY_LABELS, THINKING_LABELS, THINKING_DISPLAY_LABELS, CLAUDE_IN_CHROME_LABELS, CLAUDE_IN_CHROME_DISPLAY_LABELS, CONTEXT_MAX, CONTEXT_MAX_LABELS } from '../constants'
+import { PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, getModelLabel, EFFORT, EFFORT_LABELS, EFFORT_DISPLAY_LABELS, THINKING_LABELS, THINKING_DISPLAY_LABELS, CLAUDE_IN_CHROME_LABELS, CLAUDE_IN_CHROME_DISPLAY_LABELS, CONTEXT_MAX, CONTEXT_MAX_LABELS } from '../constants'
 import { useCodeCommentsStore, formatAllComments } from '../stores/codeComments'
 import { getParsedContent } from '../utils/parsedContent'
 import MediaThumbnailGroup from './MediaThumbnailGroup.vue'
@@ -129,10 +129,19 @@ const permissionModeOptions = Object.values(PERMISSION_MODE).map(value => ({
 }))
 
 // Model options for the dropdown
-const modelOptions = Object.values(MODEL).map(value => ({
-    value,
-    label: MODEL_LABELS[value],
-}))
+const modelRegistryOptions = computed(() => {
+    const registry = getModelRegistry()
+    return {
+        latest: registry.filter(e => e.latest),
+        older: registry.filter(e => !e.latest),
+    }
+})
+
+function formatRetirementDate(isoDate) {
+    return new Date(isoDate + 'T00:00:00').toLocaleDateString(undefined, {
+        month: 'short', day: 'numeric', year: 'numeric',
+    })
+}
 
 // Effort options for the dropdown
 const effortOptions = Object.values(EFFORT).map(value => ({
@@ -159,7 +168,17 @@ const contextMaxOptions = Object.values(CONTEXT_MAX).map(value => ({
 }))
 
 // Default labels for the "Default: xxx" option in each dropdown
-const defaultModelLabel = computed(() => MODEL_LABELS[settingsStore.getDefaultModel])
+const defaultModelLabel = computed(() => {
+    const model = settingsStore.getDefaultModel
+    const registry = getModelRegistry()
+    const entry = registry.find(e => e.selectedModel === model)
+    if (entry) {
+        return entry.latest
+            ? `${getModelLabel(model)} (latest: ${entry.version})`
+            : `${getModelLabel(model)}`
+    }
+    return getModelLabel(model)
+})
 const defaultContextMaxLabel = computed(() => CONTEXT_MAX_LABELS[settingsStore.getDefaultContextMax])
 const defaultEffortLabel = computed(() => EFFORT_LABELS[settingsStore.getDefaultEffort])
 const defaultThinkingLabel = computed(() => THINKING_LABELS[settingsStore.getDefaultThinking])
@@ -209,7 +228,7 @@ const settingsSummaryParts = computed(() => {
     const effectiveChrome = selectedClaudeInChrome.value ?? settingsStore.getDefaultClaudeInChrome
     const effectivePermission = selectedPermissionMode.value ?? settingsStore.getDefaultPermissionMode
 
-    const modelLabel = MODEL_LABELS[effectiveModel]
+    const modelLabel = getModelLabel(effectiveModel)
     const modelDisplay = effectiveContextMax === CONTEXT_MAX.EXTENDED
         ? `${modelLabel}[1m]`
         : modelLabel
@@ -262,17 +281,48 @@ const isContextMaxForced = computed(() => {
     return sess.context_usage > CONTEXT_MAX.DEFAULT * 0.85
 })
 
+const isContextMaxForcedByModel = computed(() => {
+    const effectiveModel = selectedModel.value ?? settingsStore.getDefaultModel
+    return !modelSupports1m(effectiveModel)
+})
+
+// Watch: auto-reset to 200K when model doesn't support 1M
+watch(isContextMaxForcedByModel, (forced) => {
+    if (forced) {
+        const effectiveCtx = selectedContextMax.value ?? settingsStore.getDefaultContextMax
+        if (effectiveCtx === CONTEXT_MAX.EXTENDED) {
+            selectedContextMax.value = CONTEXT_MAX.DEFAULT
+            activeContextMax.value = CONTEXT_MAX.DEFAULT
+        }
+    }
+})
+
+// Auto-correct retired model when session loads
+watch(
+    () => selectedModel.value,
+    (model) => {
+        if (!model) return
+        const upgrade = getRetiredModelUpgrade(model)
+        if (upgrade) {
+            selectedModel.value = upgrade
+            activeModel.value = upgrade
+        }
+    },
+    { immediate: true }
+)
+
 // Button label based on process state and settings changes
+// On drafts, the button is always "Send" since there's no process to apply settings to.
 const buttonLabel = computed(() => {
     const state = processState.value?.state
     if (state === 'starting') return 'Starting...'
-    if (hasSettingsChanged.value && !messageText.value.trim()) return 'Apply settings'
+    if (!isDraft.value && hasSettingsChanged.value && !messageText.value.trim()) return 'Apply settings'
     return 'Send'
 })
 
 // Button icon changes based on mode
 const buttonIcon = computed(() => {
-    if (hasSettingsChanged.value && !messageText.value.trim()) return 'arrows-rotate'
+    if (!isDraft.value && hasSettingsChanged.value && !messageText.value.trim()) return 'arrows-rotate'
     return 'paper-plane'
 })
 
@@ -1406,19 +1456,19 @@ defineExpose({ insertTextAtCursor })
                     placement="top"
                     class="settings-popover"
                 >
-                    <!-- Actions & callouts (non-scrollable) -->
-                    <div v-if="anySettingForced || hasDropdownsChanged || startupSettingsWarning" class="settings-panel-actions">
-                        <div v-if="anySettingForced || hasDropdownsChanged" class="settings-panel-links">
+                    <!-- Actions & callouts (non-scrollable) — hidden on drafts since there's no process to apply to -->
+                    <div v-if="anySettingForced || (!isDraft && hasDropdownsChanged) || startupSettingsWarning" class="settings-panel-actions">
+                        <div v-if="anySettingForced || (!isDraft && hasDropdownsChanged)" class="settings-panel-links">
                             <a v-if="anySettingForced" class="settings-action-link" @click.prevent="resetAllToDefaults">
                                 <wa-icon name="arrow-rotate-left"></wa-icon>
                                 Reset all to defaults
                             </a>
-                            <a v-if="hasDropdownsChanged" class="settings-action-link" @click.prevent="restoreSettings">
+                            <a v-if="!isDraft && hasDropdownsChanged" class="settings-action-link" @click.prevent="restoreSettings">
                                 <wa-icon name="xmark"></wa-icon>
                                 Discard unsaved changes
                             </a>
                         </div>
-                        <wa-callout v-if="hasDropdownsChanged" variant="brand" class="settings-info-callout">
+                        <wa-callout v-if="!isDraft && hasDropdownsChanged" variant="brand" class="settings-info-callout">
                             <wa-icon name="circle-info" slot="icon"></wa-icon>
                             Click "{{ buttonLabel }}" to apply your changes.
                         </wa-callout>
@@ -1441,8 +1491,20 @@ defineExpose({ insertTextAtCursor })
                             >
                                 <wa-option :value="DEFAULT_SENTINEL">Default: {{ defaultModelLabel }}</wa-option>
                                 <small class="select-group-label">Force to:</small>
-                                <wa-option v-for="option in modelOptions" :key="option.value" :value="option.value">
-                                    {{ option.label }}
+                                <wa-option
+                                    v-for="entry in modelRegistryOptions.latest"
+                                    :key="entry.selectedModel"
+                                    :value="entry.selectedModel"
+                                >
+                                    {{ getModelLabel(entry.selectedModel) }} (latest: {{ entry.version }})
+                                </wa-option>
+                                <wa-divider v-if="modelRegistryOptions.older.length"></wa-divider>
+                                <wa-option
+                                    v-for="entry in modelRegistryOptions.older"
+                                    :key="entry.selectedModel"
+                                    :value="entry.selectedModel"
+                                >
+                                    {{ getModelLabel(entry.selectedModel) }} (until {{ formatRetirementDate(entry.retirementDate) }})
                                 </wa-option>
                             </wa-select>
                             <a v-if="selectedModel !== null" class="reset-setting-link" @click.prevent="selectedModel = null">Reset to default: {{ defaultModelLabel }}</a>
@@ -1455,7 +1517,7 @@ defineExpose({ insertTextAtCursor })
                                 :value.prop="selectedContextMax === null ? DEFAULT_SENTINEL : String(selectedContextMax)"
                                 @change="selectedContextMax = $event.target.value === DEFAULT_SENTINEL ? null : Number($event.target.value)"
                                 size="small"
-                                :disabled="isStarting || isContextMaxForced"
+                                :disabled="isStarting || isContextMaxForced || isContextMaxForcedByModel"
                             >
                                 <wa-option :value="DEFAULT_SENTINEL">Default: {{ defaultContextMaxLabel }}</wa-option>
                                 <small class="select-group-label">Force to:</small>
@@ -1464,6 +1526,7 @@ defineExpose({ insertTextAtCursor })
                                 </wa-option>
                             </wa-select>
                             <span v-if="isContextMaxForced" class="setting-help">Forced to 1M: context usage exceeds 85% of 200K.</span>
+                            <span v-else-if="isContextMaxForcedByModel" class="setting-help">1M not available for this model version.</span>
                             <a v-else-if="selectedContextMax !== null" class="reset-setting-link" @click.prevent="selectedContextMax = null">Reset to default: {{ defaultContextMaxLabel }}</a>
                         </div>
 
@@ -1569,7 +1632,7 @@ defineExpose({ insertTextAtCursor })
                 <!-- Send / Update button: dynamically labeled based on state -->
                 <wa-button
                     variant="brand"
-                    :disabled="isDisabled || (!messageText.trim() && !hasSettingsChanged)"
+                    :disabled="isDisabled || (!messageText.trim() && !(hasSettingsChanged && !isDraft))"
                     @click="handleSend"
                     size="small"
                     class="send-button"

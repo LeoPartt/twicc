@@ -990,14 +990,14 @@ class ClaudeProcess:
     def _build_sdk_model(self, selected_model: str | None = None, context_max: int | None = None) -> str | None:
         """Build the full SDK model string from model shorthand and context_max.
 
-        Appends "[1m]" suffix when context_max is 1M (extended context).
-        Uses the process's current values for any None arguments.
+        Uses the model registry to resolve versioned models to their full SDK
+        name, and appends "[1m]" only when the model supports extended context.
         """
+        from twicc.model_registry import resolve_sdk_model
+
         model = selected_model if selected_model is not None else self.selected_model
         ctx = context_max if context_max is not None else self.context_max
-        if model is None:
-            return None
-        return f"{model}[1m]" if ctx == 1_000_000 else model
+        return resolve_sdk_model(model, ctx)
 
     @property
     def sdk_model(self) -> str | None:

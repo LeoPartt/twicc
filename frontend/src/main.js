@@ -46,7 +46,7 @@ import { createPinia } from 'pinia'
 import { createNotivue } from 'notivue'
 import { router } from './router'
 import App from './App.vue'
-import { applyDefaultSettings, initSettings } from './stores/settings'
+import { applyDefaultSettings, initSettings, setModelRegistry } from './stores/settings'
 import { useDataStore } from './stores/data'
 import { useCodeCommentsStore } from './stores/codeComments'
 import { useWorkspacesStore } from './stores/workspaces'
@@ -106,6 +106,7 @@ let bootstrapData
             bootstrapData = await resp.json()
             const { settings, settings_version, default_settings, claude_settings_categories, dev_mode, uvx_mode } = bootstrapData
             applyDefaultSettings(default_settings, settings, claude_settings_categories, dev_mode, uvx_mode, settings_version)
+            setModelRegistry(bootstrapData.model_registry || [])
         } else {
             bootstrapFailed = true
         }

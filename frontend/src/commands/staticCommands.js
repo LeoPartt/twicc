@@ -8,7 +8,7 @@
  */
 
 import { useCommandRegistry } from '../composables/useCommandRegistry'
-import { useSettingsStore } from '../stores/settings'
+import { useSettingsStore, getModelRegistry } from '../stores/settings'
 import { useDataStore } from '../stores/data'
 import { useWorkspacesStore } from '../stores/workspaces'
 import { useRoute } from 'vue-router'
@@ -17,14 +17,13 @@ import {
     COLOR_SCHEME,
     PERMISSION_MODE,
     PERMISSION_MODE_LABELS,
-    MODEL,
-    MODEL_LABELS,
     EFFORT,
     EFFORT_LABELS,
     THINKING,
     THINKING_LABELS,
     CONTEXT_MAX,
     CONTEXT_MAX_LABELS,
+    getModelLabel,
 } from '../constants'
 
 /**
@@ -409,11 +408,13 @@ export function initStaticCommands(router) {
             label: 'Change Default Model\u2026',
             icon: 'robot',
             category: 'claude',
-            items: () => Object.values(MODEL).map(value => ({
-                id: value,
-                label: MODEL_LABELS[value],
-                action: () => settings.setDefaultModel(value),
-                active: settings.defaultModel === value,
+            items: () => getModelRegistry().map(entry => ({
+                id: entry.selectedModel,
+                label: entry.latest
+                    ? `${getModelLabel(entry.selectedModel)} (latest: ${entry.version})`
+                    : `${getModelLabel(entry.selectedModel)} (until ${entry.retirementDate})`,
+                action: () => settings.setDefaultModel(entry.selectedModel),
+                active: settings.defaultModel === entry.selectedModel,
             })),
         },
         {
