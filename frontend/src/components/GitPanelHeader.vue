@@ -1,6 +1,7 @@
 <script setup>
 import { computed, useId } from 'vue'
 import AppTooltip from './AppTooltip.vue'
+import { toast } from '../composables/useToast'
 import pencilIcon from './GitLog/assets/pencil.svg'
 import plusIcon from './GitLog/assets/plus.svg'
 import minusIcon from './GitLog/assets/minus.svg'
@@ -70,9 +71,23 @@ const hasStats = computed(() => {
 // ---------------------------------------------------------------------------
 
 const commitLabelId = useId()
+const branchTagId = useId()
+const commitHashId = useId()
 
 function toggleGitLog() {
     emit('toggle-git-log')
+}
+
+function copyBranch(event) {
+    event.stopPropagation()
+    navigator.clipboard.writeText(props.selectedBranch)
+    toast.success('Branch copied to clipboard', { duration: 2000 })
+}
+
+function copyHash(event) {
+    event.stopPropagation()
+    navigator.clipboard.writeText(props.selectedCommit.hash)
+    toast.success('Commit hash copied to clipboard', { duration: 2000 })
 }
 </script>
 
@@ -116,13 +131,15 @@ function toggleGitLog() {
                 </span>
             </div>
 
-            <wa-tag v-if="selectedBranch" variant="neutral" class="branch-tag">
+            <wa-tag v-if="selectedBranch" :id="branchTagId" variant="neutral" class="branch-tag clickable-tag" @click="copyBranch">
                 {{ selectedBranch }}
             </wa-tag>
+            <AppTooltip :for="branchTagId">Click to copy branch name</AppTooltip>
 
-            <wa-tag v-if="commitShortHash" variant="neutral" class="commit-hash">
+            <wa-tag v-if="commitShortHash" :id="commitHashId" variant="neutral" class="commit-hash clickable-tag" @click="copyHash">
                 {{ commitShortHash }}
             </wa-tag>
+            <AppTooltip :for="commitHashId">Click to copy full commit hash</AppTooltip>
 
             <wa-icon
                 class="chevron"
@@ -187,6 +204,10 @@ function toggleGitLog() {
     line-height: 1;
     height: auto;
     padding: var(--wa-space-2xs) var(--wa-space-xs);
+}
+
+.clickable-tag:hover {
+    filter: brightness(1.2);
 }
 
 .commit-message {
