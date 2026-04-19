@@ -10,6 +10,7 @@ import type { Commit, CustomTableRowProps } from '../../types'
 import CommitMessageData from './CommitMessageData.vue'
 import AuthorData from './AuthorData.vue'
 import TimestampData from './TimestampData.vue'
+import HashData from './HashData.vue'
 
 
 // ---------------------------------------------------------------------------
@@ -188,6 +189,12 @@ function handleMouseOut() {
       :index="index"
       :style="tableDataStyle"
       :timestamp="commit.committerDate"
+      :is-placeholder="shouldRenderHyphenValue"
+    />
+
+    <HashData
+      :style="tableDataStyle"
+      :commit-hash="commit.hash"
       :is-placeholder="shouldRenderHyphenValue"
     />
   </div>

@@ -67,7 +67,5 @@ const fullTimestamp = computed(() => {
 <style scoped>
 .timestamp {
   font-weight: 400;
-  border-top-right-radius: 10px;
-  border-bottom-right-radius: 10px;
 }
 </style>

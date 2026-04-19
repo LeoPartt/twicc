@@ -49,7 +49,7 @@ const { showHeaders } = useGitContext()
   display: grid;
   margin-top: 0;
   row-gap: 0;
-  grid-template-columns: minmax(20rem, 4fr) minmax(6rem, 1fr) 12rem;
+  grid-template-columns: minmax(20rem, 4fr) minmax(6rem, 1fr) 12rem 6rem;
   grid-template-rows: repeat(var(--git-log-commit-rows), var(--git-log-row-height));
   &.hasHeaders {
     grid-template-rows: var(--git-log-header-row-height) repeat(var(--git-log-commit-rows), var(--git-log-row-height));

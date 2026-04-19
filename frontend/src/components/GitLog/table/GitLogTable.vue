@@ -95,6 +95,12 @@ const tableData = computed<Commit[]>(() => {
       >
         Timestamp
       </div>
+
+      <div
+        class="header"
+      >
+        Hash
+      </div>
     </div>
 
     <!-- Placeholder rows (skeleton) when no data -->
