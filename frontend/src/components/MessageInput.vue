@@ -557,17 +557,75 @@ watch([isDraft, textareaRef], async ([isDraftSession, textarea]) => {
  * to perform a single synchronous height reset + scrollHeight read.
  * Unlike wa-textarea's built-in resize="auto", this avoids the
  * ResizeObserver feedback loop that causes 1px jitter.
+ *
+ * IMPORTANT: The "height = auto" reset temporarily collapses the textarea,
+ * which causes the parent flex layout to reflow. During that reflow, the
+ * browser synchronously clamps the VirtualScroller's scrollTop (because the
+ * scroller grows when the textarea shrinks). When the textarea is restored
+ * to its previous height, the clamped scrollTop is now wrong — the scroller
+ * appears to jump up. To avoid this layout thrash, we skip remeasurement
+ * when content and width haven't changed since the last call.
  */
+let _lastMeasuredContent = null
+let _lastMeasuredWidth = null
+
 function adjustTextareaHeight() {
     const textarea = textareaRef.value?.shadowRoot?.querySelector('textarea')
     if (!textarea) return
-    // Reset to auto to measure natural scrollHeight
-    textarea.style.height = 'auto'
-    // Only set an explicit height if content exceeds the natural rows height.
-    // When scrollHeight <= the natural height (determined by the rows="3" attribute),
-    // leaving height as "auto" lets the browser use the rows attribute as the floor.
+
+    const currentContent = textarea.value
+    const currentWidth = textarea.clientWidth
+
+    // Skip remeasurement if content and width haven't changed and height
+    // is already explicitly set. This avoids the costly height='auto' reset
+    // that causes layout thrash and scroll position loss on focus events.
+    if (currentContent === _lastMeasuredContent
+        && currentWidth === _lastMeasuredWidth
+        && textarea.style.height
+        && textarea.style.height !== 'auto') {
+        return
+    }
+    const previousContent = _lastMeasuredContent
+    _lastMeasuredContent = currentContent
+    _lastMeasuredWidth = currentWidth
+
+    // Fast path for growth: if scrollHeight already exceeds clientHeight
+    // (with the current explicit height still set), content has grown beyond
+    // the current height. Set the new height directly — no need to reset to
+    // 'auto', which would temporarily collapse the textarea and cause the
+    // browser to clamp the VirtualScroller's scrollTop during the forced reflow.
     if (textarea.scrollHeight > textarea.clientHeight) {
         textarea.style.height = `${textarea.scrollHeight}px`
+        return
+    }
+
+    // If content didn't shrink (same length or longer), the height can only
+    // stay the same or grow — and growth was already handled by the fast path
+    // above. Skip the slow path to avoid layout thrash: the height='auto' reset
+    // temporarily collapses the textarea, causing the browser to clamp the
+    // VirtualScroller's scrollTop during the forced reflow.
+    if (previousContent !== null && currentContent.length >= previousContent.length) {
+        return
+    }
+
+    // Slow path for potential shrinkage (content deleted): reset to 'auto' to
+    // measure the natural scrollHeight. The reset temporarily collapses the
+    // textarea, causing the VirtualScroller to grow and the browser to clamp
+    // its scrollTop. Save/restore scrollTop around the measurement to prevent
+    // visible scroll jumps.
+    const scrollerEl = textareaRef.value?.closest('.session-items-list')?.querySelector('.virtual-scroller')
+    const savedScrollTop = scrollerEl?.scrollTop
+
+    textarea.style.height = 'auto'
+    if (textarea.scrollHeight > textarea.clientHeight) {
+        textarea.style.height = `${textarea.scrollHeight}px`
+    }
+
+    // Restore scrollTop — the browser will clamp it to the new valid range,
+    // which is correct: if the textarea shrunk, the scroller grew, so there's
+    // more content visible at the bottom and less room to scroll.
+    if (scrollerEl != null && savedScrollTop != null) {
+        scrollerEl.scrollTop = savedScrollTop
     }
 }
 

@@ -20,6 +20,15 @@ const DEFAULT_BUFFER = 500
 const DEFAULT_UNLOAD_BUFFER = 1000
 
 /**
+ * Threshold in pixels for the "at bottom" check used by the composable's internal
+ * scroll corrections (e.g., after item height changes or container resizes).
+ * This is intentionally small — it answers "are we at the logical bottom?"
+ * Not to be confused with AUTO_SCROLL_THRESHOLD in SessionItemsList (150px),
+ * which answers "are we close enough to follow new content?"
+ */
+const AT_BOTTOM_THRESHOLD = 150
+
+/**
  * Composable for virtual scrolling with variable-height items.
  *
  * Handles:
@@ -480,7 +489,7 @@ export function useVirtualScroll(options) {
         const offsetInAnchor = currentScrollTop - anchorOriginalTop
 
         // Check if we were at the bottom (special case)
-        const wasAtBottom = isAtBottom(5)
+        const wasAtBottom = isAtBottom(AT_BOTTOM_THRESHOLD)
 
         // 2. APPLY all height changes to the cache
         for (const [key, { newHeight, oldHeight }] of actualUpdates) {
@@ -744,7 +753,7 @@ export function useVirtualScroll(options) {
      * @param {number} [threshold=5] - Pixel threshold for "at bottom" detection
      * @returns {boolean}
      */
-    function isAtBottom(threshold = 5) {
+    function isAtBottom(threshold = AT_BOTTOM_THRESHOLD) {
         const container = containerRef.value
         if (!container) return true
         // When the container is hidden (display:none), all dimensions are 0.
@@ -777,7 +786,7 @@ export function useVirtualScroll(options) {
      * @param {number} [threshold=5] - Pixel threshold for "at top" detection
      * @returns {boolean}
      */
-    function isAtTop(threshold = 5) {
+    function isAtTop(threshold = AT_BOTTOM_THRESHOLD) {
         return scrollTop.value <= threshold
     }
 
@@ -827,7 +836,37 @@ export function useVirtualScroll(options) {
             return
         }
 
+        // If we were at bottom before the resize, stay at bottom after.
+        // Without this, shrinking the scroller (e.g., textarea growing) leaves
+        // scrollTop unchanged while the container gets shorter, causing the bottom
+        // content to disappear below the fold. Native scroll anchoring is disabled
+        // (overflow-anchor: none), so we must compensate manually.
+        //
+        // We cannot use isAtBottom() here because the container already has its
+        // new dimensions by the time the ResizeObserver fires. Instead, compute
+        // the "was at bottom" check using the PREVIOUS viewportHeight — scrollTop
+        // and scrollHeight haven't changed yet at this point.
+        const container = containerRef.value
+        const previousHeight = viewportHeight.value
+        // Use totalHeight (virtual content height) instead of container.scrollHeight
+        // (DOM height) for the "at bottom" check. scrollToBottom() scrolls to
+        // totalHeight - viewportHeight, but container.scrollHeight includes CSS
+        // padding (e.g., padding-bottom on the scroller element). Using scrollHeight
+        // would produce a false "not at bottom" when the scroller is actually at the
+        // composable's logical bottom.
+        const wasAtBottom = container
+            && previousHeight > 0
+            && (totalHeight.value - container.scrollTop - previousHeight) <= AT_BOTTOM_THRESHOLD
+
         viewportHeight.value = height
+
+        if (wasAtBottom && !preventAutoScrollToBottom.value && container) {
+            const maxScrollTop = Math.max(0, totalHeight.value - height)
+            if (Number.isFinite(maxScrollTop) && maxScrollTop >= 0) {
+                container.scrollTop = maxScrollTop
+                scrollTop.value = maxScrollTop
+            }
+        }
     }
 
     /**
