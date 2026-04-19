@@ -560,14 +560,25 @@ async def start_watcher() -> None:
     Start the file watcher for Claude projects directory.
 
     Monitors all changes recursively and dispatches to appropriate handlers.
+    If the projects directory doesn't exist yet, polls every 30 seconds
+    until it appears (e.g. user hasn't used Claude Code yet).
     """
     channel_layer = get_channel_layer()
     projects_dir = Path(settings.CLAUDE_PROJECTS_DIR)
     stop_event = get_stop_event()
 
     if not projects_dir.exists():
-        logger.warning(f"Projects directory does not exist: {projects_dir}")
-        return
+        logger.info("Projects directory does not exist yet: %s — waiting for it to appear", projects_dir)
+        while not projects_dir.exists():
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=30)
+            except asyncio.TimeoutError:
+                pass
+            else:
+                # stop_event was set — shutting down
+                logger.info("Watcher stopped while waiting for projects directory")
+                return
+        logger.info("Projects directory appeared: %s", projects_dir)
 
     # Load project caches at startup
     await sync_to_async(load_project_directories)()
