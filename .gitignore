@@ -249,3 +249,4 @@ workspaces.json
 CLAUDE.local.md
 /.claude/
 .superpowers/
+.codex
