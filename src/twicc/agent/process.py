@@ -783,6 +783,13 @@ class ClaudeProcess:
                 await self._handle_cron_tool_event(input_data)
                 return {"continue_": True}
 
+            extra_args: dict[str, str | None] = {
+                "allow-dangerously-skip-permissions": None,
+                ("chrome" if self.claude_in_chrome else "no-chrome"): None
+            }
+            if self.thinking_enabled:
+                extra_args["thinking-display"] = "summarized"
+
             options = ClaudeAgentOptions(
                 system_prompt={
                     "type": "preset",
@@ -802,13 +809,7 @@ class ClaudeProcess:
                 },
                 stderr=self._log_stderr,
                 max_buffer_size=10 * 1024 * 1024,  # 10 MB — prevent crashes on large tool outputs
-                extra_args={
-                    "allow-dangerously-skip-permissions": None,
-                    "chrome": None,
-                } if self.claude_in_chrome else {
-                    "allow-dangerously-skip-permissions": None,
-                    "no-chrome": None,
-                },
+                extra_args=extra_args,
                 include_partial_messages=True,
             )
 
