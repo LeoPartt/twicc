@@ -3,8 +3,8 @@
 //
 // Quick navigation displayed in header panels:
 // - "All Projects" mode: workspaces (getSelectableWorkspaces order) + all projects (named first, then unnamed, mtime desc)
-// - Workspace mode: projects in the workspace's custom order
-// - Single project mode: workspaces the project belongs to (store order, respecting archived setting)
+// - Workspace mode: ↑ All Projects + projects in the workspace's custom order
+// - Single project mode: ↑ All Projects + ↑ workspaces the project belongs to (store order, respecting archived setting)
 //
 // Each item shows an icon (layer-group for workspaces, colored dot for projects),
 // the name, and aggregated indicators (CodeCommentsIndicator + AggregatedProcessIndicator).
@@ -82,8 +82,19 @@ const items = computed(() => {
             })
         }
     } else if (isWorkspaceMode.value) {
+        // Go-up item: All Projects
+        result.push({
+            type: 'up',
+            id: 'all-projects',
+            label: 'All Projects',
+            to: { name: 'projects-all' },
+        })
+
         // Projects in workspace's custom order
         const projectIds = workspacesStore.getVisibleProjectIds(workspaceId.value)
+        if (projectIds.length) {
+            result.push({ type: 'divider' })
+        }
         for (const pid of projectIds) {
             const p = dataStore.getProject(pid)
             if (!p) continue
@@ -95,19 +106,33 @@ const items = computed(() => {
             })
         }
     } else {
-        // Single project mode: workspaces containing this project (store order, respecting archived setting)
+        // Go-up item: All Projects
+        result.push({
+            type: 'up',
+            id: 'all-projects',
+            label: 'All Projects',
+            to: { name: 'projects-all' },
+        })
+
+        // Single project mode: workspaces containing this project (go up one level)
         const showArchivedWs = settingsStore.isShowArchivedWorkspaces
+        const wsItems = []
         for (const ws of workspacesStore.workspaces) {
             if (!showArchivedWs && ws.archived) continue
             if (!ws.projectIds.includes(props.projectId)) continue
-            result.push({
+            wsItems.push({
                 type: 'workspace',
+                isUp: true,
                 id: ws.id,
                 name: ws.name,
                 color: ws.color,
                 projectIds: workspacesStore.getVisibleProjectIds(ws.id),
                 to: { name: 'projects-all', query: { workspace: ws.id } },
             })
+        }
+        if (wsItems.length) {
+            result.push({ type: 'divider' })
+            result.push(...wsItems)
         }
     }
 
@@ -125,7 +150,12 @@ const items = computed(() => {
                 :to="item.to"
                 class="nav-item"
             >
-            <template v-if="item.type === 'workspace'">
+            <template v-if="item.type === 'up'">
+                <wa-icon name="arrow-up" auto-width class="nav-up-icon"></wa-icon>
+                <span class="nav-item-name">{{ item.label }}</span>
+            </template>
+            <template v-else-if="item.type === 'workspace'">
+                <wa-icon v-if="item.isUp" name="arrow-up" auto-width class="nav-up-icon"></wa-icon>
                 <wa-icon
                     name="layer-group"
                     auto-width
@@ -136,8 +166,10 @@ const items = computed(() => {
             </template>
             <ProjectBadge v-else :project-id="item.id" use-directory-for-unnamed gap="var(--wa-space-2xs)" />
 
-            <CodeCommentsIndicator :project-ids="item.projectIds" :show-tooltip="false" />
-            <AggregatedProcessIndicator :project-ids="item.projectIds" size="small" />
+            <template v-if="item.projectIds">
+                <CodeCommentsIndicator :project-ids="item.projectIds" :show-tooltip="false" />
+                <AggregatedProcessIndicator :project-ids="item.projectIds" size="small" />
+            </template>
             </RouterLink>
         </template>
     </div>
@@ -147,14 +179,14 @@ const items = computed(() => {
 .project-nav-list {
     display: flex;
     flex-wrap: wrap;
-    column-gap: var(--wa-space-m);
+    column-gap: var(--wa-space-l);
     row-gap: var(--wa-space-2xs);
 }
 
 .nav-item {
     display: inline-flex;
     align-items: center;
-    gap: var(--wa-space-2xs);
+    gap: var(--wa-space-xs);
     color: var(--wa-color-text-quiet);
     font-size: var(--wa-font-size-s);
     text-decoration: none;
@@ -170,6 +202,10 @@ const items = computed(() => {
     width: 1px;
     align-self: stretch;
     background: var(--wa-color-surface-border);
+}
+
+.nav-up-icon {
+    font-size: var(--wa-font-size-xs);
 }
 
 .nav-item-icon {
