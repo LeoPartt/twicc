@@ -2,7 +2,7 @@
 // SettingsPopover.vue - Settings button with popover panel
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useSettingsStore, SETTINGS_SCHEMA, getModelRegistry, modelSupports1m, modelSupportsEffortXhigh } from '../stores/settings'
+import { useSettingsStore, SETTINGS_SCHEMA, getModelRegistry, modelSupports1m, modelSupportsEffortXhigh, modelSupportsEffortMax } from '../stores/settings'
 import { useDataStore } from '../stores/data'
 import { useAuthStore } from '../stores/auth'
 import { DISPLAY_MODE, COLOR_SCHEME, SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SESSIONS, PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, getModelLabel, EFFORT, EFFORT_LABELS, THINKING, THINKING_LABELS, CLAUDE_IN_CHROME, CLAUDE_IN_CHROME_LABELS, CONTEXT_MAX, CONTEXT_MAX_LABELS, WA_THEME, WA_THEME_LABELS, WA_BRAND, WA_BRAND_LABELS } from '../constants'
@@ -298,6 +298,7 @@ function formatRetirementDate(isoDate) {
 
 const defaultModelSupports1m = computed(() => modelSupports1m(defaultModel.value))
 const defaultModelSupportsEffortXhigh = computed(() => modelSupportsEffortXhigh(defaultModel.value))
+const defaultModelSupportsEffortMax = computed(() => modelSupportsEffortMax(defaultModel.value))
 
 /**
  * Handle display mode change.
@@ -462,7 +463,9 @@ function onDefaultModelChange(event) {
     if (!modelSupports1m(newModel) && store.getDefaultContextMax === CONTEXT_MAX.EXTENDED) {
         store.setDefaultContextMax(CONTEXT_MAX.DEFAULT)
     }
-    if (!modelSupportsEffortXhigh(newModel) && store.defaultEffort === EFFORT.X_HIGH) {
+    if (store.defaultEffort === EFFORT.MAX && !modelSupportsEffortMax(newModel)) {
+        store.setDefaultEffort(modelSupportsEffortXhigh(newModel) ? EFFORT.X_HIGH : EFFORT.HIGH)
+    } else if (store.defaultEffort === EFFORT.X_HIGH && !modelSupportsEffortXhigh(newModel)) {
         store.setDefaultEffort(EFFORT.HIGH)
     }
 }
@@ -760,9 +763,9 @@ function onChangelogClose() {
                                 v-for="option in effortOptions"
                                 :key="option.value"
                                 :value="option.value"
-                                :disabled="option.value === EFFORT.X_HIGH && !defaultModelSupportsEffortXhigh"
+                                :disabled="(option.value === EFFORT.X_HIGH && !defaultModelSupportsEffortXhigh) || (option.value === EFFORT.MAX && !defaultModelSupportsEffortMax)"
                             >
-                                {{ option.label }}{{ option.value === EFFORT.X_HIGH && !defaultModelSupportsEffortXhigh ? ' (not available)' : '' }}
+                                {{ option.label }}{{ ((option.value === EFFORT.X_HIGH && !defaultModelSupportsEffortXhigh) || (option.value === EFFORT.MAX && !defaultModelSupportsEffortMax)) ? ' (not available)' : '' }}
                             </wa-option>
                         </wa-select>
                     </div>

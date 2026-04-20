@@ -221,6 +221,11 @@ export function modelSupportsEffortXhigh(selectedModel) {
     return entry ? entry.supportsEffortXhigh : false  // last-resort default: conservative
 }
 
+export function modelSupportsEffortMax(selectedModel) {
+    const entry = resolveRegistryEntry(selectedModel)
+    return entry ? entry.supportsEffortMax : false  // last-resort default: conservative
+}
+
 /**
  * If selectedModel is retired, return the upgrade target. Otherwise null.
  * Used by frontend to correct stale session settings at render/send time.

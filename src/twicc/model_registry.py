@@ -30,15 +30,16 @@ class ModelVersion(NamedTuple):
     latest: bool  # True = current default for this family (unique per model)
     supports_1m: bool  # Whether extended 1M context is available
     supports_effort_xhigh: bool  # Whether the "xhigh" effort level is available
+    supports_effort_max: bool  # Whether the "max" effort level is available
 
 
 # deprecations: https://platform.claude.com/docs/en/about-claude/model-deprecations
 MODEL_VERSIONS: list[ModelVersion] = [
-    ModelVersion("opus", "4.7", "claude-opus-4-7", retirement_date=None, latest=True, supports_1m=True, supports_effort_xhigh=True),   # retire 2027-04-16, to set when sonnet 4.8 is released
-    ModelVersion("opus", "4.6", "claude-opus-4-6", retirement_date=date(2027, 2, 5), latest=False, supports_1m=True, supports_effort_xhigh=False),
-    ModelVersion("opus", "4.5", "claude-opus-4-5-20251101", retirement_date=date(2026, 11, 24), latest=False, supports_1m=False, supports_effort_xhigh=False),
-    ModelVersion("sonnet", "4.6", "claude-sonnet-4-6", retirement_date=None, latest=True, supports_1m=True, supports_effort_xhigh=False),   # retire 2027-02-17, to set when sonnet 4.7 is released
-    ModelVersion("sonnet", "4.5", "claude-sonnet-4-5-20250929", retirement_date=date(2026, 9, 29), latest=False, supports_1m=False, supports_effort_xhigh=False),
+    ModelVersion("opus", "4.7", "claude-opus-4-7", retirement_date=None, latest=True, supports_1m=True, supports_effort_xhigh=True, supports_effort_max=True),   # retire 2027-04-16, to set when sonnet 4.8 is released
+    ModelVersion("opus", "4.6", "claude-opus-4-6", retirement_date=date(2027, 2, 5), latest=False, supports_1m=True, supports_effort_xhigh=False, supports_effort_max=True),
+    ModelVersion("opus", "4.5", "claude-opus-4-5-20251101", retirement_date=date(2026, 11, 24), latest=False, supports_1m=False, supports_effort_xhigh=False, supports_effort_max=False),
+    ModelVersion("sonnet", "4.6", "claude-sonnet-4-6", retirement_date=None, latest=True, supports_1m=True, supports_effort_xhigh=False, supports_effort_max=True),   # retire 2027-02-17, to set when sonnet 4.7 is released
+    ModelVersion("sonnet", "4.5", "claude-sonnet-4-5-20250929", retirement_date=date(2026, 9, 29), latest=False, supports_1m=False, supports_effort_xhigh=False, supports_effort_max=False),
 ]
 
 
@@ -203,6 +204,31 @@ def enforce_effort_xhigh_consistency(selected_model: str | None, effort: str | N
     return effort
 
 
+def selected_model_supports_effort_max(selected_model: str | None) -> bool:
+    """Check if a selected_model value supports the "max" effort level.
+
+    None or unknown models fall back to the current default model from synced
+    settings. If the default is itself unknown, returns False (conservative).
+    """
+    mv = get_model_version(selected_model) if selected_model else None
+    if mv is None:
+        mv = _resolve_to_default_model_version()
+    if mv is None:
+        return False
+    return mv.supports_effort_max
+
+
+def enforce_effort_max_consistency(selected_model: str | None, effort: str | None) -> str | None:
+    """If the model doesn't support "max" effort, demote it to "xhigh" when
+    available, otherwise to "high".
+
+    Returns the (possibly adjusted) effort value.
+    """
+    if effort == "max" and not selected_model_supports_effort_max(selected_model):
+        return "xhigh" if selected_model_supports_effort_xhigh(selected_model) else "high"
+    return effort
+
+
 def serialize_model_registry() -> list[dict]:
     """Serialize the registry for the frontend bootstrap API.
 
@@ -221,6 +247,7 @@ def serialize_model_registry() -> list[dict]:
             "latest": mv.latest,
             "supports1m": mv.supports_1m,
             "supportsEffortXhigh": mv.supports_effort_xhigh,
+            "supportsEffortMax": mv.supports_effort_max,
         }
         if mv.latest:
             latest.append(entry)

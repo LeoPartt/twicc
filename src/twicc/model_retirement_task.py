@@ -118,7 +118,11 @@ async def _check_and_retire() -> None:
     #   update the session DB row; _apply_pending_settings will pick it up
     #   at the next USER_TURN transition.
     from twicc.agent.manager import get_process_manager
-    from twicc.model_registry import selected_model_supports_1m, selected_model_supports_effort_xhigh
+    from twicc.model_registry import (
+        enforce_effort_max_consistency,
+        enforce_effort_xhigh_consistency,
+        selected_model_supports_1m,
+    )
 
     manager = get_process_manager()
     # NOTE: ProcessManager doesn't expose a public get_all_processes() method.
@@ -134,8 +138,11 @@ async def _check_and_retire() -> None:
         # Update session DB so _apply_pending_settings picks it up if in ASSISTANT_TURN
         from twicc.core.models import Session
         session_updates: dict[str, object] = {"selected_model": new_model}
-        if process.effort == "xhigh" and not selected_model_supports_effort_xhigh(new_model):
-            session_updates["effort"] = "high"
+        adjusted_effort = enforce_effort_xhigh_consistency(
+            new_model, enforce_effort_max_consistency(new_model, process.effort)
+        )
+        if adjusted_effort != process.effort:
+            session_updates["effort"] = adjusted_effort
         await asyncio.to_thread(
             lambda sid=process.session_id, upd=session_updates: (
                 Session.objects.filter(id=sid).update(**upd)

@@ -8,7 +8,7 @@
  */
 
 import { useCommandRegistry } from '../composables/useCommandRegistry'
-import { useSettingsStore, getModelRegistry, modelSupportsEffortXhigh } from '../stores/settings'
+import { useSettingsStore, getModelRegistry, modelSupportsEffortXhigh, modelSupportsEffortMax } from '../stores/settings'
 import { useDataStore } from '../stores/data'
 import { useWorkspacesStore } from '../stores/workspaces'
 import { useRoute } from 'vue-router'
@@ -468,7 +468,11 @@ export function initStaticCommands(router) {
             icon: 'gauge',
             category: 'claude',
             items: () => Object.values(EFFORT)
-                .filter(value => value !== EFFORT.X_HIGH || modelSupportsEffortXhigh(settings.defaultModel))
+                .filter(value => {
+                    if (value === EFFORT.X_HIGH) return modelSupportsEffortXhigh(settings.defaultModel)
+                    if (value === EFFORT.MAX) return modelSupportsEffortMax(settings.defaultModel)
+                    return true
+                })
                 .map(value => ({
                     id: value,
                     label: EFFORT_LABELS[value],

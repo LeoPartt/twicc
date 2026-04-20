@@ -3,7 +3,7 @@
 import { ref, computed, watch, nextTick, useId } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useDataStore } from '../stores/data'
-import { useSettingsStore, classifyClaudeSettingsChanges, getModelRegistry, modelSupports1m, modelSupportsEffortXhigh, getRetiredModelUpgrade } from '../stores/settings'
+import { useSettingsStore, classifyClaudeSettingsChanges, getModelRegistry, modelSupports1m, modelSupportsEffortXhigh, modelSupportsEffortMax, getRetiredModelUpgrade } from '../stores/settings'
 import { sendWsMessage, notifyUserDraftUpdated } from '../composables/useWebSocket'
 import { isSupportedMimeType, MAX_FILE_SIZE, SUPPORTED_IMAGE_TYPES, draftMediaToMediaItem } from '../utils/fileUtils'
 import { toast } from '../composables/useToast'
@@ -291,6 +291,11 @@ const isEffortXhighAvailable = computed(() => {
     return modelSupportsEffortXhigh(effectiveModel)
 })
 
+const isEffortMaxAvailable = computed(() => {
+    const effectiveModel = selectedModel.value ?? settingsStore.getDefaultModel
+    return modelSupportsEffortMax(effectiveModel)
+})
+
 // Watch: auto-reset to 200K when model doesn't support 1M
 watch(isContextMaxForcedByModel, (forced) => {
     if (forced) {
@@ -302,13 +307,19 @@ watch(isContextMaxForcedByModel, (forced) => {
     }
 })
 
-// Watch: demote xHigh effort to High when new model doesn't support it
-watch(isEffortXhighAvailable, (available) => {
-    if (available) return
+// Watch: cascade-demote Max/xHigh efforts when the new model drops support.
+// Max → xHigh if supported, else High. xHigh → High.
+watch([isEffortMaxAvailable, isEffortXhighAvailable], ([maxOk, xhighOk]) => {
     const effectiveEffort = selectedEffort.value ?? settingsStore.getDefaultEffort
-    if (effectiveEffort === EFFORT.X_HIGH) {
-        selectedEffort.value = EFFORT.HIGH
-        activeEffort.value = EFFORT.HIGH
+    let target = null
+    if (effectiveEffort === EFFORT.MAX && !maxOk) {
+        target = xhighOk ? EFFORT.X_HIGH : EFFORT.HIGH
+    } else if (effectiveEffort === EFFORT.X_HIGH && !xhighOk) {
+        target = EFFORT.HIGH
+    }
+    if (target !== null) {
+        selectedEffort.value = target
+        activeEffort.value = target
     }
 })
 
@@ -1618,9 +1629,9 @@ defineExpose({ insertTextAtCursor })
                                     v-for="option in effortOptions"
                                     :key="option.value"
                                     :value="option.value"
-                                    :disabled="option.value === EFFORT.X_HIGH && !isEffortXhighAvailable"
+                                    :disabled="(option.value === EFFORT.X_HIGH && !isEffortXhighAvailable) || (option.value === EFFORT.MAX && !isEffortMaxAvailable)"
                                 >
-                                    {{ option.label }}{{ option.value === EFFORT.X_HIGH && !isEffortXhighAvailable ? ' (not available)' : '' }}
+                                    {{ option.label }}{{ ((option.value === EFFORT.X_HIGH && !isEffortXhighAvailable) || (option.value === EFFORT.MAX && !isEffortMaxAvailable)) ? ' (not available)' : '' }}
                                 </wa-option>
                             </wa-select>
                             <a v-if="selectedEffort !== null" class="reset-setting-link" @click.prevent="selectedEffort = null">Reset to default: {{ defaultEffortLabel }}</a>

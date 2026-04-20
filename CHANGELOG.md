@@ -8,8 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Added support for Opus 4.7, and selecting older Claude model versions (Available: Opus 4.7, Opus 4.6, Opus 4.5, Sonnet.4.6, Sonnet 4.5)
+- Added support for Opus 4.7, and selecting older Claude model versions (Available: Opus 4.7, Opus 4.6, Opus 4.5, Sonnet.4.6, Sonnet 4.5).
   - ![Claude model picker](frontend/public/whats-new/v1.5/claude-models-versions.webp)
+- Added "xHigh" new effort for Opus 4.7, and "Max" effort for Opus 4.7, Opus 4.6, and Sonnet 4.6 
 - Project, workspace, and all-projects home views now have their own Files, Git (projects only), and Terminal tabs
   - ![Workspace tabs](frontend/public/whats-new/v1.5/workspace-tabs.webp)
 - Real-time streaming of assistant text and thinking content during active sessions (avoid waiting undefined time before a visual response)
@@ -254,7 +255,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Effort level and thinking settings for Claude sessions
-- Live tracking of Bash commands, agents and other possibly long-running tools
+- Live tracking of Bash commands, agents, and other possibly long-running tools
 - Syntax-highlighted code display for Read tool results
 - Show URL/query in WebFetch, WebSearch, and ToolSearch tool summaries
 

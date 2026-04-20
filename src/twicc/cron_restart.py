@@ -74,9 +74,15 @@ def _collect_restart_data(session_id: str) -> dict | None:
     }
 
     # Enforce model-capability consistency
-    from twicc.model_registry import enforce_1m_consistency, enforce_effort_xhigh_consistency
+    from twicc.model_registry import (
+        enforce_1m_consistency,
+        enforce_effort_max_consistency,
+        enforce_effort_xhigh_consistency,
+    )
     data["context_max"] = enforce_1m_consistency(data["selected_model"], data["context_max"])
-    data["effort"] = enforce_effort_xhigh_consistency(data["selected_model"], data["effort"])
+    data["effort"] = enforce_effort_xhigh_consistency(
+        data["selected_model"], enforce_effort_max_consistency(data["selected_model"], data["effort"])
+    )
 
     return data
 
