@@ -53,7 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Image diffs in git now show side-by-side comparison instead of "binary file cannot be diffed"
   - ![Git diff comparison](frontend/public/whats-new/v1.5/git-image-diff.webp)
 - Creating a new project inside TwiCC now allows you to pick a non existent directory that will be created after confirmation 
-- Bump `claude-agent-sdk` from 0.1.58 to 0.1.59 (bundled Claude Code CLI: 2.1.97 → 2.1.105)
+- Bump `claude-agent-sdk` from 0.1.58 to 0.1.63 (bundled Claude Code CLI: 2.1.97 → 2.1.114)
 
 ### Fixed
 
