@@ -1243,11 +1243,13 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
                 # Enforce 1M consistency when defaultModel changes
                 if "defaultModel" in synced_settings:
-                    from twicc.model_registry import selected_model_supports_1m
+                    from twicc.model_registry import selected_model_supports_1m, selected_model_supports_effort_xhigh
                     from twicc.synced_settings import SYNCED_SETTINGS_DEFAULTS
                     new_model = existing.get("defaultModel", SYNCED_SETTINGS_DEFAULTS["defaultModel"])
                     if not selected_model_supports_1m(new_model) and existing.get("defaultContextMax", 200_000) == 1_000_000:
                         existing["defaultContextMax"] = 200_000
+                    if not selected_model_supports_effort_xhigh(new_model) and existing.get("defaultEffort") == "xhigh":
+                        existing["defaultEffort"] = "high"
 
                 existing["_version"] = current_version + 1
                 write_synced_settings(existing)

@@ -73,9 +73,10 @@ def _collect_restart_data(session_id: str) -> dict | None:
         "context_max": session.context_max if session.context_max is not None else defaults.get("defaultContextMax", 200_000),
     }
 
-    # Enforce 1M consistency
-    from twicc.model_registry import enforce_1m_consistency
+    # Enforce model-capability consistency
+    from twicc.model_registry import enforce_1m_consistency, enforce_effort_xhigh_consistency
     data["context_max"] = enforce_1m_consistency(data["selected_model"], data["context_max"])
+    data["effort"] = enforce_effort_xhigh_consistency(data["selected_model"], data["effort"])
 
     return data
 

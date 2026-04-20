@@ -8,7 +8,7 @@
  */
 
 import { useCommandRegistry } from '../composables/useCommandRegistry'
-import { useSettingsStore, getModelRegistry } from '../stores/settings'
+import { useSettingsStore, getModelRegistry, modelSupportsEffortXhigh } from '../stores/settings'
 import { useDataStore } from '../stores/data'
 import { useWorkspacesStore } from '../stores/workspaces'
 import { useRoute } from 'vue-router'
@@ -467,12 +467,14 @@ export function initStaticCommands(router) {
             label: 'Change Default Effort\u2026',
             icon: 'gauge',
             category: 'claude',
-            items: () => Object.values(EFFORT).map(value => ({
-                id: value,
-                label: EFFORT_LABELS[value],
-                action: () => settings.setDefaultEffort(value),
-                active: settings.defaultEffort === value,
-            })),
+            items: () => Object.values(EFFORT)
+                .filter(value => value !== EFFORT.X_HIGH || modelSupportsEffortXhigh(settings.defaultModel))
+                .map(value => ({
+                    id: value,
+                    label: EFFORT_LABELS[value],
+                    action: () => settings.setDefaultEffort(value),
+                    active: settings.defaultEffort === value,
+                })),
         },
         {
             id: 'claude.permission',

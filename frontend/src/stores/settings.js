@@ -192,10 +192,33 @@ export function getModelRegistry() {
     return _modelRegistry
 }
 
+/**
+ * Look up a registry entry for a given selected model, falling back to the
+ * current default model from the settings store when the argument is
+ * null/undefined or absent from the registry.
+ *
+ * Returns the registry entry, or undefined when even the default is unknown
+ * (e.g. during boot before the registry has been populated).
+ */
+function resolveRegistryEntry(selectedModel) {
+    let entry = selectedModel ? _modelRegistry.find(e => e.selectedModel === selectedModel) : undefined
+    if (!entry) {
+        const defaultModel = useSettingsStore().defaultModel
+        if (defaultModel) {
+            entry = _modelRegistry.find(e => e.selectedModel === defaultModel)
+        }
+    }
+    return entry
+}
+
 export function modelSupports1m(selectedModel) {
-    if (!selectedModel) return true  // null = default = latest = supports 1M
-    const entry = _modelRegistry.find(e => e.selectedModel === selectedModel)
-    return entry ? entry.supports1m : true
+    const entry = resolveRegistryEntry(selectedModel)
+    return entry ? entry.supports1m : false  // last-resort default: conservative
+}
+
+export function modelSupportsEffortXhigh(selectedModel) {
+    const entry = resolveRegistryEntry(selectedModel)
+    return entry ? entry.supportsEffortXhigh : false  // last-resort default: conservative
 }
 
 /**

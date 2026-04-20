@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Added support for Opus 4.7, and selecting older Claude model versions (Available: Opus 4.7, Opus 4.6, Opus 4.5, Sonnet.4.6, Sonnet 4.5)
+  - ![Claude model picker](frontend/public/whats-new/v1.5/claude-models-versions.webp)
 - Project, workspace, and all-projects home views now have their own Files, Git (projects only), and Terminal tabs
   - ![Workspace tabs](frontend/public/whats-new/v1.5/workspace-tabs.webp)
 - Real-time streaming of assistant text and thinking content during active sessions (avoid waiting undefined time before a visual response)
@@ -28,8 +30,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Right-click context menu in file browser for file operations (Files tab) and git operations (Git tab)
   - ![Right click on files tab](frontend/public/whats-new/v1.5/files-right-click.webp)
   - ![Right click on git tab](frontend/public/whats-new/v1.5/git-right-click.webp)
-- Added support for selecting older Claude model versions (Opus 4.5, Sonnet 4.5) with automatic upgrade on retirement
-  - ![Claude model picker](frontend/public/whats-new/v1.5/claude-models-versions.webp)
 - Granular URL routing: terminal index, file selection, and git commit are now encoded in the URL — browser Back/Forward, reload, bookmarks, and other links restore the expected screen
 - Session list items are now proper links — middle-click or right-click to open a session in a new browser tab
 - Pan/zoom on all image displays

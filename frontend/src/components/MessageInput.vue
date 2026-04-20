@@ -3,7 +3,7 @@
 import { ref, computed, watch, nextTick, useId } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useDataStore } from '../stores/data'
-import { useSettingsStore, classifyClaudeSettingsChanges, getModelRegistry, modelSupports1m, getRetiredModelUpgrade } from '../stores/settings'
+import { useSettingsStore, classifyClaudeSettingsChanges, getModelRegistry, modelSupports1m, modelSupportsEffortXhigh, getRetiredModelUpgrade } from '../stores/settings'
 import { sendWsMessage, notifyUserDraftUpdated } from '../composables/useWebSocket'
 import { isSupportedMimeType, MAX_FILE_SIZE, SUPPORTED_IMAGE_TYPES, draftMediaToMediaItem } from '../utils/fileUtils'
 import { toast } from '../composables/useToast'
@@ -286,6 +286,11 @@ const isContextMaxForcedByModel = computed(() => {
     return !modelSupports1m(effectiveModel)
 })
 
+const isEffortXhighAvailable = computed(() => {
+    const effectiveModel = selectedModel.value ?? settingsStore.getDefaultModel
+    return modelSupportsEffortXhigh(effectiveModel)
+})
+
 // Watch: auto-reset to 200K when model doesn't support 1M
 watch(isContextMaxForcedByModel, (forced) => {
     if (forced) {
@@ -294,6 +299,16 @@ watch(isContextMaxForcedByModel, (forced) => {
             selectedContextMax.value = CONTEXT_MAX.DEFAULT
             activeContextMax.value = CONTEXT_MAX.DEFAULT
         }
+    }
+})
+
+// Watch: demote xHigh effort to High when new model doesn't support it
+watch(isEffortXhighAvailable, (available) => {
+    if (available) return
+    const effectiveEffort = selectedEffort.value ?? settingsStore.getDefaultEffort
+    if (effectiveEffort === EFFORT.X_HIGH) {
+        selectedEffort.value = EFFORT.HIGH
+        activeEffort.value = EFFORT.HIGH
     }
 })
 
@@ -1599,8 +1614,13 @@ defineExpose({ insertTextAtCursor })
                             >
                                 <wa-option :value="DEFAULT_SENTINEL">Default: {{ defaultEffortLabel }}</wa-option>
                                 <small class="select-group-label">Force to:</small>
-                                <wa-option v-for="option in effortOptions" :key="option.value" :value="option.value">
-                                    {{ option.label }}
+                                <wa-option
+                                    v-for="option in effortOptions"
+                                    :key="option.value"
+                                    :value="option.value"
+                                    :disabled="option.value === EFFORT.X_HIGH && !isEffortXhighAvailable"
+                                >
+                                    {{ option.label }}{{ option.value === EFFORT.X_HIGH && !isEffortXhighAvailable ? ' (not available)' : '' }}
                                 </wa-option>
                             </wa-select>
                             <a v-if="selectedEffort !== null" class="reset-setting-link" @click.prevent="selectedEffort = null">Reset to default: {{ defaultEffortLabel }}</a>

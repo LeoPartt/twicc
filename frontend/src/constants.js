@@ -199,6 +199,7 @@ export function getModelLabel(selectedModel) {
  * Controls the depth of thinking for Claude's responses.
  */
 export const EFFORT = {
+    X_HIGH: 'xhigh',
     HIGH: 'high',
     MEDIUM: 'medium',
     LOW: 'low',
@@ -211,6 +212,7 @@ export const EFFORT_LABELS = {
     [EFFORT.LOW]: 'Low',
     [EFFORT.MEDIUM]: 'Medium',
     [EFFORT.HIGH]: 'High',
+    [EFFORT.X_HIGH]: 'xHigh',
 }
 
 /**
@@ -220,6 +222,7 @@ export const EFFORT_DISPLAY_LABELS = {
     [EFFORT.LOW]: 'Low effort',
     [EFFORT.MEDIUM]: 'Medium effort',
     [EFFORT.HIGH]: 'High effort',
+    [EFFORT.X_HIGH]: 'xHigh effort',
 }
 
 /**

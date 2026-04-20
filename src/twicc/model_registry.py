@@ -29,13 +29,16 @@ class ModelVersion(NamedTuple):
     retirement_date: date | None  # Date after which this version is retired (None for latest)
     latest: bool  # True = current default for this family (unique per model)
     supports_1m: bool  # Whether extended 1M context is available
+    supports_effort_xhigh: bool  # Whether the "xhigh" effort level is available
 
 
+# deprecations: https://platform.claude.com/docs/en/about-claude/model-deprecations
 MODEL_VERSIONS: list[ModelVersion] = [
-    ModelVersion("opus", "4.6", "claude-opus-4-6", retirement_date=None, latest=True, supports_1m=True),
-    ModelVersion("opus", "4.5", "claude-opus-4-5-20251101", retirement_date=date(2026, 11, 24), latest=False, supports_1m=False),
-    ModelVersion("sonnet", "4.6", "claude-sonnet-4-6", retirement_date=None, latest=True, supports_1m=True),
-    ModelVersion("sonnet", "4.5", "claude-sonnet-4-5-20250929", retirement_date=date(2026, 9, 29), latest=False, supports_1m=False),
+    ModelVersion("opus", "4.7", "claude-opus-4-7", retirement_date=None, latest=True, supports_1m=True, supports_effort_xhigh=True),   # retire 2027-04-16, to set when sonnet 4.8 is released
+    ModelVersion("opus", "4.6", "claude-opus-4-6", retirement_date=date(2027, 2, 5), latest=False, supports_1m=True, supports_effort_xhigh=False),
+    ModelVersion("opus", "4.5", "claude-opus-4-5-20251101", retirement_date=date(2026, 11, 24), latest=False, supports_1m=False, supports_effort_xhigh=False),
+    ModelVersion("sonnet", "4.6", "claude-sonnet-4-6", retirement_date=None, latest=True, supports_1m=True, supports_effort_xhigh=False),   # retire 2027-02-17, to set when sonnet 4.7 is released
+    ModelVersion("sonnet", "4.5", "claude-sonnet-4-5-20250929", retirement_date=date(2026, 9, 29), latest=False, supports_1m=False, supports_effort_xhigh=False),
 ]
 
 
@@ -138,28 +141,66 @@ def get_all_selected_model_values() -> list[str]:
     return result
 
 
+def _resolve_to_default_model_version() -> ModelVersion | None:
+    """Return the ModelVersion for the current default model from synced settings.
+
+    Used by capability-check helpers as a defensive fallback when the caller
+    passes None or an unknown model string. Returns None if the default model
+    itself is missing or unknown (caller must then fall back to a hardcoded
+    default).
+    """
+    from twicc.synced_settings import SYNCED_SETTINGS_DEFAULTS, read_synced_settings
+    default_model = read_synced_settings().get("defaultModel") or SYNCED_SETTINGS_DEFAULTS.get("defaultModel")
+    if not default_model:
+        return None
+    return get_model_version(default_model)
+
+
 def selected_model_supports_1m(selected_model: str | None) -> bool:
     """Check if a selected_model value supports 1M context.
 
-    None means "use default" — caller should resolve to effective model first.
-    Unknown models are assumed to support 1M (backward compat).
+    None or unknown models fall back to the current default model from synced
+    settings. If the default is itself unknown, returns False (conservative).
     """
-    if not selected_model:
-        return True
-    mv = get_model_version(selected_model)
+    mv = get_model_version(selected_model) if selected_model else None
     if mv is None:
-        return True
+        mv = _resolve_to_default_model_version()
+    if mv is None:
+        return False
     return mv.supports_1m
 
 
 def enforce_1m_consistency(selected_model: str | None, context_max: int) -> int:
     """If the model doesn't support 1M, cap context_max to 200K.
-
     Returns the (possibly adjusted) context_max value.
     """
     if context_max == 1_000_000 and not selected_model_supports_1m(selected_model):
         return 200_000
     return context_max
+
+
+def selected_model_supports_effort_xhigh(selected_model: str | None) -> bool:
+    """Check if a selected_model value supports the "xhigh" effort level.
+
+    None or unknown models fall back to the current default model from synced
+    settings. If the default is itself unknown, returns False (conservative).
+    """
+    mv = get_model_version(selected_model) if selected_model else None
+    if mv is None:
+        mv = _resolve_to_default_model_version()
+    if mv is None:
+        return False
+    return mv.supports_effort_xhigh
+
+
+def enforce_effort_xhigh_consistency(selected_model: str | None, effort: str | None) -> str | None:
+    """If the model doesn't support "xhigh" effort, demote it to "high".
+
+    Returns the (possibly adjusted) effort value.
+    """
+    if effort == "xhigh" and not selected_model_supports_effort_xhigh(selected_model):
+        return "high"
+    return effort
 
 
 def serialize_model_registry() -> list[dict]:
@@ -179,6 +220,7 @@ def serialize_model_registry() -> list[dict]:
             "retirementDate": mv.retirement_date.isoformat() if mv.retirement_date else None,
             "latest": mv.latest,
             "supports1m": mv.supports_1m,
+            "supportsEffortXhigh": mv.supports_effort_xhigh,
         }
         if mv.latest:
             latest.append(entry)
