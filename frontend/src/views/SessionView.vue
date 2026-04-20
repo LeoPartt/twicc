@@ -279,16 +279,82 @@ function navigateInTab(tab, params = {}, method = 'push') {
 }
 
 function onFilesNavigate({ rootKey, filePath, replace }) {
-    navigateInTab('files', buildFilesRouteParams({ rootKey, filePath }), replace ? 'replace' : 'push')
+    const params = buildFilesRouteParams({ rootKey, filePath })
+    rememberToolTabRoute('files', params)
+    navigateInTab('files', params, replace ? 'replace' : 'push')
 }
 
 function onGitNavigate({ rootKey, commitRef, filePath, replace }) {
-    navigateInTab('git', buildGitRouteParams({ rootKey, commitRef, filePath }), replace ? 'replace' : 'push')
+    const params = buildGitRouteParams({ rootKey, commitRef, filePath })
+    rememberToolTabRoute('git', params)
+    navigateInTab('git', params, replace ? 'replace' : 'push')
 }
 
 function onTerminalNavigate({ termIndex, replace }) {
-    navigateInTab('terminal', buildTerminalRouteParams({ termIndex }), replace ? 'replace' : 'push')
+    const params = buildTerminalRouteParams({ termIndex })
+    rememberToolTabRoute('terminal', params)
+    navigateInTab('terminal', params, replace ? 'replace' : 'push')
 }
+
+const TOOL_TAB_IDS = ['files', 'git', 'terminal']
+
+// Keep the last granular URL visited for each tool tab so switching away and back
+// restores the previous state instead of resetting the panel to its base route.
+const rememberedToolTabRoutes = {
+    files: null,
+    git: null,
+    terminal: null,
+}
+
+function getCurrentToolTabRouteParams(tabId) {
+    if (tabId === 'files') {
+        return buildFilesRouteParams({
+            rootKey: filesRouteRootKey.value,
+            filePath: filesRouteFilePath.value,
+        })
+    }
+
+    if (tabId === 'git') {
+        return buildGitRouteParams({
+            rootKey: gitRouteRootKey.value,
+            commitRef: gitRouteCommitRef.value,
+            filePath: gitRouteFilePath.value,
+        })
+    }
+
+    if (tabId === 'terminal') {
+        return buildTerminalRouteParams({
+            termIndex: terminalRouteTermIndex.value,
+        })
+    }
+
+    return null
+}
+
+function rememberToolTabRoute(tabId, params = getCurrentToolTabRouteParams(tabId)) {
+    if (!TOOL_TAB_IDS.includes(tabId)) return
+    rememberedToolTabRoutes[tabId] = params ?? {}
+}
+
+watch(
+    [
+        isActive,
+        activeTabId,
+        filesRouteRootKey,
+        filesRouteFilePath,
+        gitRouteRootKey,
+        gitRouteCommitRef,
+        gitRouteFilePath,
+        terminalRouteTermIndex,
+    ],
+    ([active, tabId]) => {
+        if (!active) return
+        if (route.params.sessionId !== sessionId.value) return
+        if (!TOOL_TAB_IDS.includes(tabId)) return
+        rememberToolTabRoute(tabId)
+    },
+    { immediate: true }
+)
 
 /**
  * Navigate to a specific tab by panel name.
@@ -321,8 +387,8 @@ function switchToTab(panel) {
             },
             query: route.query,
         })
-    } else if (['files', 'git', 'terminal'].includes(panel)) {
-        navigateInTab(panel)
+    } else if (TOOL_TAB_IDS.includes(panel)) {
+        navigateInTab(panel, rememberedToolTabRoutes[panel] ?? {})
     }
 }
 
