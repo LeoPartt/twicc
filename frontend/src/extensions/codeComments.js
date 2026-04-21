@@ -317,13 +317,22 @@ function createHoverButtonPlugin(callbacks, field) {
             this.btn.addEventListener('click', this.handleClick)
         }
 
-        /** Find the gutter element at a screen Y, via elementFromPoint. */
-        _gutterElAtY(y) {
+        /** Find the gutter cell that vertically aligns with a given doc line. */
+        _gutterElForLine(line) {
             const gutter = this.view.dom.querySelector('.cm-lineNumbers')
             if (!gutter) return null
-            const rect = gutter.getBoundingClientRect()
-            const el = document.elementFromPoint(rect.left + rect.width / 2, y)
-            return el?.closest('.cm-gutterElement')
+            // Use coordsAtPos to get the actual text line coords. lineBlockAt
+            // includes block widgets attached before the line (e.g. deletion
+            // widgets in unified diff view), which would shift y above the
+            // visible text line and miss its gutter cell.
+            const coords = this.view.coordsAtPos(line.from)
+            if (!coords) return null
+            const y = (coords.top + coords.bottom) / 2
+            for (const cell of gutter.children) {
+                const r = cell.getBoundingClientRect()
+                if (r.height > 0 && r.top <= y && y < r.bottom) return cell
+            }
+            return null
         }
 
         /** Find the doc line at a screen Y coordinate. */
@@ -348,8 +357,9 @@ function createHoverButtonPlugin(callbacks, field) {
                 return
             }
 
-            // Find the gutter element for this line
-            const gutterEl = this._gutterElAtY(event.clientY)
+            // Find the gutter element for this line (by line index, not Y) —
+            // elementFromPoint-based lookup was giving wrong cells.
+            const gutterEl = this._gutterElForLine(line)
             if (!gutterEl) { this.hide(); return }
 
             // Move button into this gutter cell
@@ -399,11 +409,13 @@ const baseTheme = EditorView.baseTheme({
     },
     '& .cm-code-comment-add-btn': {
         position: 'absolute',
-        top: '0',
+        top: '50%',
         bottom: '0',
         left: '0',
         zIndex: '1',
-        transform: 'scale(0.8)',
+        height: '3rem',
+        transform: 'scale(0.8) translateY(-50%)',
+        transformOrigin: 'center center',
     },
     '& .cm-code-comment-add-btn-icon': {
         transform: 'scale(1.2)',
