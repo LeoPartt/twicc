@@ -709,6 +709,7 @@ function goToNextDiff() {
             <div v-if="showMarkdownPreview && isMarkdownFile" class="markdown-preview-container">
                 <MarkdownContent
                     :source="diffMode ? (modifiedContent ?? '') : currentContent"
+                    :show-toolbar="false"
                 />
             </div>
 

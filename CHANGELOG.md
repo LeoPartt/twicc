@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Floating toolbar on rendered markdown content with buttons to view the raw markdown source and copy it to the clipboard
+
 ### Fixed
 
 - Code comments gutter button is now correctly positioned on the hovered line

@@ -3,6 +3,7 @@ import { ref, inject, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { renderMarkdown } from '../utils/markdown.js'
 import { vHighlight } from '../directives/vHighlight.js'
+import { toast } from '../composables/useToast'
 // Uses the combined version that includes both light and dark
 // Then override with our theme file that uses [data-color-scheme] without media queries
 import 'github-markdown-css/github-markdown.css'
@@ -12,6 +13,10 @@ const props = defineProps({
     source: {
         type: String,
         required: true
+    },
+    showToolbar: {
+        type: Boolean,
+        default: true
     }
 })
 
@@ -102,6 +107,17 @@ async function render() {
 watch(() => props.source, render)
 onMounted(render)
 
+const showRaw = ref(false)
+
+function toggleRaw() {
+    showRaw.value = !showRaw.value
+}
+
+function copySource() {
+    navigator.clipboard.writeText(props.source)
+    toast.success('Markdown copied to clipboard', { duration: 2000 })
+}
+
 // Intercept clicks on relative links inside rendered markdown to use Vue Router
 // navigation instead of full page reloads (SPA-friendly).
 function handleLinkClick(event) {
@@ -127,13 +143,39 @@ function handleLinkClick(event) {
 </script>
 
 <template>
-    <div
-        ref="container"
-        class="markdown-body"
-        v-html="renderedHtml"
-        v-highlight="highlightTerms"
-        @click="handleLinkClick"
-    ></div>
+    <div class="markdown-content-wrapper">
+        <div v-if="showToolbar" class="markdown-toolbar">
+            <wa-button-group orientation="vertical" label="Markdown tools">
+                <wa-button
+                    size="small"
+                    :variant="showRaw ? 'neutral' : 'brand'"
+                    appearance="filled"
+                    :title="showRaw ? 'Show rendered markdown' : 'Show raw markdown'"
+                    @click="toggleRaw"
+                >
+                    <wa-icon :name="showRaw ? 'code' : 'eye'"></wa-icon>
+                </wa-button>
+                <wa-button
+                    size="small"
+                    variant="neutral"
+                    appearance="filled"
+                    title="Copy raw markdown"
+                    @click="copySource"
+                >
+                    <wa-icon name="copy"></wa-icon>
+                </wa-button>
+            </wa-button-group>
+        </div>
+        <pre v-if="showRaw" class="markdown-raw">{{ source }}</pre>
+        <div
+            v-show="!showRaw"
+            ref="container"
+            class="markdown-body"
+            v-html="renderedHtml"
+            v-highlight="highlightTerms"
+            @click="handleLinkClick"
+        ></div>
+    </div>
 </template>
 
 <style>
@@ -143,10 +185,55 @@ function handleLinkClick(event) {
    Dark mode handled via class data-color-scheme="dark" on <html> (set by main.js).
    NOT scoped — must penetrate v-html content.
    ------------------------------------------------------------------- */
+.markdown-content-wrapper {
+    position: relative;
+}
+
 .markdown-body {
     background: transparent;
     /* Override github-markdown-css fixed 16px to inherit from :root */
     font-size: 1rem;
+}
+
+/* -- Floating toolbar (raw toggle + copy) ---------------------------- */
+.markdown-toolbar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    opacity: 0;
+    transform: scale(0.8);
+    transform-origin: top right;
+    transition: opacity 0.15s ease;
+    z-index: 2;
+}
+.markdown-content-wrapper:hover .markdown-toolbar {
+    opacity: 0.3;
+}
+.markdown-toolbar:hover {
+    opacity: 1 !important;
+}
+@media (pointer:coarse) {
+    .markdown-content-wrapper:focus {
+        opacity: 1 !important;
+    }
+}
+.markdown-toolbar wa-button wa-icon {
+    width: .6rem;
+}
+
+.markdown-raw {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--wa-font-family-body);
+    font-size: 1rem;
+    color: var(--wa-color-text-normal);
 }
 
 /* -- Shiki-generated code blocks ------------------------------------- */

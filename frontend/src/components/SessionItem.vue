@@ -360,6 +360,43 @@ body:not([data-display-mode="debug"]) .json-toggle {
     box-shadow: var(--wa-shadow-offset-x-s) var(--wa-shadow-offset-y-s) var(--wa-shadow-blur-s) var(--wa-shadow-spread-s) var(--user-card-border-color);
 }
 
+.session-items {
+    --markdown-toolbar-offset: -2.5rem;
+}
+@media (width < 640px) {
+    .session-items {
+        --markdown-toolbar-offset: -3rem;
+    }
+}
+
+.session-items .session-item[data-kind="user_message"] .text-content > .markdown-content-wrapper > .markdown-toolbar {
+    right: calc(100% + var(--markdown-toolbar-offset) + 1.25rem);
+    top: -1rem;
+    width: 6rem;
+}
+
+.session-items .session-item[data-kind="assistant_message"] > .text-content > .markdown-content-wrapper > .markdown-toolbar {
+    right: auto;
+    left: calc(100% + var(--markdown-toolbar-offset));
+    top: 0;
+    width: 6rem;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.session-items .session-item[data-kind="content_items"] {
+    .thinking-body, .compact-summary-body {
+        > .markdown-content-wrapper > .markdown-toolbar {
+            right: auto;
+            left: calc(100% + var(--markdown-toolbar-offset));
+            top: 0;
+            width: 7rem;
+            display: flex;
+            justify-content: flex-end;
+        }
+    }
+}
+
 /* Style assistant messages in parts, the whole looking like a wa-card
    But as we have many items, the first one handles the top, the last one handles the bottom, and all have left/right sides
  */
