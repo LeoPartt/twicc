@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Code comments gutter button is now correctly positioned on the hovered line
+- Git commit selector no longer renders raw error JSON and stays interactive (opens the commit list) when the requested commit cannot be found
 
 ## [1.5.0] - 2026-04-20
 

@@ -261,11 +261,15 @@ const selectedCommit = ref(null)
  */
 const commitFilesData = ref(null)
 const commitFilesLoading = ref(false)
-const headerSelectedCommit = computed(() => (
-    routeCommitIssue.value
-        ? { message: routeCommitIssue.value }
-        : selectedCommit.value
-))
+const headerSelectedCommit = computed(() => {
+    const issue = routeCommitIssue.value
+    if (issue) {
+        return {
+            message: `${issue.before ?? ''}${issue.detail ?? ''}${issue.after ?? ''}`,
+        }
+    }
+    return selectedCommit.value
+})
 const showGitMainContent = computed(() => !routeRootIssue.value && !routeCommitIssue.value)
 
 /** Stats for the header: commit-specific when a commit is selected, index otherwise. */
@@ -1245,8 +1249,8 @@ onMounted(() => {
             <wa-divider></wa-divider>
 
             <!-- Content area (position: relative so overlay can cover it) -->
-            <div v-if="showGitMainContent" class="git-panel-content">
-                <div v-if="routeIssueMessage" class="pane-callout-overlay">
+            <div class="git-panel-content">
+                <div v-if="routeIssueMessage && !gitLogOpen" class="pane-callout-overlay">
                     <wa-callout
                         variant="warning"
                         appearance="filled-outlined"
@@ -1259,6 +1263,8 @@ onMounted(() => {
                     </wa-callout>
                 </div>
 
+                <!-- Main content — hidden when a blocking route issue (root or commit) is present -->
+                <template v-if="showGitMainContent">
                 <!-- ═══ Hidden owners: single instances that get reparented ═══ -->
                 <div ref="treeOwnerRef" class="reparent-owner">
                     <FileTreePanel
@@ -1421,6 +1427,7 @@ onMounted(() => {
                     <div ref="mobileTreeSlotRef" class="mobile-tree-slot"></div>
                     <div ref="mobileContentSlotRef" class="git-content-panel"></div>
                 </div>
+                </template>
 
                 <!-- Git log overlay (absolute, shown when chevron is clicked) -->
                 <div v-if="gitLogOpen" class="gitlog-overlay">
