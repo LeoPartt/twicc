@@ -5,6 +5,7 @@ import { useContainerBreakpoint } from '../composables/useContainerBreakpoint'
 import FileTreePanel from './FileTreePanel.vue'
 import FilePane from './FilePane.vue'
 import { useCodeCommentsStore, buildCommentedPathsSet } from '../stores/codeComments'
+import { useSettingsStore } from '../stores/settings'
 
 const emit = defineEmits(['navigate'])
 
@@ -73,6 +74,7 @@ const { isBelowBreakpoint: isMobile } = useContainerBreakpoint({
 // ─── Code comments ───────────────────────────────────────────────────────────
 
 const codeCommentsStore = useCodeCommentsStore()
+const settingsStore = useSettingsStore()
 
 const commentedPaths = computed(() => {
     if (!props.projectId || !props.sessionId) return new Set()
@@ -255,8 +257,6 @@ function setRootByPath(path) {
 
 // ─── Display options ─────────────────────────────────────────────────────────
 
-const showHidden = ref(false)
-const showIgnored = ref(false)
 const isGit = ref(false)
 
 /**
@@ -264,8 +264,8 @@ const isGit = ref(false)
  */
 function optionsQuery() {
     let qs = ''
-    if (showHidden.value) qs += '&show_hidden=1'
-    if (showIgnored.value) qs += '&show_ignored=1'
+    if (settingsStore.filesShowHidden) qs += '&show_hidden=1'
+    if (settingsStore.filesShowIgnored) qs += '&show_ignored=1'
     if (props.rootRestriction) qs += `&root=${encodeURIComponent(props.rootRestriction)}`
     return qs
 }
@@ -386,7 +386,7 @@ watch(
 // Fetch tree whenever the resolved API prefix, directory, or display options change
 // (only after the panel has been started)
 watch(
-    () => [started.value, resolvedApiPrefix.value, directory.value, showHidden.value, showIgnored.value],
+    () => [started.value, resolvedApiPrefix.value, directory.value, settingsStore.filesShowHidden, settingsStore.filesShowIgnored],
     ([isStarted, , newDir]) => {
         if (!isStarted) return
         fetchTree(newDir)
@@ -404,9 +404,9 @@ watch(
 
 function handleOptionsSelect(value) {
     if (value === 'show-hidden') {
-        showHidden.value = !showHidden.value
+        settingsStore.filesShowHidden = !settingsStore.filesShowHidden
     } else if (value === 'show-ignored') {
-        showIgnored.value = !showIgnored.value
+        settingsStore.filesShowIgnored = !settingsStore.filesShowIgnored
     } else if (value?.startsWith('root:')) {
         handleRootSelect(value.slice(5))
     }
@@ -823,7 +823,7 @@ defineExpose({ revealFile, setRootByPath })
                     <wa-dropdown-item
                         type="checkbox"
                         value="show-hidden"
-                        :checked="showHidden"
+                        :checked="settingsStore.filesShowHidden"
                     >
                         Show hidden files
                     </wa-dropdown-item>
@@ -831,7 +831,7 @@ defineExpose({ revealFile, setRootByPath })
                         v-if="isGit"
                         type="checkbox"
                         value="show-ignored"
-                        :checked="showIgnored"
+                        :checked="settingsStore.filesShowIgnored"
                     >
                         Show git ignored files
                     </wa-dropdown-item>
