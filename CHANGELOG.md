@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Bump `claude-agent-sdk` from 0.1.63 to 0.1.64 (bundled Claude Code CLI: 2.1.114 → 2.1.116)
+- Bump `claude-agent-sdk` from 0.1.63 to 0.1.65 (bundled Claude Code CLI: 2.1.114 → 2.1.117)
 
 ### Fixed
 
