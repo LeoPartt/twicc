@@ -47,7 +47,7 @@ export const ALL_PROJECTS_ID = '__all__'
  * @param {Object} processStates - Map of sessionId -> processState
  * @returns {function} Comparator function for Array.sort()
  */
-function sessionSortComparator(processStates) {
+export function sessionSortComparator(processStates) {
     return (a, b) => {
         // 1. Sessions with active process first
         const aProcess = processStates[a.id]
@@ -1078,6 +1078,36 @@ export const useDataStore = defineStore('data', {
                 throw error  // Re-throw for reconciliation retry logic
             } finally {
                 state.sessionsLoading = false
+            }
+        },
+        /**
+         * Fetch a single session by ID when its project is not known ahead of time.
+         * Populates `this.sessions[sessionId]` on success so reactive consumers
+         * (SessionView, SessionList fallback) can proceed. Used when opening a
+         * session whose project was not pre-loaded via `loadSessions` — e.g. a
+         * cross-filter deep link where the URL's projectId is the sidebar filter
+         * rather than the session's real project.
+         * @param {string} sessionId
+         * @returns {Promise<Object|null>} The session object, or null if not found.
+         */
+        async loadSessionById(sessionId) {
+            if (this.sessions[sessionId]) {
+                return this.sessions[sessionId]
+            }
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}/`)
+                if (response.status === 404) {
+                    return null
+                }
+                if (!response.ok) {
+                    throw new Error(`Failed to load session: ${response.status}`)
+                }
+                const session = await response.json()
+                this.sessions[session.id] = session
+                return session
+            } catch (error) {
+                console.error(`Failed to load session ${sessionId}:`, error)
+                throw error
             }
         },
         /**

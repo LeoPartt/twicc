@@ -466,25 +466,39 @@ function handleBackHome() {
     router.push({ name: 'home' })
 }
 
-// Create a new draft session and navigate to it
-// In single project mode: uses current projectId
-// In all projects mode: requires explicit targetProjectId parameter
+// Create a new draft session and navigate to it.
+// In single project mode: uses the current projectId when targetProjectId is
+// omitted; when targetProjectId is set the draft is created there but the
+// sidebar filter stays on the current project (the draft shows up via the
+// cross-filter fallback with its project color dot).
+// In all projects mode: requires an explicit targetProjectId, used both for
+// the draft and for the URL's canonical projectId (the sidebar stays on
+// "All Projects" because the route name carries that mode).
 function handleNewSession(targetProjectId = null) {
     const projectIdToUse = targetProjectId || projectId.value
     if (!projectIdToUse) return
 
     const newSessionId = store.createDraftSession(projectIdToUse)
 
-    // Navigate to appropriate route based on current mode
+    // `query: route.query` preserves ?workspace=… (and any other query params)
+    // across the navigation. The router guard would normally drop workspace
+    // when navigating to a project outside it, but we set workspace explicitly
+    // so the guard short-circuits and our value wins.
     if (isAllProjectsMode.value) {
         router.push({
             name: 'projects-session',
-            params: { projectId: projectIdToUse, sessionId: newSessionId }
+            params: { projectId: projectIdToUse, sessionId: newSessionId },
+            query: route.query,
         })
     } else {
+        // Single-project mode: URL's projectId stays on the current filter so
+        // the sidebar does not switch. When targetProjectId is not set,
+        // projectId.value === projectIdToUse so the URL matches the draft
+        // naturally; when it is set, they differ (cross-filter draft).
         router.push({
             name: 'session',
-            params: { projectId: projectIdToUse, sessionId: newSessionId }
+            params: { projectId: projectId.value, sessionId: newSessionId },
+            query: route.query,
         })
     }
 }

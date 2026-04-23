@@ -14,6 +14,7 @@ urlpatterns = [
     path("api/home/", views.home_data),
     path("api/daily-activity/", views.daily_activity),  # Global daily activity
     path("api/sessions/", views.all_sessions),
+    path("api/sessions/<str:session_id>/", views.session_by_id),
     path("api/search/", views.search_sessions),
     path("api/usage-history/", views.usage_history),
     # Standalone filesystem endpoints (for directory picker, no project required)

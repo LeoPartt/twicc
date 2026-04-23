@@ -205,7 +205,7 @@ const activeWsColor = computed(() => activeWs.value?.color || null)
 const selectableWorkspaces = computed(() => workspacesStore.getSelectableWorkspaces)
 
 /** Whether the current filter is a workspace */
-const isWorkspaceFilter = computed(() => filters.projectId.startsWith('workspace:'))
+const isWorkspaceFilter = computed(() => filters.projectId?.startsWith('workspace:') === true)
 
 /** Workspace ID from the filter (if workspace is selected) */
 const filterWorkspaceId = computed(() =>
@@ -341,13 +341,50 @@ function navigateToResult(result) {
 
     close()
 
-    router.push({
-        name: 'projects-session',
-        params: {
-            projectId: result.project_id,
-            sessionId: result.session_id,
-        },
-    })
+    // Destination depends on the scope the user was searching within:
+    //
+    // 1. Workspace filter — the user scoped to a workspace. Navigate to
+    //    all-projects mode carrying the workspace query; the result's own
+    //    project is canonical in the URL path.
+    // 2. Specific project filter — the user scoped to one project.
+    //    Navigate to single-project mode on that project; if the result's
+    //    real project differs, it renders as a cross-filter session (dot
+    //    badge in the sidebar, SessionView on the result's project).
+    // 3. No filter — the user asked "search everywhere". Preserve the
+    //    caller's current route context so clicking a result does not
+    //    disrupt navigation: all-projects stays all-projects, a single-
+    //    project filter stays on that project (result renders cross-filter
+    //    if needed), and any existing ?workspace= query is carried along.
+    let destination
+    if (isWorkspaceFilter.value) {
+        destination = {
+            name: 'projects-session',
+            params: { projectId: result.project_id, sessionId: result.session_id },
+            query: { ...route.query, workspace: workspaceFilterId.value },
+        }
+    } else if (filters.projectId) {
+        destination = {
+            name: 'session',
+            params: { projectId: filters.projectId, sessionId: result.session_id },
+        }
+    } else {
+        const inAllProjectsMode = route.name?.startsWith('projects-') || !route.params.projectId
+        if (inAllProjectsMode) {
+            destination = {
+                name: 'projects-session',
+                params: { projectId: result.project_id, sessionId: result.session_id },
+                query: route.query,
+            }
+        } else {
+            destination = {
+                name: 'session',
+                params: { projectId: route.params.projectId, sessionId: result.session_id },
+                query: route.query,
+            }
+        }
+    }
+
+    router.push(destination)
 }
 
 function handleAfterHide(e) {

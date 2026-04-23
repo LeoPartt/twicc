@@ -77,6 +77,29 @@ def all_sessions(request):
     return JsonResponse(_get_sessions_page(None, before_mtime, project_id_list=project_id_list))
 
 
+def session_by_id(request, session_id):
+    """GET /api/sessions/<session_id>/ - Fetch a single regular session by ID.
+
+    Resolves a session when the caller does not know (or cannot trust) its
+    project_id. Used by the frontend when rendering a cross-filter deep link
+    (e.g. /project/A/session/sessionX where sessionX belongs to project B):
+    the session view needs the session object to derive its real project,
+    but the URL's project_id is the sidebar filter and may not match.
+
+    Returns 404 if the session does not exist or is a subagent (subagents
+    must be accessed via their parent's subagent route).
+    """
+    try:
+        session = Session.objects.get(id=session_id)
+    except Session.DoesNotExist:
+        raise Http404("Session not found")
+
+    if session.parent_session_id is not None:
+        raise Http404("Session not found")
+
+    return JsonResponse(serialize_session(session))
+
+
 def project_list(request):
     """GET /api/projects/ - List all projects.
     POST /api/projects/ - Create a new project from a directory path.

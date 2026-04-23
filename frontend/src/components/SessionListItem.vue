@@ -43,6 +43,14 @@ const props = defineProps({
     showProjectName: {
         type: Boolean,
         default: false
+    },
+    // When set, the sidebar is filtered on a single project. If the session's
+    // real project differs from this filter (cross-filter deep link, future pin
+    // cross-filter), the project badge is shown even when showProjectName is
+    // false, so the user can tell the session belongs elsewhere.
+    filterProjectId: {
+        type: String,
+        default: null
     }
 })
 
@@ -94,6 +102,19 @@ const activeCronCount = computed(() => processState.value?.active_crons?.length 
 
 /** Project for this session — single lookup. */
 const project = computed(() => store.getProject(props.session.project_id))
+
+/**
+ * Whether to show the project badge for this specific session.
+ * True when the parent explicitly asked (workspace / all-projects mode), or
+ * when the session's project differs from the single-project sidebar filter
+ * (cross-filter case — the session is visible in a list that is otherwise
+ * scoped to a different project, so the badge disambiguates).
+ */
+const effectiveShowProjectName = computed(() => {
+    if (props.showProjectName) return true
+    if (!props.filterProjectId) return false
+    return props.session.project_id !== props.filterProjectId
+})
 
 /**
  * Whether the session has unread content (new assistant messages since last view).
@@ -352,12 +373,12 @@ function handleStopConfirm({ mode }) {
             <div class="session-name-row">
                 <!-- Compact mode: inline project color dot (instead of full ProjectBadge line) -->
                 <span
-                    v-if="compactView && showProjectName"
+                    v-if="compactView && effectiveShowProjectName"
                     :id="`compact-project-dot-${session.id}`"
                     class="compact-project-dot"
                     :style="project?.color ? { '--dot-color': project.color } : null"
                 ></span>
-                <AppTooltip v-if="compactView && showProjectName" :for="`compact-project-dot-${session.id}`">{{ store.getProjectDisplayName(session.project_id) }}</AppTooltip>
+                <AppTooltip v-if="compactView && effectiveShowProjectName" :for="`compact-project-dot-${session.id}`">{{ store.getProjectDisplayName(session.project_id) }}</AppTooltip>
                 <wa-icon v-if="session.pinned" name="thumbtack" class="pinned-icon"></wa-icon>
                 <wa-tag v-if="session.archived" size="small" variant="neutral" class="archived-tag">Arch.</wa-tag>
                 <wa-tag v-else-if="session.draft && !processState" size="small" variant="warning" class="draft-tag">Draft</wa-tag>
@@ -399,8 +420,8 @@ function handleStopConfirm({ mode }) {
             </div>
             <!-- Project badge line (hidden in compact mode, dot is shown inline instead) -->
             <!-- When unread + no process: show unread indicator on the project line (right-aligned) -->
-            <div v-if="!compactView && (showProjectName || hasCodeComments || (hasUnread && !processState))" class="session-project-row">
-                <ProjectBadge v-if="showProjectName" :project-id="session.project_id" class="session-project" />
+            <div v-if="!compactView && (effectiveShowProjectName || hasCodeComments || (hasUnread && !processState))" class="session-project-row">
+                <ProjectBadge v-if="effectiveShowProjectName" :project-id="session.project_id" class="session-project" />
                 <wa-icon
                     v-if="hasCodeComments"
                     name="comment"
@@ -550,6 +571,7 @@ function handleStopConfirm({ mode }) {
 .session-item-wrapper {
     position: relative;
     width: 100%;
+    padding-inline: var(--wa-space-2xs);
 }
 
 

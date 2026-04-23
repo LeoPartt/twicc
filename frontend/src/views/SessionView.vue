@@ -141,13 +141,23 @@ function insertTextAtCursor(text) {
 provide('insertTextAtCursor', insertTextAtCursor)
 
 // Current session from route params
-// IMPORTANT: projectId and sessionId are captured at creation time (not reactive
-// computeds from route.params) because with KeepAlive, the route changes globally
-// when switching sessions. If these were reactive, ALL cached SessionView instances
+// IMPORTANT: these refs are captured at creation time (not reactive computeds
+// from route.params) because with KeepAlive, the route changes globally when
+// switching sessions. If they were reactive, ALL cached SessionView instances
 // would see the NEW session's params, breaking deactivation hooks and item lookups.
 // The KeepAlive key (route.params.sessionId) ensures each instance gets the correct
 // value at creation time and keeps it permanently.
-const projectId = ref(route.params.projectId)
+//
+// filterProjectId is the project the sidebar filter was on when this SessionView
+// was created. It is used only by router.push calls that rebuild the current
+// URL, so that switching tabs (main / subagent / files / git / terminal) never
+// changes the sidebar filter — even when the session lives in a different
+// project than the filter (cross-filter bookmarks, future pin cross-filter).
+//
+// projectId (declared further down, after `session`) is the project the session
+// belongs to, driven by `session.project_id`. It is used for API calls, code-
+// comments lookups, and WS payloads.
+const filterProjectId = ref(route.params.projectId)
 const sessionId = ref(route.params.sessionId)
 const subagentId = computed(() => route.params.subagentId)
 
@@ -168,6 +178,31 @@ const terminalRouteTermIndex = computed(() => parseRouteTermIndex(route.params.t
 
 // Session data
 const session = computed(() => store.getSession(sessionId.value))
+
+// If the session was not pre-loaded via the sidebar's sessions list, fetch it
+// by ID so the view can render. Happens on cross-filter deep links (the URL's
+// projectId is the sidebar filter, not the session's real project) and on
+// direct bookmarks into a project whose sessions haven't been loaded yet.
+// The store action is idempotent: it returns immediately if the session is
+// already present, so this call is safe even when redundant.
+// `sessionLoadError` drives the "not found" / "error" fallback in the template:
+// - `null`: still loading or loaded successfully
+// - `'not-found'`: backend returned 404 — the session ID does not exist
+// - `'error'`: network or server error — the user can try again by reloading
+const sessionLoadError = ref(null)
+if (!session.value) {
+    store.loadSessionById(sessionId.value).then(result => {
+        if (!result) sessionLoadError.value = 'not-found'
+    }).catch(() => {
+        sessionLoadError.value = 'error'
+    })
+}
+
+// Session's project (data-driven). Stable per KeepAlive instance because
+// sessionId is frozen and session.project_id is immutable for a given session.
+// Used for API calls, code-comments lookups, WS payloads, and template props
+// that identify the session's project (not the sidebar filter).
+const projectId = computed(() => session.value?.project_id)
 
 // Whether the session is in a git repository:
 // - session has resolved git info (git_directory + git_branch from tool_use), OR
@@ -256,7 +291,7 @@ watch([activeTabId, hasGitRepo], ([tabId, hasGit]) => {
         if (!store.getProject(session.value?.project_id)) return
         router.replace({
             name: buildSessionBaseRouteName(isAllProjectsMode.value),
-            params: { projectId: projectId.value, sessionId: sessionId.value },
+            params: { projectId: filterProjectId.value, sessionId: sessionId.value },
             query: route.query,
         })
     }
@@ -270,7 +305,7 @@ function navigateInTab(tab, params = {}, method = 'push') {
             tab,
         }),
         params: clearTabRouteParams(tab, {
-            projectId: projectId.value,
+            projectId: filterProjectId.value,
             sessionId: sessionId.value,
             ...params,
         }),
@@ -370,7 +405,7 @@ function switchToTab(panel) {
         router.push({
             name: buildSessionBaseRouteName(isAllProjectsMode.value),
             params: {
-                projectId: projectId.value,
+                projectId: filterProjectId.value,
                 sessionId: sessionId.value
             },
             query: route.query,
@@ -381,7 +416,7 @@ function switchToTab(panel) {
         router.push({
             name: buildSubagentRouteName(isAllProjectsMode.value),
             params: {
-                projectId: projectId.value,
+                projectId: filterProjectId.value,
                 sessionId: sessionId.value,
                 subagentId: agentId
             },
@@ -638,7 +673,7 @@ function closeTab(tabId) {
             router.push({
                 name: buildSubagentRouteName(isAllProjectsMode.value),
                 params: {
-                    projectId: projectId.value,
+                    projectId: filterProjectId.value,
                     sessionId: sessionId.value,
                     subagentId: prevTab.agentId
                 },
@@ -649,7 +684,7 @@ function closeTab(tabId) {
             router.push({
                 name: buildSessionBaseRouteName(isAllProjectsMode.value),
                 params: {
-                    projectId: projectId.value,
+                    projectId: filterProjectId.value,
                     sessionId: sessionId.value
                 },
                 query: route.query,
@@ -859,7 +894,7 @@ function registerSessionCommands() {
                 if (isAllProjectsMode.value) {
                     router.push({ name: 'projects-all', query: route.query.workspace ? { workspace: route.query.workspace } : {} })
                 } else {
-                    router.push({ name: 'project', params: { projectId: projectId.value } })
+                    router.push({ name: 'project', params: { projectId: filterProjectId.value } })
                 }
             },
         },
@@ -1158,7 +1193,23 @@ onBeforeUnmount(() => {
             </wa-tab-panel>
         </wa-tab-group>
 
-        <!-- No session state -->
+        <!-- Session not found (backend returned 404) -->
+        <div v-else-if="sessionLoadError === 'not-found'" class="empty-state">
+            <wa-callout variant="warning" size="small">
+                <wa-icon slot="icon" name="circle-exclamation"></wa-icon>
+                Session not found
+            </wa-callout>
+        </div>
+
+        <!-- Session load failed (network / server error) -->
+        <div v-else-if="sessionLoadError === 'error'" class="empty-state">
+            <wa-callout variant="danger" size="small">
+                <wa-icon slot="icon" name="triangle-exclamation"></wa-icon>
+                Failed to load session
+            </wa-callout>
+        </div>
+
+        <!-- Loading state -->
         <div v-else class="empty-state">
             <wa-spinner></wa-spinner>
             <span>Loading session...</span>
