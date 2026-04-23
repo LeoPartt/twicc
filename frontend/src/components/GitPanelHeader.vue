@@ -400,7 +400,7 @@ function copyHash() {
 /* ----- Commit details popover ----- */
 
 .commit-popover {
-    --max-width: min(40rem, 100vw);
+    --max-width: min(50rem, 100vw);
     --arrow-size: 16px;
 }
 
