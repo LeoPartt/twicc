@@ -799,7 +799,9 @@ const SESSION_COMMAND_IDS = [
     'session.rename',
     'session.archive',
     'session.unarchive',
-    'session.pin',
+    'session.pin.project',
+    'session.pin.workspace',
+    'session.pin.all',
     'session.unpin',
     'session.stop',
     'session.delete-draft',
@@ -848,15 +850,37 @@ function registerSessionCommands() {
             action: () => store.setSessionArchived(projectId.value, sessionId.value, false),
         },
         {
-            id: 'session.pin',
-            label: 'Pin Session',
+            id: 'session.pin.project',
+            label: 'Pin Session: Project',
             icon: 'thumbtack',
             category: 'session',
             when: () => {
                 const s = store.getSession(sessionId.value)
-                return !!s && !s.pinned
+                return !!s && !s.draft && s.pinned !== 'project'
             },
-            action: () => store.setSessionPinned(projectId.value, sessionId.value, true),
+            action: () => store.setSessionPinMode(projectId.value, sessionId.value, 'project'),
+        },
+        {
+            id: 'session.pin.workspace',
+            label: 'Pin Session: Workspace',
+            icon: 'thumbtack',
+            category: 'session',
+            when: () => {
+                const s = store.getSession(sessionId.value)
+                return !!s && !s.draft && s.pinned !== 'workspace'
+            },
+            action: () => store.setSessionPinMode(projectId.value, sessionId.value, 'workspace'),
+        },
+        {
+            id: 'session.pin.all',
+            label: 'Pin Session: All projects',
+            icon: 'thumbtack',
+            category: 'session',
+            when: () => {
+                const s = store.getSession(sessionId.value)
+                return !!s && !s.draft && s.pinned !== 'all'
+            },
+            action: () => store.setSessionPinMode(projectId.value, sessionId.value, 'all'),
         },
         {
             id: 'session.unpin',
@@ -867,7 +891,7 @@ function registerSessionCommands() {
                 const s = store.getSession(sessionId.value)
                 return !!s && !!s.pinned
             },
-            action: () => store.setSessionPinned(projectId.value, sessionId.value, false),
+            action: () => store.setSessionPinMode(projectId.value, sessionId.value, null),
         },
         {
             id: 'session.stop',

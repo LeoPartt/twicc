@@ -146,6 +146,17 @@ const canToggleReadState = computed(() => {
     return true
 })
 
+/**
+ * Whether non-danger menu items are shown after the pin block (mark-read/unread,
+ * archive/unarchive). Used to decide whether to render a divider between the pin
+ * block and the rest. The danger section has its own divider, so we only need
+ * our own if there's something between pin and danger.
+ */
+const hasItemsAfterPinBlock = computed(() => {
+    const s = props.session
+    return canToggleReadState.value || (!s.draft && !s.archived) || s.archived
+})
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Settings
 // ═══════════════════════════════════════════════════════════════════════════
@@ -309,10 +320,9 @@ function handleMenuSelect(event) {
         }
     } else if (action === 'unarchive') {
         store.setSessionArchived(session.project_id, session.id, false)
-    } else if (action === 'pin') {
-        store.setSessionPinned(session.project_id, session.id, true)
-    } else if (action === 'unpin') {
-        store.setSessionPinned(session.project_id, session.id, false)
+    } else if (action === 'pin-none' || action === 'pin-project' || action === 'pin-workspace' || action === 'pin-all') {
+        const mode = action === 'pin-none' ? null : action.slice(4)
+        store.setSessionPinMode(session.project_id, session.id, mode)
     } else if (action === 'mark-unread') {
         // Cancel any pending session_viewed trailing throttle to prevent it
         // from immediately resetting last_viewed_at after we mark unread
@@ -524,14 +534,22 @@ function handleStopConfirm({ mode }) {
                 <wa-icon slot="icon" name="pencil"></wa-icon>
                 Rename
             </wa-dropdown-item>
-            <wa-dropdown-item v-if="!session.draft && !session.pinned" value="pin">
-                <wa-icon slot="icon" name="thumbtack"></wa-icon>
-                Pin
-            </wa-dropdown-item>
-            <wa-dropdown-item v-if="session.pinned" value="unpin">
-                <wa-icon slot="icon" name="thumbtack" class="unpinned-menu-icon"></wa-icon>
-                Unpin
-            </wa-dropdown-item>
+            <template v-if="!session.draft">
+                <wa-divider></wa-divider>
+                <wa-dropdown-item type="checkbox" :checked="!session.pinned" value="pin-none">
+                    Not pinned
+                </wa-dropdown-item>
+                <wa-dropdown-item type="checkbox" :checked="session.pinned === 'project'" value="pin-project">
+                    Pin in project
+                </wa-dropdown-item>
+                <wa-dropdown-item type="checkbox" :checked="session.pinned === 'workspace'" value="pin-workspace">
+                    Pin in workspace
+                </wa-dropdown-item>
+                <wa-dropdown-item type="checkbox" :checked="session.pinned === 'all'" value="pin-all">
+                    Pin in all projects
+                </wa-dropdown-item>
+                <wa-divider v-if="hasItemsAfterPinBlock"></wa-divider>
+            </template>
             <wa-dropdown-item v-if="canToggleReadState && hasUnread" value="mark-read">
                 <wa-icon slot="icon" name="eye-slash"></wa-icon>
                 Mark as read
@@ -608,10 +626,6 @@ function handleStopConfirm({ mode }) {
     font-size: var(--wa-font-size-2xs);
     color: var(--wa-color-yellow-80) !important;
     transform: rotate(30deg);
-}
-
-.unpinned-menu-icon {
-    opacity: 0.5;
 }
 
 .draft-tag,

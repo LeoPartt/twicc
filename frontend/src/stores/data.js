@@ -63,9 +63,11 @@ export function sessionSortComparator(processStates) {
             return (bProcess.started_at || 0) - (aProcess.started_at || 0)
         }
 
-        // 3. Pinned sessions next (only when neither has a process)
-        const aPinned = a.pinned || false
-        const bPinned = b.pinned || false
+        // 3. Pinned sessions next (only when neither has a process).
+        //    `pinned` is a string ('project'/'workspace'/'all') or null — any truthy
+        //    value means pinned, regardless of mode.
+        const aPinned = !!a.pinned
+        const bPinned = !!b.pinned
         if (aPinned !== bPinned) return aPinned ? -1 : 1
 
         // 4. Within each group, sort by mtime descending
@@ -2483,7 +2485,7 @@ export const useDataStore = defineStore('data', {
             if (session) {
                 session.archived = archived
                 if (shouldUnpin) {
-                    session.pinned = false
+                    session.pinned = null
                 }
             }
 
@@ -2495,7 +2497,7 @@ export const useDataStore = defineStore('data', {
             // Build the PATCH payload
             const patchData = { archived }
             if (shouldUnpin) {
-                patchData.pinned = false
+                patchData.pinned = null
             }
 
             try {
@@ -2531,19 +2533,19 @@ export const useDataStore = defineStore('data', {
         },
 
         /**
-         * Set the pinned state of a session.
+         * Set the pin mode of a session.
          * @param {string} projectId - The project ID
          * @param {string} sessionId - The session ID
-         * @param {boolean} pinned - Whether to pin or unpin
+         * @param {('project'|'workspace'|'all'|null)} mode - Pin mode, or null to unpin
          * @throws {Error} If the update fails
          */
-        async setSessionPinned(projectId, sessionId, pinned) {
+        async setSessionPinMode(projectId, sessionId, mode) {
             // Optimistic update
             const session = this.sessions[sessionId]
             const oldPinned = session?.pinned
 
             if (session) {
-                session.pinned = pinned
+                session.pinned = mode
             }
 
             try {
@@ -2552,7 +2554,7 @@ export const useDataStore = defineStore('data', {
                     {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ pinned })
+                        body: JSON.stringify({ pinned: mode })
                     }
                 )
 

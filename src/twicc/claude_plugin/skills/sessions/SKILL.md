@@ -67,7 +67,7 @@ The command outputs a JSON array of session objects:
     "git_directory": "/home/twidi/dev/myproject",
     "model": {"raw": "claude-opus-4-20250514", "family": "opus", "version": "4"},
     "archived": false,
-    "pinned": false,
+    "pinned": null,
     "permission_mode": "default",
     "selected_model": null,
     "effort": null,

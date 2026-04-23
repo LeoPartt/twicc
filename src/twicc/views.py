@@ -15,7 +15,7 @@ import orjson
 from twicc import search
 from twicc.compute import get_message_content, get_message_content_list
 from twicc.core.enums import ItemKind
-from twicc.core.models import AgentLink, DailyActivity, Project, Session, SessionItem, SessionType, SlashCommand, ToolResultLink, UsageSnapshot, WeeklyActivity
+from twicc.core.models import AgentLink, DailyActivity, PinMode, Project, Session, SessionItem, SessionType, SlashCommand, ToolResultLink, UsageSnapshot, WeeklyActivity
 from twicc.core.serializers import (
     serialize_project,
     serialize_session,
@@ -462,11 +462,14 @@ def session_detail(request, project_id, session_id, parent_session_id=None):
                 from twicc.terminal import kill_all_tmux_terminals
                 kill_all_tmux_terminals(f"s:{session_id}")
 
-        # Handle pinned update
+        # Handle pinned update: NULL (unpinned) or one of PinMode.values.
         if "pinned" in data:
             pinned = data["pinned"]
-            if not isinstance(pinned, bool):
-                return JsonResponse({"error": "pinned must be a boolean"}, status=400)
+            if pinned is not None and pinned not in PinMode.values:
+                return JsonResponse(
+                    {"error": f"pinned must be null or one of {list(PinMode.values)}"},
+                    status=400,
+                )
             session.pinned = pinned
             session.save(update_fields=["pinned"])
             needs_broadcast = True

@@ -329,12 +329,23 @@ function handleUnarchive() {
 }
 
 /**
- * Toggle the pinned state of the current session.
+ * Label shown on the pin button tooltip, reflecting the current pin mode.
  */
-function handleTogglePin() {
-    if (session.value && !session.value.draft) {
-        store.setSessionPinned(session.value.project_id, props.sessionId, !session.value.pinned)
-    }
+const PIN_MODE_LABELS = { project: 'Project', workspace: 'Workspace', all: 'All projects' }
+const pinTooltip = computed(() => {
+    if (!session.value?.pinned) return 'Pin session'
+    return `Pinned: ${PIN_MODE_LABELS[session.value.pinned] || session.value.pinned}`
+})
+
+/**
+ * Handle pin mode selection from the dropdown.
+ * @param {CustomEvent} event - The wa-select event (event.detail.item.value)
+ */
+function handlePinSelect(event) {
+    if (!session.value || session.value.draft) return
+    const value = event.detail.item.value
+    const mode = value === 'none' ? null : value
+    store.setSessionPinMode(session.value.project_id, props.sessionId, mode)
 }
 
 // Expose methods and refs for parent components
@@ -356,19 +367,37 @@ defineExpose({
                 <wa-tag v-if="session.stale" :id="`session-header-${sessionId}-stale-tag`" size="small" variant="warning" class="stale-tag">Stale</wa-tag>
                 <AppTooltip v-if="session.stale" :for="`session-header-${sessionId}-stale-tag`">Session files were deleted from disk</AppTooltip>
 
-                <!-- Pin/Unpin button (not for drafts) -->
-                <wa-button
+                <!-- Pin mode dropdown (not for drafts) -->
+                <wa-dropdown
                     v-if="!session.draft"
-                    :id="`session-header-${sessionId}-pin-button`"
-                    :variant="session.pinned ? 'brand' : 'neutral'"
-                    appearance="plain"
-                    size="small"
-                    :class="['pin-button', 'reduced-height', { 'pin-button--active': session.pinned }]"
-                    @click="handleTogglePin"
+                    class="pin-dropdown"
+                    placement="bottom-start"
+                    @wa-select="handlePinSelect"
                 >
-                    <wa-icon name="thumbtack" :label="session.pinned ? 'Unpin' : 'Pin'"></wa-icon>
-                </wa-button>
-                <AppTooltip v-if="!session.draft" :for="`session-header-${sessionId}-pin-button`">{{ session.pinned ? 'Unpin session' : 'Pin session' }}</AppTooltip>
+                    <wa-button
+                        :id="`session-header-${sessionId}-pin-button`"
+                        slot="trigger"
+                        :variant="session.pinned ? 'brand' : 'neutral'"
+                        appearance="plain"
+                        size="small"
+                        :class="['pin-button', 'reduced-height', { 'pin-button--active': session.pinned }]"
+                    >
+                        <wa-icon name="thumbtack" label="Pin"></wa-icon>
+                    </wa-button>
+                    <wa-dropdown-item type="checkbox" :checked="!session.pinned" value="none">
+                        Not pinned
+                    </wa-dropdown-item>
+                    <wa-dropdown-item type="checkbox" :checked="session.pinned === 'project'" value="project">
+                        Pin in project
+                    </wa-dropdown-item>
+                    <wa-dropdown-item type="checkbox" :checked="session.pinned === 'workspace'" value="workspace">
+                        Pin in workspace
+                    </wa-dropdown-item>
+                    <wa-dropdown-item type="checkbox" :checked="session.pinned === 'all'" value="all">
+                        Pin in all projects
+                    </wa-dropdown-item>
+                </wa-dropdown>
+                <AppTooltip v-if="!session.draft" :for="`session-header-${sessionId}-pin-button`">{{ pinTooltip }}</AppTooltip>
 
                 <!-- Archive button (not for drafts or already archived) -->
                 <wa-button
@@ -866,6 +895,11 @@ wa-divider {
     margin-block: calc(-3 * var(--wa-space-2xs));
     position: relative;
     top: calc(-1 * var(--wa-space-2xs));
+}
+
+/* The pin button lives inside a wa-dropdown; the dropdown itself is the flex child. */
+.pin-dropdown {
+    flex-shrink: 0;
 }
 
 .pin-button {

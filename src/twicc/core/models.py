@@ -43,6 +43,13 @@ class SessionType(models.TextChoices):
     SUBAGENT = "subagent", "Subagent"
 
 
+class PinMode(models.TextChoices):
+    """Pin visibility scope for a session."""
+    PROJECT = "project", "Project"
+    WORKSPACE = "workspace", "Workspace"
+    ALL = "all", "All projects"
+
+
 # Default prices per family (USD per million tokens) - fallback when no DB price exists
 # Based on Anthropic's published pricing as of January 2026
 DEFAULT_FAMILY_PRICES = {
@@ -314,7 +321,9 @@ class Session(models.Model):
 
     # User-controlled fields
     archived = models.BooleanField(default=False)  # User can archive sessions to hide them from default list
-    pinned = models.BooleanField(default=False)  # User can pin sessions to keep them at the top of the list
+    # User can pin sessions: NULL = not pinned, string = pin mode (scope/workspace/always).
+    # Any truthy value means the session is pinned; mode controls cross-filter visibility.
+    pinned = models.CharField(max_length=16, choices=PinMode.choices, null=True, blank=True, default=None)
 
     # Permission mode for the Claude SDK (e.g., "default", "acceptEdits", "plan", "bypassPermissions")
     permission_mode = models.CharField(max_length=30, null=True, default=None)
