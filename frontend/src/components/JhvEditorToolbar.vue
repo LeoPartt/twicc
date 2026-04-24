@@ -46,14 +46,14 @@ const settingsStore = useSettingsStore()
 // Toggle state
 // ============================================================================
 
-const wordWrap = ref(settingsStore.isToolDiffWordWrap)
-const sideBySide = ref(settingsStore.isToolDiffSideBySide)
+const wordWrap = computed(() => settingsStore.isToolDiffWordWrap)
+const sideBySide = computed(() => settingsStore.isToolDiffSideBySide)
 
 function onWordWrapToggle(event) {
-    wordWrap.value = event.target.checked
+    settingsStore.setToolDiffWordWrap(event.target.checked)
 }
 function onSideBySideToggle(event) {
-    sideBySide.value = event.target.checked
+    settingsStore.setToolDiffSideBySide(event.target.checked)
 }
 
 // ============================================================================

@@ -47,23 +47,13 @@ const props = defineProps({
         type: Boolean,
         default: true,
     },
-    // Optional overrides: when provided, used as initial value instead of settings store.
-    // The parent can persist these across FilePane destruction/recreation (e.g. Git tab).
-    initialWordWrap: {
-        type: Boolean,
-        default: null,
-    },
-    initialSideBySide: {
-        type: Boolean,
-        default: null,
-    },
     displayPath: {
         type: String,
         default: null,
     },
 })
 
-const emit = defineEmits(['revert', 'update:wordWrap', 'update:sideBySide'])
+const emit = defineEmits(['revert'])
 
 const filePathLabelId = useId()
 const prevChangeButtonId = useId()
@@ -175,13 +165,8 @@ const isWritable = ref(false)
 const saving = ref(false)
 const saveError = ref(null)
 
-// --- Word wrap state ---
-// Initialize from parent override (if provided) or settings store.
-const wordWrap = ref(props.initialWordWrap ?? settingsStore.isEditorWordWrap)
-
-// --- Diff layout state ---
-// Initialize from parent override (if provided) or settings store.
-const sideBySide = ref(props.initialSideBySide ?? settingsStore.isDiffSideBySide)
+const wordWrap = computed(() => settingsStore.isEditorWordWrap)
+const sideBySide = computed(() => settingsStore.isDiffSideBySide)
 
 // Auto-switch to unified when editor area is too narrow for side-by-side.
 // Start at 0 so the default is unified (safe) until the first measurement arrives.
@@ -479,13 +464,11 @@ async function revert() {
 }
 
 function onWordWrapToggle(event) {
-    wordWrap.value = event.target.checked
-    emit('update:wordWrap', wordWrap.value)
+    settingsStore.setEditorWordWrap(event.target.checked)
 }
 
 function onSideBySideToggle(event) {
-    sideBySide.value = event.target.checked
-    emit('update:sideBySide', sideBySide.value)
+    settingsStore.setDiffSideBySide(event.target.checked)
 }
 
 /**

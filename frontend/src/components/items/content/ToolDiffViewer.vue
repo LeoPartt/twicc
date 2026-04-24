@@ -45,9 +45,8 @@ const searchPanelEl = ref(null)
 
 const settingsStore = useSettingsStore()
 
-// Toggle state — initialized from tool diff settings
-const wordWrap = ref(settingsStore.isToolDiffWordWrap)
-const sideBySide = ref(settingsStore.isToolDiffSideBySide)
+const wordWrap = computed(() => settingsStore.isToolDiffWordWrap)
+const sideBySide = computed(() => settingsStore.isToolDiffSideBySide)
 
 // Container width tracking for side-by-side availability.
 // editorReady gates the rendering of DiffEditor/CodeEditor: we defer mounting
@@ -76,10 +75,10 @@ const canSideBySide = computed(() => editorAreaWidth.value > SIDE_BY_SIDE_MIN_WI
 const effectiveSideBySide = computed(() => sideBySide.value && canSideBySide.value)
 
 function onWordWrapToggle(event) {
-    wordWrap.value = event.target.checked
+    settingsStore.setToolDiffWordWrap(event.target.checked)
 }
 function onSideBySideToggle(event) {
-    sideBySide.value = event.target.checked
+    settingsStore.setToolDiffSideBySide(event.target.checked)
 }
 
 function openSearch() {

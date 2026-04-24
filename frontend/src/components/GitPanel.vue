@@ -639,11 +639,6 @@ watch(diffLoading, (loading) => {
     }
 })
 
-// Persist word-wrap and side-by-side toggle state.
-// Maintained here so the settings survive across different files.
-const diffWordWrap = ref(settingsStore.isEditorWordWrap)
-const diffSideBySide = ref(settingsStore.isDiffSideBySide)
-
 /** Absolute file path for the selected file (needed by FilePane for language detection and save). */
 const selectedFilePath = computed(() => {
     if (!selectedFile.value) return null
@@ -1377,12 +1372,8 @@ onMounted(() => {
                                 :original-content="diffData.original"
                                 :modified-content="diffData.modified"
                                 :diff-read-only="!isViewingIndex"
-                                :initial-word-wrap="diffWordWrap"
-                                :initial-side-by-side="diffSideBySide"
                                 :commit-sha="isViewingIndex ? null : selectedCommit?.hash ?? null"
                                 @revert="fetchDiff(selectedFile)"
-                                @update:word-wrap="diffWordWrap = $event"
-                                @update:side-by-side="diffSideBySide = $event"
                             />
 
                             <!-- No file selected / no changes -->

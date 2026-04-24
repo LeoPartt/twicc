@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Word wrap and side-by-side toggles in diff and editor toolbars now persist across sessions and stay in sync with the Settings panel (proposed by @LeoPartt)
 - Bump `claude-agent-sdk` from 0.1.63 to 0.1.65 (bundled Claude Code CLI: 2.1.114 → 2.1.117)
 - Improved command palette for "Go to Session…" and "Go to Workspace…"
 
