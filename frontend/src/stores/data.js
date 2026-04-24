@@ -1084,6 +1084,31 @@ export const useDataStore = defineStore('data', {
             }
         },
         /**
+         * Load all pinned sessions across every project into the store.
+         *
+         * The single-project `loadSessions(projectId)` call only populates
+         * `this.sessions` with sessions belonging to that project. Cross-filter
+         * pinned sessions (`workspace`/`all` modes, owned by another project)
+         * would therefore be missing from the sidebar's source data. We preload
+         * them once at app startup; subsequent updates are covered by the
+         * existing `session_updated` WebSocket broadcasts.
+         */
+        async loadPinnedSessions() {
+            try {
+                const res = await apiFetch('/api/sessions/?pinned=1')
+                if (!res.ok) {
+                    console.error('Failed to load pinned sessions:', res.status, res.statusText)
+                    return
+                }
+                const data = await res.json()
+                for (const session of data.sessions) {
+                    this.sessions[session.id] = session
+                }
+            } catch (error) {
+                console.error('Failed to load pinned sessions:', error)
+            }
+        },
+        /**
          * Fetch a single session by ID when its project is not known ahead of time.
          * Populates `this.sessions[sessionId]` on success so reactive consumers
          * (SessionView, SessionList fallback) can proceed. Used when opening a

@@ -7,7 +7,8 @@
  * by SessionListItem, which owns its own store lookups (computed).
  */
 import { ref, computed, watch, nextTick } from 'vue'
-import { useDataStore, ALL_PROJECTS_ID } from '../stores/data'
+import { useRoute } from 'vue-router'
+import { useDataStore, ALL_PROJECTS_ID, sessionSortComparator } from '../stores/data'
 import { useWorkspacesStore } from '../stores/workspaces'
 import { isWorkspaceProjectId, extractWorkspaceId } from '../utils/workspaceIds'
 import VirtualScroller from './VirtualScroller.vue'
@@ -45,87 +46,130 @@ const props = defineProps({
 })
 
 const store = useDataStore()
+const route = useRoute()
 
-// The single-project filter (null when the sidebar is in workspace or all-projects
-// mode). Passed to SessionListItem so it can decide whether to show the project
-// badge for a session whose real project differs from this filter (cross-filter).
-const filterProjectId = computed(() => {
-    if (isWorkspaceProjectId(props.projectId)) return null
-    if (props.projectId === ALL_PROJECTS_ID) return null
-    return props.projectId
-})
-
-// Base sessions: all sessions for the current context (workspace, all projects, or single project)
-const baseSessions = computed(() => {
-    const sessions = (() => {
-        if (isWorkspaceProjectId(props.projectId)) {
-            // Workspace mode: get all sessions, filter to workspace's visible projects
-            const wsId = extractWorkspaceId(props.projectId)
-            const wsStore = useWorkspacesStore()
-            const visibleIds = new Set(wsStore.getVisibleProjectIds(wsId))
-            return store.getAllSessions.filter(s => visibleIds.has(s.project_id))
-        }
-        if (props.projectId === ALL_PROJECTS_ID) {
-            return store.getAllSessions
-        }
-        return store.getProjectSessions(props.projectId)
-    })()
-
-    // Ensure the selected session is in the list, even when it falls outside the
-    // sidebar filter or the pagination window. Pin it at the top so it is
-    // visually separated from the rest of the list (a divider is rendered in
-    // the template for the first row when it is the extra one).
-    if (props.sessionId && !sessions.some(s => s.id === props.sessionId)) {
-        const s = store.sessions[props.sessionId]
-        if (s && !s.parent_session_id) {
-            return [s, ...sessions]
-        }
-    }
-    return sessions
-})
-
-// Id of the "extra" cross-filter / out-of-pagination session pinned at the top
-// of the list, or null when every session in the list belongs to the current
-// context. Drives the divider styling after the first item.
-const extraSessionId = computed(() => {
-    if (!props.sessionId) return null
-    const first = baseSessions.value[0]
-    if (!first || first.id !== props.sessionId) return null
-    // First check: the natural filtered list does not contain this session id
-    // (workspace / all-projects / single-project). If the selected session
-    // naturally belongs to the current filter, it is not "extra" even when it
-    // happens to be at index 0.
-    const wsId = isWorkspaceProjectId(props.projectId)
-        ? extractWorkspaceId(props.projectId)
-        : null
-    if (wsId) {
+// Natural scope project IDs for the current sidebar filter, passed down so
+// SessionListItem can flag any session whose project falls outside it as
+// cross-filter (and show its project badge accordingly). null = all-projects
+// mode (no scope restriction).
+const scopeProjectIds = computed(() => {
+    if (isWorkspaceProjectId(props.projectId)) {
+        const wsId = extractWorkspaceId(props.projectId)
         const wsStore = useWorkspacesStore()
-        const visibleIds = wsStore.getVisibleProjectIds(wsId)
-        if (visibleIds.includes(first.project_id)) return null
-        return first.id
+        return wsStore.getVisibleProjectIds(wsId)
     }
     if (props.projectId === ALL_PROJECTS_ID) return null
-    return first.project_id === props.projectId ? null : first.id
+    return [props.projectId]
 })
 
-// Sessions are already sorted by mtime desc in the getter
-// Filter out archived sessions unless showArchived is enabled
-// Always keep the currently selected session visible (even if archived)
-const allSessions = computed(() => {
-    // Pre-compute archived project IDs once (O(projects) ≈ 20) instead of calling
-    // store.getProject() per session (O(sessions) ≈ 4,674). Each getProject() call
-    // triggers reactive Proxy tracking, multiplied by thousands of sessions ×
-    // thousands of re-evaluations during background compute.
+// The currently "active" workspace for cross-filter `workspace`-mode pins. Set
+// when the sidebar is on a workspace view (projectId `workspace:X`) OR when a
+// single-project view preserves the workspace via the `?workspace=X` query.
+const activeWorkspaceId = computed(() => {
+    if (isWorkspaceProjectId(props.projectId)) {
+        return extractWorkspaceId(props.projectId)
+    }
+    return route.query.workspace || null
+})
+
+/**
+ * Apply the "hide archived sessions / archived projects" filter, with the
+ * usual exception: the currently selected session is never hidden (so a
+ * deep-linked archived session stays visible even when the toggles are off).
+ */
+function applyArchivedFilters(list) {
     const archivedProjectIds = props.showArchivedProjects
         ? null
         : new Set(store.getProjects.filter(p => p.archived).map(p => p.id))
-
-    const filtered = baseSessions.value.filter(s =>
+    return list.filter(s =>
         (props.showArchived || !s.archived || s.id === props.sessionId) &&
         (!archivedProjectIds || !archivedProjectIds.has(s.project_id) || s.id === props.sessionId)
     )
+}
 
-    return filtered
+// Sessions naturally in scope for the current sidebar filter (workspace, all
+// projects or single project). Already sorted by `sessionSortComparator` via
+// the store getters.
+const naturalSessions = computed(() => {
+    if (isWorkspaceProjectId(props.projectId)) {
+        const wsId = extractWorkspaceId(props.projectId)
+        const wsStore = useWorkspacesStore()
+        const visibleIds = new Set(wsStore.getVisibleProjectIds(wsId))
+        return applyArchivedFilters(store.getAllSessions.filter(s => visibleIds.has(s.project_id)))
+    }
+    if (props.projectId === ALL_PROJECTS_ID) {
+        return applyArchivedFilters(store.getAllSessions)
+    }
+    return applyArchivedFilters(store.getProjectSessions(props.projectId))
+})
+
+/**
+ * Pinned sessions that do NOT naturally belong to the current sidebar filter
+ * but should still appear thanks to their pin mode:
+ *   - `all`       → always visible, regardless of filter
+ *   - `workspace` → visible when an active workspace contains their project
+ *   - `project`   → never cross-filter (only shown in its own project scope)
+ *
+ * Sorted by the standard comparator, which reduces to process-first → mtime
+ * inside this group since every member is pinned.
+ */
+const crossFilterPinnedSessions = computed(() => {
+    const naturalIds = new Set(naturalSessions.value.map(s => s.id))
+    const wsId = activeWorkspaceId.value
+    const wsStore = useWorkspacesStore()
+    const activeWs = wsId ? wsStore.getWorkspaceById(wsId) : null
+
+    const matches = Object.values(store.sessions).filter(s => {
+        if (!s.pinned) return false
+        if (s.parent_session_id) return false
+        if (naturalIds.has(s.id)) return false
+        if (s.pinned === 'all') return true
+        if (s.pinned === 'workspace' && activeWs) {
+            return activeWs.projectIds.includes(s.project_id)
+        }
+        return false
+    })
+
+    return applyArchivedFilters(matches).sort(sessionSortComparator(store.processStates))
+})
+
+/**
+ * Id of the selected session when it belongs to neither the natural filter
+ * nor the cross-filter pinned block — i.e. a deep link to a session that
+ * nothing would otherwise bring on screen. Prepended at the very top of the
+ * list with a divider below it.
+ */
+const extraSessionId = computed(() => {
+    if (!props.sessionId) return null
+    if (naturalSessions.value.some(s => s.id === props.sessionId)) return null
+    if (crossFilterPinnedSessions.value.some(s => s.id === props.sessionId)) return null
+    const s = store.sessions[props.sessionId]
+    if (!s || s.parent_session_id) return null
+    return s.id
+})
+
+/**
+ * Id of the last cross-filter pinned session in the current order, or null when
+ * the block is empty. Drives the divider rendered between the cross-filter
+ * pinned block and the natural sessions below it.
+ */
+const lastCrossFilterPinnedId = computed(() => {
+    const list = crossFilterPinnedSessions.value
+    return list.length > 0 ? list[list.length - 1].id : null
+})
+
+// Flat list consumed by the virtual scroller: [extra?, ...crossFilterPinned,
+// ...natural]. Dividers live in the template, keyed off the terminal ids of
+// the first two blocks.
+const allSessions = computed(() => {
+    const result = []
+    if (extraSessionId.value) {
+        const extra = store.sessions[extraSessionId.value]
+        if (extra) result.push(extra)
+    }
+    result.push(...crossFilterPinnedSessions.value)
+    result.push(...naturalSessions.value)
+    return result
 })
 
 /**
@@ -531,11 +575,14 @@ defineExpose({
                     :highlighted="index === highlightedIndex"
                     :compact-view="compactView"
                     :show-project-name="showProjectName"
-                    :filter-project-id="filterProjectId"
+                    :scope-project-ids="scopeProjectIds"
                     @select="handleSelect"
                     @drop-data="handleDropData"
                 />
-                <wa-divider v-if="session.id === extraSessionId" class="session-list-extra-divider"></wa-divider>
+                <wa-divider
+                    v-if="session.id === extraSessionId || session.id === lastCrossFilterPinnedId"
+                    class="session-list-group-divider"
+                ></wa-divider>
             </template>
         </VirtualScroller>
 
@@ -593,8 +640,10 @@ defineExpose({
     margin-block: var(--wa-space-3xs);
 }
 
-/* Divider rendered below the pinned "extra" cross-filter session at the top. */
-.session-list-extra-divider {
+/* Divider rendered below the "extra" selected session at the very top of the
+   list, and below the cross-filter pinned block (pinned sessions not
+   naturally in scope) when either is present. */
+.session-list-group-divider {
     --width: var(--divider-size);
     --spacing: var(--wa-space-2xs);
 }

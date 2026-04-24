@@ -36,7 +36,13 @@ const dataStore = useDataStore()
 // React to authentication state changes (initial check + after login)
 watch(isAuthenticated, async (authenticated) => {
     if (authenticated) {
-        await dataStore.loadHomeData()
+        await Promise.all([
+            dataStore.loadHomeData(),
+            // Preload cross-filter pinned sessions so sidebar filters on other
+            // projects/workspaces can still render pinned sessions owned by
+            // another project (for `workspace`/`all` pin modes).
+            dataStore.loadPinnedSessions(),
+        ])
         openWs()
     } else {
         closeWs()

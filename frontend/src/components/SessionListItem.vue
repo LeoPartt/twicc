@@ -44,12 +44,14 @@ const props = defineProps({
         type: Boolean,
         default: false
     },
-    // When set, the sidebar is filtered on a single project. If the session's
-    // real project differs from this filter (cross-filter deep link, future pin
-    // cross-filter), the project badge is shown even when showProjectName is
-    // false, so the user can tell the session belongs elsewhere.
-    filterProjectId: {
-        type: String,
+    // Natural scope project IDs for the current sidebar filter (single-project,
+    // workspace, or all-projects). When non-null and the session's project is
+    // not in this set, the session is "cross-filter" (e.g. deep-linked extra
+    // session or a pinned session whose mode brings it in from another project)
+    // and the project badge is shown even when showProjectName is false.
+    // null = no scope filter (all-projects mode): rely on showProjectName alone.
+    scopeProjectIds: {
+        type: Array,
         default: null
     }
 })
@@ -105,15 +107,15 @@ const project = computed(() => store.getProject(props.session.project_id))
 
 /**
  * Whether to show the project badge for this specific session.
- * True when the parent explicitly asked (workspace / all-projects mode), or
- * when the session's project differs from the single-project sidebar filter
- * (cross-filter case — the session is visible in a list that is otherwise
- * scoped to a different project, so the badge disambiguates).
+ * True when the parent explicitly asked (all-projects mode with multiple
+ * visible projects), or when the session falls outside the current filter's
+ * natural scope (cross-filter deep link or cross-filter pinned session —
+ * the badge tells the user it belongs elsewhere).
  */
 const effectiveShowProjectName = computed(() => {
     if (props.showProjectName) return true
-    if (!props.filterProjectId) return false
-    return props.session.project_id !== props.filterProjectId
+    if (!props.scopeProjectIds) return false
+    return !props.scopeProjectIds.includes(props.session.project_id)
 })
 
 /**

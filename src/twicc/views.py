@@ -29,13 +29,19 @@ from twicc.core.serializers import (
 SESSIONS_PAGE_SIZE = 1000
 
 
-def _get_sessions_page(project_id: str | None, before_mtime: str | None, project_id_list: list[str] | None = None) -> dict:
+def _get_sessions_page(
+    project_id: str | None,
+    before_mtime: str | None,
+    project_id_list: list[str] | None = None,
+    pinned_only: bool = False,
+) -> dict:
     """Get a page of sessions with pagination support.
 
     Args:
         project_id: Project ID to filter by, or None for all projects.
         before_mtime: Cursor for pagination - only return sessions with mtime < this value.
         project_id_list: List of project IDs to filter by (used when project_id is None).
+        pinned_only: If True, restrict the result to pinned sessions (any pin mode).
 
     Returns:
         Dict with "sessions" (list) and "has_more" (bool).
@@ -46,6 +52,9 @@ def _get_sessions_page(project_id: str | None, before_mtime: str | None, project
         sessions = sessions.filter(project_id=project_id)
     elif project_id_list is not None:
         sessions = sessions.filter(project_id__in=project_id_list)
+
+    if pinned_only:
+        sessions = sessions.filter(pinned__isnull=False)
 
     if before_mtime:
         sessions = sessions.filter(mtime__lt=float(before_mtime))
@@ -70,11 +79,15 @@ def all_sessions(request):
     Query params (optional):
         before_mtime: Cursor for pagination - only return sessions older than this mtime.
         project_ids: Comma-separated list of project IDs to filter by.
+        pinned: When "1"/"true", restrict to pinned sessions (any pin mode) across all projects.
+                Used at app startup to preload cross-filter pinned sessions that would
+                otherwise be missing from a single-project `store.sessions` map.
     """
     before_mtime = request.GET.get("before_mtime")
     project_ids_param = request.GET.get("project_ids")
     project_id_list = project_ids_param.split(",") if project_ids_param else None
-    return JsonResponse(_get_sessions_page(None, before_mtime, project_id_list=project_id_list))
+    pinned_only = request.GET.get("pinned", "").lower() in ("1", "true")
+    return JsonResponse(_get_sessions_page(None, before_mtime, project_id_list=project_id_list, pinned_only=pinned_only))
 
 
 def session_by_id(request, session_id):
