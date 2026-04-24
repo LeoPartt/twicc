@@ -357,7 +357,7 @@ defineExpose({
                         Pin in workspace
                     </wa-dropdown-item>
                     <wa-dropdown-item type="checkbox" :checked="session.pinned === 'all'" value="all">
-                        Pin in all projects
+                        Pin everywhere
                     </wa-dropdown-item>
                 </wa-dropdown>
                 <AppTooltip v-if="!session.draft" :for="`session-header-${sessionId}-pin-button`">{{ pinTooltip }}</AppTooltip>

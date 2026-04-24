@@ -877,7 +877,7 @@ function registerSessionCommands() {
                     { id: 'none',      label: 'Not pinned',   action: () => pick(null),        active: !current },
                     { id: 'project',   label: 'Project',      action: () => pick('project'),   active: current === 'project' },
                     { id: 'workspace', label: 'Workspace',    action: () => pick('workspace'), active: current === 'workspace' },
-                    { id: 'all',       label: 'All projects', action: () => pick('all'),       active: current === 'all' },
+                    { id: 'all',       label: 'Everywhere', action: () => pick('all'),       active: current === 'all' },
                 ]
             },
         },

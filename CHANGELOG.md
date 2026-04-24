@@ -9,18 +9,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Floating toolbar on rendered markdown content with buttons to view the raw markdown source and copy it to the clipboard
+  - ![Markdown toolbar](frontend/public/whats-new/v1.5.1/markdown-toolbar.webp)
 - Pin a session to your current project, across a whole workspace, or across every project — pinned sessions stay at the top of the sidebar in every matching context
+  - ![Pin modes](frontend/public/whats-new/v1.5.1/pin-modes.webp)
 - New "Always show active sessions" sidebar option that surfaces running and unread sessions from other projects at the top, so you never lose track of them while working in a different scope
+  - ![Active session toggle](frontend/public/whats-new/v1.5.1/show-active-sessions.webp)
 - Triple-press Escape quickly on a session's chat tab to stop the running Claude Code process
+  - ![Triple escape shortcut](frontend/public/whats-new/v1.5.1/triple-escape.webp)
 - New `/` and `@` buttons below the message input textarea to quickly open the slash command picker and the file path picker
+  - ![New textarea buttons](frontend/public/whats-new/v1.5.1/slash-arobase.webp)
 - Command palette can now change Claude settings for the current session
+  - ![Change session settings in command palette](frontend/public/whats-new/v1.5.1/session-claude-settings-palette.webp)
 - New "Tmux config file" setting in the Terminal section to load your own `tmux.conf` (status bar, colors, key bindings, etc.) in TwiCC terminals
+  - ![Tmux conf new settings](frontend/public/whats-new/v1.5.1/tmux-conf-settings.webp)
 
 ### Changed
 
 - Word wrap and side-by-side toggles in diff and editor toolbars now persist across sessions and stay in sync with the Settings panel (proposed by @LeoPartt)
 - Bump `claude-agent-sdk` from 0.1.63 to 0.1.66 (bundled Claude Code CLI: 2.1.114 → 2.1.119)
-- Improved command palette for "Go to Session…" and "Go to Workspace…"
+- Minor improvements to the command palette (added some missing commands, added indicators for workspaces, projects, and sessions)
 
 ### Fixed
 

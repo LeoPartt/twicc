@@ -513,7 +513,7 @@ function handleMenuSelect(event) {
                     Pin in workspace
                 </wa-dropdown-item>
                 <wa-dropdown-item type="checkbox" :checked="session.pinned === 'all'" value="pin-all">
-                    Pin in all projects
+                    Pin everywhere
                 </wa-dropdown-item>
                 <wa-divider v-if="hasItemsAfterPinBlock"></wa-divider>
             </template>
