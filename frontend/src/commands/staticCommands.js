@@ -28,6 +28,10 @@ import {
     CLAUDE_IN_CHROME_LABELS,
     CONTEXT_MAX,
     CONTEXT_MAX_LABELS,
+    WA_THEME,
+    WA_THEME_LABELS,
+    WA_BRAND,
+    WA_BRAND_LABELS,
     getModelLabel,
 } from '../constants'
 
@@ -219,9 +223,21 @@ export function initStaticCommands(router) {
         return PROJECT_DETAIL_ROUTES.has(route.name)
     }
 
-    /** Non-archived projects sorted by display name */
-    function activeProjects() {
-        return data.getProjects.filter(p => !p.archived)
+    /** Projects for palette pickers: filter out archived unless the
+     *  "show archived projects" setting is enabled. */
+    function pickerProjects() {
+        return data.getProjects.filter(p => settings.isShowArchivedProjects || !p.archived)
+    }
+
+    /** Map a project to a palette sub-item carrying the colored dot metadata
+     *  (mirrors the session list dot). */
+    function toProjectItem(p, action) {
+        return {
+            id: p.id,
+            label: data.getProjectDisplayName(p.id),
+            action,
+            project: { color: p.color ?? null },
+        }
     }
 
     // ── Display mode labels ───────────────────────────────────────────────
@@ -259,11 +275,9 @@ export function initStaticCommands(router) {
             label: 'Go to Project\u2026',
             icon: 'folder',
             category: 'navigation',
-            items: () => activeProjects().map(p => ({
-                id: p.id,
-                label: data.getProjectDisplayName(p.id),
-                action: () => router.push({ name: 'project', params: { projectId: p.id } }),
-            })),
+            items: () => pickerProjects().map(p => toProjectItem(p,
+                () => router.push({ name: 'project', params: { projectId: p.id } })
+            )),
         },
         {
             id: 'nav.session',
@@ -485,33 +499,29 @@ export function initStaticCommands(router) {
             label: 'New Session in\u2026',
             icon: 'square-plus',
             category: 'creation',
-            items: () => activeProjects().map(p => ({
-                id: p.id,
-                label: data.getProjectDisplayName(p.id),
-                action: () => {
-                    const sessionId = data.createDraftSession(p.id)
-                    // Preserve the current sidebar filter: the draft lives in
-                    // project p.id (data), but we keep the URL's projectId on
-                    // the current filter so the sidebar does not switch. The
-                    // SessionView derives the draft's real project from
-                    // session.project_id. In all-projects mode there is no
-                    // single-project filter to preserve, and on pages without
-                    // a project segment in the URL (home, settings) there is
-                    // no filter either — in both cases fall back to the
-                    // draft's project for URL canonicity.
-                    // `query: route.query` carries the current ?workspace=…
-                    // along with any other query params. The router guard
-                    // would normally drop workspace when navigating to a
-                    // project outside it, but we set workspace explicitly so
-                    // the guard short-circuits and our value wins.
-                    const filterProjectId = route.params.projectId
-                    if (isAllProjectsMode() || !filterProjectId) {
-                        const name = isAllProjectsMode() ? 'projects-session' : 'session'
-                        router.push({ name, params: { projectId: p.id, sessionId }, query: route.query })
-                    } else {
-                        router.push({ name: 'session', params: { projectId: filterProjectId, sessionId }, query: route.query })
-                    }
-                },
+            items: () => pickerProjects().map(p => toProjectItem(p, () => {
+                const sessionId = data.createDraftSession(p.id)
+                // Preserve the current sidebar filter: the draft lives in
+                // project p.id (data), but we keep the URL's projectId on
+                // the current filter so the sidebar does not switch. The
+                // SessionView derives the draft's real project from
+                // session.project_id. In all-projects mode there is no
+                // single-project filter to preserve, and on pages without
+                // a project segment in the URL (home, settings) there is
+                // no filter either — in both cases fall back to the
+                // draft's project for URL canonicity.
+                // `query: route.query` carries the current ?workspace=…
+                // along with any other query params. The router guard
+                // would normally drop workspace when navigating to a
+                // project outside it, but we set workspace explicitly so
+                // the guard short-circuits and our value wins.
+                const filterProjectId = route.params.projectId
+                if (isAllProjectsMode() || !filterProjectId) {
+                    const name = isAllProjectsMode() ? 'projects-session' : 'session'
+                    router.push({ name, params: { projectId: p.id, sessionId }, query: route.query })
+                } else {
+                    router.push({ name: 'session', params: { projectId: filterProjectId, sessionId }, query: route.query })
+                }
             })),
         },
         {
@@ -545,6 +555,30 @@ export function initStaticCommands(router) {
                 { id: COLOR_SCHEME.LIGHT, label: COLOR_SCHEME_LABELS[COLOR_SCHEME.LIGHT], action: () => settings.setColorScheme(COLOR_SCHEME.LIGHT), active: settings.colorScheme === COLOR_SCHEME.LIGHT },
                 { id: COLOR_SCHEME.DARK, label: COLOR_SCHEME_LABELS[COLOR_SCHEME.DARK], action: () => settings.setColorScheme(COLOR_SCHEME.DARK), active: settings.colorScheme === COLOR_SCHEME.DARK },
             ],
+        },
+        {
+            id: 'display.wa-theme',
+            label: 'Change Theme…',
+            icon: 'palette',
+            category: 'display',
+            items: () => Object.values(WA_THEME).map(value => ({
+                id: value,
+                label: WA_THEME_LABELS[value],
+                action: () => settings.setWaTheme(value),
+                active: settings.waTheme === value,
+            })),
+        },
+        {
+            id: 'display.wa-brand',
+            label: 'Change Brand Color…',
+            icon: 'droplet',
+            category: 'display',
+            items: () => Object.values(WA_BRAND).map(value => ({
+                id: value,
+                label: WA_BRAND_LABELS[value],
+                action: () => settings.setWaBrand(value),
+                active: settings.waBrand === value,
+            })),
         },
         {
             id: 'display.mode',
@@ -605,12 +639,20 @@ export function initStaticCommands(router) {
             action: () => settings.setFontSize(Math.max(settings.fontSize - 1, 12)),
         },
         {
-            id: 'display.toggle-word-wrap',
+            id: 'display.toggle-editor-word-wrap',
             label: 'Toggle Editor Word Wrap',
             icon: 'text-width',
             category: 'display',
             toggled: () => settings.isEditorWordWrap,
             action: () => settings.setEditorWordWrap(!settings.editorWordWrap),
+        },
+        {
+            id: 'display.toggle-editor-diff-layout',
+            label: 'Toggle Editor Side-by-Side Diff',
+            icon: 'columns',
+            category: 'display',
+            toggled: () => settings.isDiffSideBySide,
+            action: () => settings.setDiffSideBySide(!settings.diffSideBySide),
         },
         {
             id: 'display.toggle-show-diffs',
@@ -621,12 +663,20 @@ export function initStaticCommands(router) {
             action: () => settings.setShowDiffs(!settings.showDiffs),
         },
         {
-            id: 'display.toggle-diff-layout',
-            label: 'Toggle Side-by-Side Diff',
+            id: 'display.toggle-session-diff-word-wrap',
+            label: 'Toggle Session Diff Word Wrap',
+            icon: 'text-width',
+            category: 'display',
+            toggled: () => settings.isToolDiffWordWrap,
+            action: () => settings.setToolDiffWordWrap(!settings.toolDiffWordWrap),
+        },
+        {
+            id: 'display.toggle-session-diff-layout',
+            label: 'Toggle Session Side-by-Side Diff',
             icon: 'columns',
             category: 'display',
-            toggled: () => settings.isDiffSideBySide,
-            action: () => settings.setDiffSideBySide(!settings.diffSideBySide),
+            toggled: () => settings.isToolDiffSideBySide,
+            action: () => settings.setToolDiffSideBySide(!settings.toolDiffSideBySide),
         },
 
         // ── Claude Defaults ───────────────────────────────────────────

@@ -400,7 +400,7 @@ defineExpose({ open, close })
                         ></wa-divider>
                         <div
                             class="command-item"
-                            :class="{ active: item.id === activeId, 'command-item--session': !!item.session, 'command-item--workspace': !!item.workspace }"
+                            :class="{ active: item.id === activeId, 'command-item--session': !!item.session, 'command-item--workspace': !!item.workspace, 'command-item--project': !!item.project }"
                             :data-id="item.id"
                             @click="selectNestedItem(item)"
                             @pointerenter="activeId = item.id"
@@ -424,6 +424,13 @@ defineExpose({ open, close })
                                     class="palette-workspace-icon"
                                     :style="item.workspace.color ? { color: item.workspace.color } : null"
                                 ></wa-icon>
+                            </template>
+                            <!-- Project row: colored dot mirroring the sidebar -->
+                            <template v-else-if="item.project">
+                                <span
+                                    class="palette-project-dot"
+                                    :style="item.project.color ? { '--dot-color': item.project.color } : null"
+                                ></span>
                             </template>
                             <!-- Regular sub-item: active check, icon, or spacer -->
                             <template v-else>
