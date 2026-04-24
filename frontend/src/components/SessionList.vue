@@ -42,6 +42,13 @@ const props = defineProps({
     compactView: {
         type: Boolean,
         default: false
+    },
+    // When true, sessions with a running Claude SDK process or unread content
+    // are always surfaced in the sidebar — even when they belong to a project
+    // outside the current filter/workspace.
+    showActiveAcrossFilters: {
+        type: Boolean,
+        default: false
     }
 })
 
@@ -134,33 +141,84 @@ const crossFilterPinnedSessions = computed(() => {
 })
 
 /**
- * Id of the selected session when it belongs to neither the natural filter
- * nor the cross-filter pinned block — i.e. a deep link to a session that
- * nothing would otherwise bring on screen. Prepended at the very top of the
- * list with a divider below it.
+ * Sessions that have a running Claude SDK process or unread content but fall
+ * outside the current sidebar filter (and are not cross-filter pinned already).
+ * Gated by the `showActiveAcrossFilters` prop — when the setting is off, this
+ * block is empty and the UI keeps its previous shape.
+ *
+ * "Unread" mirrors the DB-side check: `last_new_content_at` is set and is more
+ * recent than `last_viewed_at` (or the session has never been viewed). We do
+ * NOT apply the "only in user_turn" refinement used by `SessionListItem`'s
+ * unread *indicator* — a session mid-assistant-turn still deserves to stay
+ * surfaced. Drafts are excluded (they have no server-side activity).
+ */
+const crossFilterActiveSessions = computed(() => {
+    if (!props.showActiveAcrossFilters) return []
+    const naturalIds = new Set(naturalSessions.value.map(s => s.id))
+    const pinnedIds = new Set(crossFilterPinnedSessions.value.map(s => s.id))
+    const processStates = store.processStates
+
+    const matches = Object.values(store.sessions).filter(s => {
+        if (s.parent_session_id) return false
+        if (s.draft) return false
+        if (naturalIds.has(s.id)) return false
+        if (pinnedIds.has(s.id)) return false
+        const ps = processStates[s.id]
+        const hasProcess = ps != null
+        const isUnread = !!s.last_new_content_at
+            && (!s.last_viewed_at || s.last_new_content_at > s.last_viewed_at)
+        return hasProcess || isUnread
+    })
+
+    return applyArchivedFilters(matches).sort(sessionSortComparator(processStates))
+})
+
+/**
+ * Id of the selected session when it belongs to none of the upstream blocks —
+ * i.e. a deep link to a session that nothing would otherwise bring on screen.
+ * Prepended at the very top of the list with a divider below it.
  */
 const extraSessionId = computed(() => {
     if (!props.sessionId) return null
     if (naturalSessions.value.some(s => s.id === props.sessionId)) return null
     if (crossFilterPinnedSessions.value.some(s => s.id === props.sessionId)) return null
+    if (crossFilterActiveSessions.value.some(s => s.id === props.sessionId)) return null
     const s = store.sessions[props.sessionId]
     if (!s || s.parent_session_id) return null
     return s.id
 })
 
 /**
- * Id of the last cross-filter pinned session in the current order, or null when
- * the block is empty. Drives the divider rendered between the cross-filter
- * pinned block and the natural sessions below it.
+ * Ids of the last item of each top block that should be followed by a divider.
+ * A divider is only rendered when the block it terminates has a non-empty
+ * block somewhere below it — so the bottom-most non-empty block never gets
+ * a trailing divider.
  */
-const lastCrossFilterPinnedId = computed(() => {
-    const list = crossFilterPinnedSessions.value
-    return list.length > 0 ? list[list.length - 1].id : null
+const dividerAfterIds = computed(() => {
+    const pinned = crossFilterPinnedSessions.value
+    const active = crossFilterActiveSessions.value
+    const natural = naturalSessions.value
+    const hasExtra = !!extraSessionId.value
+    const hasPinned = pinned.length > 0
+    const hasActive = active.length > 0
+    const hasNatural = natural.length > 0
+
+    const ids = new Set()
+    if (hasExtra && (hasPinned || hasActive || hasNatural)) {
+        ids.add(extraSessionId.value)
+    }
+    if (hasPinned && (hasActive || hasNatural)) {
+        ids.add(pinned[pinned.length - 1].id)
+    }
+    if (hasActive && hasNatural) {
+        ids.add(active[active.length - 1].id)
+    }
+    return ids
 })
 
-// Flat list consumed by the virtual scroller: [extra?, ...crossFilterPinned,
-// ...natural]. Dividers live in the template, keyed off the terminal ids of
-// the first two blocks.
+// Flat list consumed by the virtual scroller:
+//   [extra?, ...crossFilterPinned, ...crossFilterActive, ...natural]
+// Dividers live in the template, keyed off `dividerAfterIds`.
 const allSessions = computed(() => {
     const result = []
     if (extraSessionId.value) {
@@ -168,6 +226,7 @@ const allSessions = computed(() => {
         if (extra) result.push(extra)
     }
     result.push(...crossFilterPinnedSessions.value)
+    result.push(...crossFilterActiveSessions.value)
     result.push(...naturalSessions.value)
     return result
 })
@@ -580,7 +639,7 @@ defineExpose({
                     @drop-data="handleDropData"
                 />
                 <wa-divider
-                    v-if="session.id === extraSessionId || session.id === lastCrossFilterPinnedId"
+                    v-if="dividerAfterIds.has(session.id)"
                     class="session-list-group-divider"
                 ></wa-divider>
             </template>

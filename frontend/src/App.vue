@@ -38,10 +38,10 @@ watch(isAuthenticated, async (authenticated) => {
     if (authenticated) {
         await Promise.all([
             dataStore.loadHomeData(),
-            // Preload cross-filter pinned sessions so sidebar filters on other
-            // projects/workspaces can still render pinned sessions owned by
-            // another project (for `workspace`/`all` pin modes).
-            dataStore.loadPinnedSessions(),
+            // Preload "sticky" sessions (pinned, unread, running process)
+            // from every project so the sidebar can render them cross-filter
+            // without waiting for their project to be loaded on demand.
+            dataStore.loadStickySessions(),
         ])
         openWs()
     } else {

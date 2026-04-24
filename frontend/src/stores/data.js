@@ -1084,20 +1084,23 @@ export const useDataStore = defineStore('data', {
             }
         },
         /**
-         * Load all pinned sessions across every project into the store.
+         * Load all "sticky" sessions across every project into the store. A
+         * sticky session is one that the sidebar may need to render even when
+         * a different project/workspace is filtered: pinned sessions (any pin
+         * mode), sessions with unread content, or sessions that currently have
+         * an active Claude SDK process.
          *
          * The single-project `loadSessions(projectId)` call only populates
-         * `this.sessions` with sessions belonging to that project. Cross-filter
-         * pinned sessions (`workspace`/`all` modes, owned by another project)
-         * would therefore be missing from the sidebar's source data. We preload
-         * them once at app startup; subsequent updates are covered by the
-         * existing `session_updated` WebSocket broadcasts.
+         * `this.sessions` with sessions belonging to that project, so without
+         * this preload a cross-filter session would be missing from the store
+         * and invisible to the sidebar. Subsequent updates are covered by the
+         * existing `session_updated` / process-state WebSocket broadcasts.
          */
-        async loadPinnedSessions() {
+        async loadStickySessions() {
             try {
-                const res = await apiFetch('/api/sessions/?pinned=1')
+                const res = await apiFetch('/api/sessions/?pinned=1&unread=1&has_process=1')
                 if (!res.ok) {
-                    console.error('Failed to load pinned sessions:', res.status, res.statusText)
+                    console.error('Failed to load sticky sessions:', res.status, res.statusText)
                     return
                 }
                 const data = await res.json()
@@ -1105,7 +1108,7 @@ export const useDataStore = defineStore('data', {
                     this.sessions[session.id] = session
                 }
             } catch (error) {
-                console.error('Failed to load pinned sessions:', error)
+                console.error('Failed to load sticky sessions:', error)
             }
         },
         /**

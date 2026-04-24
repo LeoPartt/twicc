@@ -37,6 +37,7 @@ export const SETTINGS_SCHEMA = {
     showArchivedSessions: false,
     showArchivedProjects: false,
     showArchivedWorkspaces: false,
+    showActiveAcrossFilters: false,
     notifUserTurnSound: NOTIFICATION_SOUNDS.NONE,
     notifUserTurnBrowser: false,
     notifPendingRequestSound: NOTIFICATION_SOUNDS.NONE,
@@ -95,6 +96,7 @@ const SETTINGS_VALIDATORS = {
     showArchivedSessions: (v) => typeof v === 'boolean',
     showArchivedProjects: (v) => typeof v === 'boolean',
     showArchivedWorkspaces: (v) => typeof v === 'boolean',
+    showActiveAcrossFilters: (v) => typeof v === 'boolean',
     defaultPermissionMode: (v) => Object.values(PERMISSION_MODE).includes(v),
     defaultModel: (v) => typeof v === 'string' && v.length > 0,
     defaultEffort: (v) => Object.values(EFFORT).includes(v),
@@ -281,6 +283,7 @@ export const useSettingsStore = defineStore('settings', {
         isShowArchivedSessions: (state) => state.showArchivedSessions,
         isShowArchivedProjects: (state) => state.showArchivedProjects,
         isShowArchivedWorkspaces: (state) => state.showArchivedWorkspaces,
+        isShowActiveAcrossFilters: (state) => state.showActiveAcrossFilters,
         getDefaultPermissionMode: (state) => state.defaultPermissionMode,
         getDefaultModel: (state) => state.defaultModel,
         getDefaultEffort: (state) => state.defaultEffort,
@@ -516,6 +519,12 @@ export const useSettingsStore = defineStore('settings', {
         setShowArchivedSessions(enabled) {
             if (SETTINGS_VALIDATORS.showArchivedSessions(enabled)) {
                 this.showArchivedSessions = enabled
+            }
+        },
+
+        setShowActiveAcrossFilters(enabled) {
+            if (SETTINGS_VALIDATORS.showActiveAcrossFilters(enabled)) {
+                this.showActiveAcrossFilters = enabled
             }
         },
 
@@ -824,6 +833,7 @@ export function initSettings() {
             showArchivedSessions: store.showArchivedSessions,
             showArchivedProjects: store.showArchivedProjects,
             showArchivedWorkspaces: store.showArchivedWorkspaces,
+            showActiveAcrossFilters: store.showActiveAcrossFilters,
             defaultPermissionMode: store.defaultPermissionMode,
             defaultModel: store.defaultModel,
             defaultEffort: store.defaultEffort,

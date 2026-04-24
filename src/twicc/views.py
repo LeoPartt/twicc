@@ -34,6 +34,8 @@ def _get_sessions_page(
     before_mtime: str | None,
     project_id_list: list[str] | None = None,
     pinned_only: bool = False,
+    unread_only: bool = False,
+    active_session_ids: list[str] | None = None,
 ) -> dict:
     """Get a page of sessions with pagination support.
 
@@ -41,11 +43,21 @@ def _get_sessions_page(
         project_id: Project ID to filter by, or None for all projects.
         before_mtime: Cursor for pagination - only return sessions with mtime < this value.
         project_id_list: List of project IDs to filter by (used when project_id is None).
-        pinned_only: If True, restrict the result to pinned sessions (any pin mode).
+        pinned_only: If True, include pinned sessions (any pin mode) in the union.
+        unread_only: If True, include sessions with unread content (last_new_content_at
+            set AND later than last_viewed_at, or last_viewed_at null) in the union.
+        active_session_ids: If not None, include sessions whose id is in this list
+            (typically ProcessManager's active process session ids) in the union.
+
+    When more than one "sticky" flag (pinned_only / unread_only / active_session_ids)
+    is set, the results are the UNION of the matching sessions — callers passing
+    several flags get every session that matches at least one of them.
 
     Returns:
         Dict with "sessions" (list) and "has_more" (bool).
     """
+    from django.db.models import F, Q
+
     sessions = Session.objects.filter(type=SessionType.SESSION, created_at__isnull=False, user_message_count__gt=0)
 
     if project_id is not None:
@@ -53,8 +65,17 @@ def _get_sessions_page(
     elif project_id_list is not None:
         sessions = sessions.filter(project_id__in=project_id_list)
 
+    sticky = Q()
     if pinned_only:
-        sessions = sessions.filter(pinned__isnull=False)
+        sticky |= Q(pinned__isnull=False)
+    if unread_only:
+        sticky |= Q(last_new_content_at__isnull=False) & (
+            Q(last_viewed_at__isnull=True) | Q(last_new_content_at__gt=F("last_viewed_at"))
+        )
+    if active_session_ids:
+        sticky |= Q(id__in=active_session_ids)
+    if pinned_only or unread_only or active_session_ids:
+        sessions = sessions.filter(sticky)
 
     if before_mtime:
         sessions = sessions.filter(mtime__lt=float(before_mtime))
@@ -79,15 +100,36 @@ def all_sessions(request):
     Query params (optional):
         before_mtime: Cursor for pagination - only return sessions older than this mtime.
         project_ids: Comma-separated list of project IDs to filter by.
-        pinned: When "1"/"true", restrict to pinned sessions (any pin mode) across all projects.
-                Used at app startup to preload cross-filter pinned sessions that would
-                otherwise be missing from a single-project `store.sessions` map.
+        pinned: When "1"/"true", include pinned sessions (any pin mode) in the result.
+        unread: When "1"/"true", include sessions with unread content in the result.
+        has_process: When "1"/"true", include sessions that have an active Claude SDK
+            process. Combined with pinned/unread via UNION when multiple flags are set.
+
+    The pinned / unread / has_process flags are "sticky" filters used at app startup
+    to preload cross-filter sessions that would otherwise be missing from the store
+    (a single-project sidebar only loads its own project's sessions). When no such
+    flag is set, the endpoint returns a regular paginated list.
     """
     before_mtime = request.GET.get("before_mtime")
     project_ids_param = request.GET.get("project_ids")
     project_id_list = project_ids_param.split(",") if project_ids_param else None
     pinned_only = request.GET.get("pinned", "").lower() in ("1", "true")
-    return JsonResponse(_get_sessions_page(None, before_mtime, project_id_list=project_id_list, pinned_only=pinned_only))
+    unread_only = request.GET.get("unread", "").lower() in ("1", "true")
+    has_process = request.GET.get("has_process", "").lower() in ("1", "true")
+
+    active_session_ids: list[str] | None = None
+    if has_process:
+        from twicc.agent.manager import get_process_manager
+        active_session_ids = [info.session_id for info in get_process_manager().get_active_processes()]
+
+    return JsonResponse(_get_sessions_page(
+        None,
+        before_mtime,
+        project_id_list=project_id_list,
+        pinned_only=pinned_only,
+        unread_only=unread_only,
+        active_session_ids=active_session_ids,
+    ))
 
 
 def session_by_id(request, session_id):

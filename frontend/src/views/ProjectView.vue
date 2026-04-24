@@ -309,6 +309,11 @@ const showArchivedProjects = computed(() => settingsStore.isShowArchivedProjects
 // Compact view (persistent setting, browser-local via settings store)
 const compactView = computed(() => settingsStore.isCompactSessionList)
 
+// Always-show-active filter (persistent setting): promotes running/unread
+// sessions from other projects to the top of the sidebar regardless of the
+// current filter.
+const showActiveAcrossFilters = computed(() => settingsStore.isShowActiveAcrossFilters)
+
 // Reference to SessionList for keyboard navigation
 const sessionListRef = ref(null)
 
@@ -361,11 +366,16 @@ function openAdvancedSearch() {
     window.dispatchEvent(new CustomEvent('twicc:open-search'))
 }
 
-// Load sessions when project changes or mode changes
+// Load sessions when project changes or mode changes. Also refresh the sticky
+// set (pinned / unread / running-process sessions across every project) so
+// newly activated sessions in other projects surface in the sidebar without
+// waiting for a page reload — the initial App.vue load only fires once at
+// auth, so it may have raced or missed HMR updates.
 watch(effectiveProjectId, async (newProjectId) => {
     if (newProjectId) {
         await store.loadSessions(newProjectId, { isInitialLoading: true })
     }
+    store.loadStickySessions()
 }, { immediate: true })
 
 // Retry loading sessions
@@ -382,6 +392,8 @@ function handleSessionOptionsSelect(event) {
         settingsStore.setShowArchivedSessions(item.checked)
     } else if (item.value === 'compact-view') {
         settingsStore.setCompactSessionList(item.checked)
+    } else if (item.value === 'show-active') {
+        settingsStore.setShowActiveAcrossFilters(item.checked)
     }
 }
 
@@ -1130,6 +1142,15 @@ function updateSidebarClosedClass(closed) {
                         >
                             Compact view
                         </wa-dropdown-item>
+                        <wa-divider></wa-divider>
+                        <wa-dropdown-item
+                            type="checkbox"
+                            value="show-active"
+                            :checked="showActiveAcrossFilters"
+                        >
+                            <div>Show active sessions across projects</div>
+                            <div class="session-option-hint">All with a running process or unread content</div>
+                        </wa-dropdown-item>
                     </wa-dropdown>
                     <AppTooltip for="session-options-button">Session list options</AppTooltip>
 
@@ -1188,6 +1209,7 @@ function updateSidebarClosedClass(closed) {
                     :show-archived="showArchivedSessions"
                     :show-archived-projects="showArchivedProjects"
                     :compact-view="compactView"
+                    :show-active-across-filters="showActiveAcrossFilters"
                     @select="handleSessionSelect"
                     @drop-data="handleDropOnSession"
                     @focus-search="focusSearchInput"
@@ -1654,6 +1676,13 @@ wa-split-panel::part(divider) {
 
 .session-options-dropdown {
     flex-shrink: 0;
+}
+
+/* Secondary hint line under a dropdown-item label (same style as the
+   "scroll to selected file" subtitle in the files tab root selector). */
+.session-option-hint {
+    font-size: var(--wa-font-size-xs);
+    color: var(--wa-color-text-quiet);
 }
 
 .project-selector {
