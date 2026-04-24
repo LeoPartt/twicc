@@ -401,6 +401,7 @@ defineExpose({ open, close })
                         @pointerenter="activeId = item.id"
                     >
                         <wa-icon v-if="item.active" name="check" class="command-icon active-check" />
+                        <wa-icon v-else-if="item.icon" :name="item.icon" class="command-icon" />
                         <span v-else class="command-icon-spacer" />
                         <span class="command-label" v-html="item.highlighted" />
                     </div>

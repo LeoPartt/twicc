@@ -9,7 +9,7 @@
 
 import { useCommandRegistry } from '../composables/useCommandRegistry'
 import { useSettingsStore, getModelRegistry, modelSupportsEffortXhigh, modelSupportsEffortMax } from '../stores/settings'
-import { useDataStore } from '../stores/data'
+import { useDataStore, sessionSortComparator } from '../stores/data'
 import { useWorkspacesStore } from '../stores/workspaces'
 import { useRoute } from 'vue-router'
 import { clearTabRouteParams } from '../utils/granularRoutes'
@@ -26,6 +26,137 @@ import {
     CONTEXT_MAX_LABELS,
     getModelLabel,
 } from '../constants'
+
+// Cap on how many sessions "Go to Session…" exposes. The list is already
+// prioritized (extra → cross-filter pinned → cross-filter active → natural),
+// so the cap keeps big session sets from filling the palette but always keeps
+// the sticky groups visible.
+const SESSION_NAV_LIMIT = 100
+
+/**
+ * Build the "Go to Session…" sub-picker items so they mirror SessionList's
+ * sidebar order and groups:
+ *   1. The deep-linked "extra" session when the selected session is out of
+ *      every filter (prepended at the very top of the sidebar).
+ *   2. Cross-filter pinned sessions (pin mode `workspace`/`all`).
+ *   3. Cross-filter active sessions (running process or unread) when the
+ *      "Always show active sessions" setting is on.
+ *   4. Natural scope sessions for the current filter (project / workspace /
+ *      all projects).
+ *
+ * Sticky groups get a thumbtack / signal icon so the user can tell at a
+ * glance which ones come from outside the current filter. Navigation
+ * preserves the active workspace query so the sidebar stays where it was,
+ * same as clicking a cross-filter session directly in the sidebar.
+ */
+function buildSessionNavItems({
+    data, workspaces, settings, route, router,
+    isAllProjectsMode, routeSessionId, routeProjectId,
+}) {
+    const currentSessionId = routeSessionId()
+    const currentProjectId = routeProjectId()
+    const allProjects = isAllProjectsMode()
+    const activeWorkspaceId = route.query.workspace || null
+
+    // Archived filters — same rules as SessionList (keep the selected session
+    // visible as an exception so a deep-linked archived session is reachable).
+    const showArchived = settings.isShowArchivedSessions
+    const showArchivedProjects = settings.isShowArchivedProjects
+    const archivedProjectIds = showArchivedProjects
+        ? null
+        : new Set(data.getProjects.filter(p => p.archived).map(p => p.id))
+    const passesArchiveFilter = (s) => (
+        (showArchived || !s.archived || s.id === currentSessionId)
+        && (!archivedProjectIds || !archivedProjectIds.has(s.project_id) || s.id === currentSessionId)
+    )
+
+    // 1. Natural scope — mirrors SessionList.naturalSessions.
+    let natural
+    if (allProjects && activeWorkspaceId) {
+        const visibleIds = new Set(workspaces.getVisibleProjectIds(activeWorkspaceId))
+        natural = data.getAllSessions.filter(s => visibleIds.has(s.project_id))
+    } else if (allProjects) {
+        natural = data.getAllSessions
+    } else if (currentProjectId) {
+        natural = data.getProjectSessions(currentProjectId)
+    } else {
+        natural = data.getAllSessions
+    }
+    natural = natural.filter(s => !s.draft).filter(passesArchiveFilter)
+    const naturalIds = new Set(natural.map(s => s.id))
+
+    // 2. Cross-filter pinned — mirrors SessionList.crossFilterPinnedSessions.
+    const activeWs = activeWorkspaceId ? workspaces.getWorkspaceById(activeWorkspaceId) : null
+    const crossPinned = Object.values(data.sessions).filter(s => {
+        if (!s.pinned) return false
+        if (s.parent_session_id || s.draft) return false
+        if (naturalIds.has(s.id)) return false
+        if (s.pinned === 'all') return true
+        if (s.pinned === 'workspace' && activeWs) return activeWs.projectIds.includes(s.project_id)
+        return false
+    }).filter(passesArchiveFilter)
+    crossPinned.sort(sessionSortComparator(data.processStates))
+    const crossPinnedIds = new Set(crossPinned.map(s => s.id))
+
+    // 3. Cross-filter active — gated by the user setting, mirrors
+    //    SessionList.crossFilterActiveSessions.
+    let crossActive = []
+    if (settings.isShowActiveAcrossFilters) {
+        const processStates = data.processStates
+        crossActive = Object.values(data.sessions).filter(s => {
+            if (s.parent_session_id || s.draft) return false
+            if (naturalIds.has(s.id) || crossPinnedIds.has(s.id)) return false
+            const ps = processStates[s.id]
+            const hasProcess = ps != null
+            const isUnread = !!s.last_new_content_at
+                && (!s.last_viewed_at || s.last_new_content_at > s.last_viewed_at)
+            return hasProcess || isUnread
+        }).filter(passesArchiveFilter)
+        crossActive.sort(sessionSortComparator(data.processStates))
+    }
+    const crossActiveIds = new Set(crossActive.map(s => s.id))
+
+    // 4. Extra (selected session out of every other block).
+    let extra = null
+    if (currentSessionId
+        && !naturalIds.has(currentSessionId)
+        && !crossPinnedIds.has(currentSessionId)
+        && !crossActiveIds.has(currentSessionId)) {
+        const s = data.sessions[currentSessionId]
+        if (s && !s.parent_session_id && !s.draft) extra = s
+    }
+
+    const navigate = (s) => {
+        const name = allProjects ? 'projects-session' : 'session'
+        // Mirror ProjectView.handleSessionSelect: in single-project mode the
+        // URL keeps the current filter project; in all-projects mode the URL
+        // path has to carry a real project so the session's own is used.
+        const params = {
+            projectId: allProjects ? s.project_id : (currentProjectId || s.project_id),
+            sessionId: s.id,
+        }
+        const query = activeWorkspaceId ? { workspace: activeWorkspaceId } : {}
+        router.push({ name, params, query })
+    }
+
+    const toItem = (s, icon) => {
+        const item = {
+            id: s.id,
+            label: s.title || s.id,
+            action: () => navigate(s),
+        }
+        if (icon) item.icon = icon
+        return item
+    }
+
+    const ordered = [
+        ...(extra ? [toItem(extra, 'link')] : []),
+        ...crossPinned.map(s => toItem(s, 'thumbtack')),
+        ...crossActive.map(s => toItem(s, 'signal')),
+        ...natural.map(s => toItem(s, null)),
+    ]
+    return ordered.slice(0, SESSION_NAV_LIMIT)
+}
 
 /**
  * Register all static commands.
@@ -117,24 +248,10 @@ export function initStaticCommands(router) {
             label: 'Go to Session\u2026',
             icon: 'message',
             category: 'navigation',
-            items: () => {
-                const projectId = routeProjectId()
-                const sessions = (isAllProjectsMode() || !projectId
-                    ? data.getAllSessions
-                    : data.getProjectSessions(projectId)
-                ).filter(s => !s.draft).slice(0, 100)
-                return sessions.map(s => ({
-                    id: s.id,
-                    label: s.title || s.id,
-                    action: () => {
-                        const prefix = isAllProjectsMode() ? 'projects-session' : 'session'
-                        router.push({
-                            name: prefix,
-                            params: { projectId: s.project_id, sessionId: s.id },
-                        })
-                    },
-                }))
-            },
+            items: () => buildSessionNavItems({
+                data, workspaces, settings, route, router,
+                isAllProjectsMode, routeSessionId, routeProjectId,
+            }),
         },
         {
             id: 'nav.all-projects',
