@@ -245,8 +245,8 @@ const settingsSummaryParts = computed(() => {
         { text: modelDisplay, forced: modelForced },
         { text: EFFORT_DISPLAY_LABELS[effectiveEffort], forced: selectedEffort.value !== null && selectedEffort.value !== settingsStore.getDefaultEffort },
         { text: THINKING_DISPLAY_LABELS[effectiveThinking], forced: selectedThinking.value !== null && selectedThinking.value !== settingsStore.getDefaultThinking },
-        { text: CLAUDE_IN_CHROME_DISPLAY_LABELS[effectiveChrome], forced: selectedClaudeInChrome.value !== null && selectedClaudeInChrome.value !== settingsStore.getDefaultClaudeInChrome },
         { text: PERMISSION_MODE_LABELS[effectivePermission], forced: selectedPermissionMode.value !== null && selectedPermissionMode.value !== settingsStore.getDefaultPermissionMode },
+        { text: CLAUDE_IN_CHROME_DISPLAY_LABELS[effectiveChrome], forced: selectedClaudeInChrome.value !== null && selectedClaudeInChrome.value !== settingsStore.getDefaultClaudeInChrome },
     ]
 })
 
