@@ -799,10 +799,7 @@ const SESSION_COMMAND_IDS = [
     'session.rename',
     'session.archive',
     'session.unarchive',
-    'session.pin.project',
-    'session.pin.workspace',
-    'session.pin.all',
-    'session.unpin',
+    'session.pin-mode',
     'session.stop',
     'session.delete-draft',
     'session.focus-input',
@@ -850,48 +847,25 @@ function registerSessionCommands() {
             action: () => store.setSessionArchived(projectId.value, sessionId.value, false),
         },
         {
-            id: 'session.pin.project',
-            label: 'Pin Session: Project',
+            id: 'session.pin-mode',
+            label: 'Change Pin Mode…',
             icon: 'thumbtack',
             category: 'session',
             when: () => {
                 const s = store.getSession(sessionId.value)
-                return !!s && !s.draft && s.pinned !== 'project'
+                return !!s && !s.draft
             },
-            action: () => store.setSessionPinMode(projectId.value, sessionId.value, 'project'),
-        },
-        {
-            id: 'session.pin.workspace',
-            label: 'Pin Session: Workspace',
-            icon: 'thumbtack',
-            category: 'session',
-            when: () => {
+            items: () => {
                 const s = store.getSession(sessionId.value)
-                return !!s && !s.draft && s.pinned !== 'workspace'
+                const current = s?.pinned ?? null
+                const pick = (mode) => store.setSessionPinMode(projectId.value, sessionId.value, mode)
+                return [
+                    { id: 'none',      label: 'Not pinned',   action: () => pick(null),        active: !current },
+                    { id: 'project',   label: 'Project',      action: () => pick('project'),   active: current === 'project' },
+                    { id: 'workspace', label: 'Workspace',    action: () => pick('workspace'), active: current === 'workspace' },
+                    { id: 'all',       label: 'All projects', action: () => pick('all'),       active: current === 'all' },
+                ]
             },
-            action: () => store.setSessionPinMode(projectId.value, sessionId.value, 'workspace'),
-        },
-        {
-            id: 'session.pin.all',
-            label: 'Pin Session: All projects',
-            icon: 'thumbtack',
-            category: 'session',
-            when: () => {
-                const s = store.getSession(sessionId.value)
-                return !!s && !s.draft && s.pinned !== 'all'
-            },
-            action: () => store.setSessionPinMode(projectId.value, sessionId.value, 'all'),
-        },
-        {
-            id: 'session.unpin',
-            label: 'Unpin Session',
-            icon: 'thumbtack',
-            category: 'session',
-            when: () => {
-                const s = store.getSession(sessionId.value)
-                return !!s && !!s.pinned
-            },
-            action: () => store.setSessionPinMode(projectId.value, sessionId.value, null),
         },
         {
             id: 'session.stop',

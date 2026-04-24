@@ -428,6 +428,22 @@ export function initStaticCommands(router) {
             action: () => settings.setCompactSessionList(!settings.compactSessionList),
         },
         {
+            id: 'display.toggle-show-archived-sessions',
+            label: 'Toggle Show Archived Sessions',
+            icon: 'box-archive',
+            category: 'display',
+            toggled: () => settings.isShowArchivedSessions,
+            action: () => settings.setShowArchivedSessions(!settings.showArchivedSessions),
+        },
+        {
+            id: 'display.toggle-active-across-filters',
+            label: 'Toggle Show Active Sessions Across Projects',
+            icon: 'signal',
+            category: 'display',
+            toggled: () => settings.isShowActiveAcrossFilters,
+            action: () => settings.setShowActiveAcrossFilters(!settings.showActiveAcrossFilters),
+        },
+        {
             id: 'display.font-increase',
             label: 'Increase Font Size',
             icon: 'magnifying-glass-plus',
