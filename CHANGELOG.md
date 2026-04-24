@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Floating toolbar on rendered markdown content with buttons to view the raw markdown source and copy it to the clipboard
 - Pin a session to your current project, across a whole workspace, or across every project — pinned sessions stay at the top of the sidebar in every matching context
 - New "Always show active sessions" sidebar option that surfaces running and unread sessions from other projects at the top, so you never lose track of them while working in a different scope
+- Triple-press Escape quickly on a session's chat tab to stop the running Claude Code process
 - New `/` and `@` buttons below the message input textarea to quickly open the slash command picker and the file path picker
 - Command palette can now change Claude settings for the current session
 - New "Tmux config file" setting in the Terminal section to load your own `tmux.conf` (status bar, colors, key bindings, etc.) in TwiCC terminals

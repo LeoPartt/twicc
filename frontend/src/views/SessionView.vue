@@ -4,7 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDataStore } from '../stores/data'
 import { useSettingsStore, getModelRegistry } from '../stores/settings'
 import { useCommandRegistry } from '../composables/useCommandRegistry'
-import { killProcess, requestTitleSuggestion, notifySessionViewed, forceNotifySessionViewed } from '../composables/useWebSocket'
+import { requestTitleSuggestion, notifySessionViewed, forceNotifySessionViewed } from '../composables/useWebSocket'
+import { stopSessionProcess } from '../composables/useStopSessionProcess'
 import { useDragHover } from '../composables/useDragHover'
 import {
     PROCESS_STATE,
@@ -846,13 +847,7 @@ function registerSessionCommands() {
                 const s = store.getSession(sessionId.value)
                 return !!s && !s.draft && !s.archived
             },
-            action: async () => {
-                const ps = store.getProcessState(sessionId.value)
-                if (ps && ps.state !== PROCESS_STATE.DEAD && !ps.synthetic) {
-                    killProcess(sessionId.value)
-                }
-                await store.setSessionArchived(projectId.value, sessionId.value, true)
-            },
+            action: () => stopSessionProcess(sessionId.value, { archive: true }),
         },
         {
             id: 'session.unarchive',
@@ -895,7 +890,7 @@ function registerSessionCommands() {
                 const ps = store.getProcessState(sessionId.value)
                 return !!ps && ps.state !== PROCESS_STATE.DEAD && !ps.synthetic
             },
-            action: () => killProcess(sessionId.value),
+            action: () => stopSessionProcess(sessionId.value),
         },
         {
             id: 'session.delete-draft',

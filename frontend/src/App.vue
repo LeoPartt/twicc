@@ -6,13 +6,20 @@ import { useWebSocket, versionMismatchDetected } from './composables/useWebSocke
 import { useDataStore } from './stores/data'
 import { useSettingsStore } from './stores/settings'
 import { useAuthStore } from './stores/auth'
-import { COLOR_SCHEME } from './constants'
+import { COLOR_SCHEME, PROCESS_STATE } from './constants'
 import { useFavicon } from './composables/useFavicon'
 import ConnectionIndicator from './components/ConnectionIndicator.vue'
 import CustomNotification from './components/CustomNotification.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import SearchOverlay from './components/SearchOverlay.vue'
+import StopProcessConfirmDialog from './components/StopProcessConfirmDialog.vue'
 import { initStaticCommands } from './commands/staticCommands'
+import {
+    pendingConfirmation,
+    confirmPendingStop,
+    cancelPendingStop,
+    stopSessionProcess,
+} from './composables/useStopSessionProcess'
 
 const route = useRoute()
 const router = useRouter()
@@ -72,6 +79,12 @@ const searchOverlayRef = ref(null)
 
 // Route names where Ctrl+F opens in-session search (main chat tab only)
 const SESSION_CHAT_ROUTES = new Set(['session', 'projects-session'])
+
+// Triple-Escape shortcut (emergency stop of the current session's process)
+const TRIPLE_ESCAPE_WINDOW_MS = 333  // max gap between two consecutive Escape presses
+const TRIPLE_ESCAPE_COOLDOWN_MS = 1000  // after a trigger, ignore Escape for this long
+let escapeTimestamps = []  // rolling window of recent Escape presses
+let lastTripleEscapeAt = 0
 
 // All session route names (for tab keyboard shortcuts: Alt+Shift+{1-4, ←, →, ↑})
 const SESSION_ROUTES = new Set([
@@ -158,6 +171,58 @@ function handleGlobalKeydown(e) {
             window.dispatchEvent(new CustomEvent('twicc:tab-shortcut', { detail: tabAction }))
         }
     }
+    // Triple-Escape: emergency stop of the current chat session's process.
+    // Only active on chat routes (session, projects-session), only when a
+    // stoppable process exists. Does NOT preventDefault/stopPropagation —
+    // we let the Escape propagate so overlays close naturally.
+    //
+    // NOTE: the `return` statements below exit handleGlobalKeydown entirely.
+    // This is intentional and safe because this IS the last branch in the
+    // function. If you add a new shortcut AFTER this block, convert these
+    // early returns to not exit the function.
+    if (e.key === 'Escape' && !e.repeat) {
+        const now = performance.now()
+
+        if (now - lastTripleEscapeAt < TRIPLE_ESCAPE_COOLDOWN_MS) {
+            // Swallow counting during cooldown (but still let the event bubble)
+            return
+        }
+
+        if (!SESSION_CHAT_ROUTES.has(route.name)) {
+            escapeTimestamps = []
+            return
+        }
+        const sessionId = route.params.sessionId
+        if (!sessionId) return
+
+        const ps = dataStore.getProcessState(sessionId)
+        const canStop = ps && !ps.synthetic && ps.state && ps.state !== PROCESS_STATE.DEAD
+        if (!canStop) {
+            escapeTimestamps = []
+            return
+        }
+
+        // Reset the sequence if the gap since the previous press exceeded the
+        // window. Otherwise append. We measure gap-to-previous, NOT distance-to-first,
+        // so a natural tap-tap-tap at ~150 ms/key still triggers (3 gaps of 150 ms
+        // each fit within the 200 ms per-gap budget, total span ~300–450 ms).
+        const last = escapeTimestamps[escapeTimestamps.length - 1]
+        if (last === undefined || now - last < TRIPLE_ESCAPE_WINDOW_MS) {
+            escapeTimestamps.push(now)
+        } else {
+            escapeTimestamps = [now]
+        }
+
+        if (escapeTimestamps.length >= 3) {
+            lastTripleEscapeAt = now
+            escapeTimestamps = []
+            // Defer to the next tick so the triggering Escape event finishes
+            // propagating BEFORE the confirmation dialog opens. Otherwise the
+            // wa-dialog would catch the still-bubbling Escape and close itself
+            // immediately (only visible in the crons-confirmation path).
+            setTimeout(() => stopSessionProcess(sessionId), 0)
+        }
+    }
 }
 
 onMounted(() => {
@@ -199,6 +264,13 @@ const toastTheme = computed(() => {
     <ConnectionIndicator v-if="!isLoginPage && !isConnecting" :status="wsStatus" />
     <CommandPalette ref="commandPaletteRef" />
     <SearchOverlay ref="searchOverlayRef" />
+    <StopProcessConfirmDialog
+        :open="pendingConfirmation !== null"
+        :mode="pendingConfirmation?.mode ?? 'stop'"
+        :cron-count="pendingConfirmation?.cronCount ?? 0"
+        @confirm="confirmPendingStop"
+        @cancel="cancelPendingStop"
+    />
     <!-- Prevent browser default drop behavior (e.g. navigating to a dropped image).
          Our specific drop handlers in SessionItemsList call preventDefault themselves;
          this catches any drops that miss those zones. -->

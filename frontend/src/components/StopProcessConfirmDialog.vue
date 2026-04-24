@@ -7,47 +7,54 @@
  * explicit confirmation before proceeding. Supports two modes:
  * - 'stop': just stop the process
  * - 'archive': stop the process and archive the session
+ *
+ * Props-driven: the parent controls visibility via the `open` prop and
+ * receives `confirm` / `cancel` events. There is typically a single instance
+ * mounted globally in App.vue.
  */
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
-const emit = defineEmits(['confirm'])
+const props = defineProps({
+    open: { type: Boolean, default: false },
+    mode: { type: String, default: 'stop' },       // 'stop' | 'archive'
+    cronCount: { type: Number, default: 0 },
+})
+const emit = defineEmits(['confirm', 'cancel'])
 
 const dialogRef = ref(null)
-const mode = ref('stop')       // 'stop' | 'archive'
-const cronCount = ref(0)
 
-/**
- * Open the confirmation dialog.
- * @param {Object} options
- * @param {'stop'|'archive'} options.mode - Whether this is a stop-only or stop-and-archive action
- * @param {number} options.cronCount - Number of active crons on the session
- */
-function open({ mode: m = 'stop', cronCount: c = 0 } = {}) {
-    mode.value = m
-    cronCount.value = c
-    if (dialogRef.value) {
-        dialogRef.value.open = true
+// Set synchronously by handleConfirm / handleCancel so the subsequent
+// wa-hide event (fired when the dialog closes in reaction to props.open
+// going false) does NOT re-emit `cancel` on top of the button's emit.
+let closedByButton = false
+
+// Sync the `open` prop to the underlying wa-dialog's `open` attribute.
+watch(() => props.open, (isOpen) => {
+    if (!dialogRef.value) return
+    dialogRef.value.open = isOpen
+}, { immediate: true })
+
+// wa-hide fires when the dialog is requested to close: either because
+// props.open flipped to false (our watcher set it) or because the user
+// dismissed via Escape / the X button / backdrop.
+// We only want to emit `cancel` in the user-dismissal case.
+function onWaHide() {
+    if (closedByButton) {
+        closedByButton = false
+        return
     }
+    if (props.open) emit('cancel')
 }
 
-/**
- * Close the dialog without confirming.
- */
-function close() {
-    if (dialogRef.value) {
-        dialogRef.value.open = false
-    }
-}
-
-/**
- * User confirmed the action.
- */
 function handleConfirm() {
-    emit('confirm', { mode: mode.value })
-    close()
+    closedByButton = true
+    emit('confirm', { mode: props.mode })
 }
 
-defineExpose({ open, close })
+function handleCancel() {
+    closedByButton = true
+    emit('cancel')
+}
 </script>
 
 <template>
@@ -55,6 +62,7 @@ defineExpose({ open, close })
         ref="dialogRef"
         label="Active crons will be lost"
         class="stop-confirm-dialog"
+        @wa-hide="onWaHide"
     >
         <div class="dialog-content">
             <wa-callout variant="warning" size="small" open>
@@ -73,7 +81,7 @@ defineExpose({ open, close })
         </div>
 
         <div slot="footer" class="dialog-footer">
-            <wa-button variant="neutral" appearance="outlined" @click="close">
+            <wa-button variant="neutral" appearance="outlined" @click="handleCancel">
                 Cancel, keep the process
             </wa-button>
             <wa-button variant="danger" appearance="filled" @click="handleConfirm">

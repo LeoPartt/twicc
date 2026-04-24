@@ -4,14 +4,14 @@ import { useDataStore } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
 import { formatDate } from '../utils/date'
 import { CONTEXT_MAX_LABELS, PROCESS_STATE, PROCESS_STATE_COLORS, PROCESS_STATE_NAMES } from '../constants'
-import { killProcess, stopAgent } from '../composables/useWebSocket'
+import { stopAgent } from '../composables/useWebSocket'
+import { stopSessionProcess } from '../composables/useStopSessionProcess'
 import ProjectBadge from './ProjectBadge.vue'
 import ProcessIndicator from './ProcessIndicator.vue'
 import CodeCommentsIndicator from './CodeCommentsIndicator.vue'
 import ProcessDuration from './ProcessDuration.vue'
 import CostDisplay from './CostDisplay.vue'
 import AppTooltip from './AppTooltip.vue'
-import StopProcessConfirmDialog from './StopProcessConfirmDialog.vue'
 
 const props = defineProps({
     sessionId: {
@@ -200,19 +200,10 @@ const canStopAgent = computed(() => {
     return !!link?.isBackground
 })
 
-// Track when a stop request has been sent and we're waiting for the process to die
-const stoppingProcess = ref(false)
+// Track when a stop request has been sent and we're waiting for the process to die.
+// Sourced from the store so it stays in sync across all UIs (sidebar, header, shortcut).
+const stoppingProcess = computed(() => store.isSessionStopping(props.sessionId))
 const stoppingAgent = ref(false)
-
-// Confirmation dialog for stopping a process with active crons
-const stopConfirmDialogRef = ref(null)
-
-// Reset stoppingProcess when the process actually dies (or becomes un-stoppable for any reason)
-watch(canStopProcess, (canStop) => {
-    if (!canStop) {
-        stoppingProcess.value = false
-    }
-})
 
 // Reset stoppingAgent when the agent stops running
 watch(canStopAgent, (canStop) => {
@@ -222,18 +213,12 @@ watch(canStopAgent, (canStop) => {
 })
 
 /**
- * Stop the current process.
- * If the session has active crons, shows a confirmation dialog first.
+ * Stop the current process. Delegates to the centralized composable, which
+ * handles the active-crons confirmation and the stopping flag.
  */
 function handleStopProcess() {
-    if (canStopProcess.value && !stoppingProcess.value) {
-        if (hasActiveCrons.value) {
-            stopConfirmDialogRef.value?.open({ mode: 'stop', cronCount: activeCronCount.value })
-        } else {
-            stoppingProcess.value = true
-            killProcess(props.sessionId)
-        }
-    }
+    if (stoppingProcess.value) return
+    stopSessionProcess(props.sessionId)
 }
 
 /**
@@ -290,33 +275,11 @@ function openRenameDialog({ showHint = false } = {}) {
 /**
  * Archive the current session.
  * Also stops the process if running — archived and running are mutually exclusive.
- * If the process has active crons, shows a confirmation dialog first.
+ * If the process has active crons, the composable shows the confirmation dialog.
  */
 function handleArchive() {
-    if (session.value && !session.value.archived && !session.value.draft) {
-        if (canStopProcess.value && hasActiveCrons.value) {
-            stopConfirmDialogRef.value?.open({ mode: 'archive', cronCount: activeCronCount.value })
-        } else {
-            if (canStopProcess.value) {
-                killProcess(props.sessionId)
-            }
-            store.setSessionArchived(session.value.project_id, props.sessionId, true)
-        }
-    }
-}
-
-/**
- * Handle confirmation from the stop-process dialog.
- * Executes the deferred stop (or stop+archive) action.
- * @param {Object} payload
- * @param {'stop'|'archive'} payload.mode
- */
-function handleStopConfirm({ mode }) {
-    stoppingProcess.value = true
-    killProcess(props.sessionId)
-    if (mode === 'archive' && session.value) {
-        store.setSessionArchived(session.value.project_id, props.sessionId, true)
-    }
+    if (!session.value || session.value.archived || session.value.draft) return
+    stopSessionProcess(props.sessionId, { archive: true })
 }
 
 /**
@@ -654,9 +617,6 @@ defineExpose({
         </div><!-- /.session-collapsible-rows -->
 
         <wa-divider></wa-divider>
-
-        <!-- Confirmation dialog for stopping a process with active crons -->
-        <StopProcessConfirmDialog ref="stopConfirmDialogRef" @confirm="handleStopConfirm" />
 
         <!-- Compact mode toggle for non main session headers (no .session-title row to host it) -->
         <wa-button

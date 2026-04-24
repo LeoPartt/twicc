@@ -7,21 +7,21 @@
  * called ~9 and ~4 times respectively in the template for the same session.
  * Now each is called once via a computed, and Vue caches the result.
  */
-import { ref, computed, watch, inject } from 'vue'
+import { computed, watch, inject } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCodeCommentsStore } from '../stores/codeComments'
 import { useDataStore } from '../stores/data'
 import { useSettingsStore } from '../stores/settings'
 import { formatDate } from '../utils/date'
 import { PROCESS_STATE, PROCESS_STATE_COLORS, PROCESS_STATE_NAMES, SESSION_TIME_FORMAT } from '../constants'
-import { killProcess, markSessionReadState, cancelSessionViewedThrottle } from '../composables/useWebSocket'
+import { markSessionReadState, cancelSessionViewedThrottle } from '../composables/useWebSocket'
+import { stopSessionProcess } from '../composables/useStopSessionProcess'
 import { useDragHover } from '../composables/useDragHover'
 import ProjectBadge from './ProjectBadge.vue'
 import ProcessIndicator from './ProcessIndicator.vue'
 import ProcessDuration from './ProcessDuration.vue'
 import CostDisplay from './CostDisplay.vue'
 import AppTooltip from './AppTooltip.vue'
-import StopProcessConfirmDialog from './StopProcessConfirmDialog.vue'
 
 const props = defineProps({
     session: {
@@ -246,18 +246,8 @@ const canStop = computed(() => {
     return state && state !== PROCESS_STATE.DEAD
 })
 
-// Track when a stop request has been sent and we're waiting for the process to die
-const stoppingProcess = ref(false)
-
-// Confirmation dialog for stopping a process with active crons
-const stopConfirmDialogRef = ref(null)
-
-// Reset stoppingProcess when the process actually dies (or becomes un-stoppable for any reason)
-watch(canStop, (value) => {
-    if (!value) {
-        stoppingProcess.value = false
-    }
-})
+// Stopping state, shared across all UIs via the store.
+const stoppingProcess = computed(() => store.isSessionStopping(props.session.id))
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Link href for native "open in new tab" support
@@ -298,12 +288,7 @@ function handleMenuSelect(event) {
     if (action === 'rename') {
         openRenameDialog(session)
     } else if (action === 'stop') {
-        if (hasActiveCrons.value) {
-            stopConfirmDialogRef.value?.open({ mode: 'stop', cronCount: activeCronCount.value })
-        } else {
-            stoppingProcess.value = true
-            killProcess(session.id)
-        }
+        if (!stoppingProcess.value) stopSessionProcess(session.id)
     } else if (action === 'delete-draft') {
         // If viewing this draft, deselect it first (navigate to project home)
         if (props.active) {
@@ -311,15 +296,9 @@ function handleMenuSelect(event) {
         }
         store.deleteDraftSession(session.id)
     } else if (action === 'archive') {
-        // Stop the process if running — archived and running are mutually exclusive
-        if (canStop.value && hasActiveCrons.value) {
-            stopConfirmDialogRef.value?.open({ mode: 'archive', cronCount: activeCronCount.value })
-        } else {
-            if (canStop.value) {
-                killProcess(session.id)
-            }
-            store.setSessionArchived(session.project_id, session.id, true)
-        }
+        // Delegates to the composable: it handles the active-crons confirmation
+        // and the combined kill+archive in one place.
+        stopSessionProcess(session.id, { archive: true })
     } else if (action === 'unarchive') {
         store.setSessionArchived(session.project_id, session.id, false)
     } else if (action === 'pin-none' || action === 'pin-project' || action === 'pin-workspace' || action === 'pin-all') {
@@ -340,20 +319,6 @@ function handleMenuSelect(event) {
     }
 }
 
-/**
- * Handle confirmation from the stop-process dialog.
- * Executes the deferred stop (or stop+archive) action.
- * @param {Object} payload
- * @param {'stop'|'archive'} payload.mode
- */
-function handleStopConfirm({ mode }) {
-    const session = props.session
-    stoppingProcess.value = true
-    killProcess(session.id)
-    if (mode === 'archive') {
-        store.setSessionArchived(session.project_id, session.id, true)
-    }
-}
 </script>
 
 <template>
@@ -582,8 +547,6 @@ function handleStopConfirm({ mode }) {
             </template>
         </wa-dropdown>
         <AppTooltip :for="`session-menu-trigger-${session.id}`">Session actions</AppTooltip>
-        <!-- Confirmation dialog for stopping a process with active crons -->
-        <StopProcessConfirmDialog ref="stopConfirmDialogRef" @confirm="handleStopConfirm" />
     </div>
 </template>
 

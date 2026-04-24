@@ -293,6 +293,14 @@ export const useDataStore = defineStore('data', {
         // Process state getter - returns { state, error?, pending_request? } or null if no active process
         getProcessState: (state) => (sessionId) => state.processStates[sessionId] || null,
 
+        /**
+         * Whether a stop request has been sent for this session and we're
+         * waiting for the backend to confirm the process has died.
+         * Used by UI components to show a spinner / disabled state on stop buttons.
+         */
+        isSessionStopping: (state) => (sessionId) =>
+            state.processStates[sessionId]?.stopping === true,
+
         // Whether a session has active (non-stopped) streaming blocks
         hasActiveStreaming: (state) => (sessionId) => {
             const streaming = state.localState.streamingBlocks[sessionId]
@@ -2098,6 +2106,19 @@ export const useDataStore = defineStore('data', {
         },
 
         // Process state actions
+
+        /**
+         * Mark a session as "stopping" so the UI can reflect it immediately.
+         * The flag is automatically cleared when the backend replaces the
+         * processState entry (on state transition, including DEAD).
+         * No-op if the session has no active process state.
+         * @param {string} sessionId
+         */
+        setSessionStopping(sessionId) {
+            const ps = this.processStates[sessionId]
+            if (!ps) return
+            this.processStates[sessionId] = { ...ps, stopping: true }
+        },
 
         /**
          * Set process state for a session (from WebSocket process_state message).

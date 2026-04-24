@@ -96,6 +96,12 @@ const shortcutGroups = computed(() => {
             ]
         },
         {
+            label: 'Session chat',
+            shortcuts: [
+                { keys: ['Quick triple Esc'], description: 'Emergency stop of the running Claude Code process' },
+            ]
+        },
+        {
             label: 'Project home tabs',
             shortcuts: [
                 { keys: ['Alt', 'Shift', '1–4'], description: 'Jump to tab (Stats, Files, Git, Terminal)' },
