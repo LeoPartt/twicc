@@ -451,14 +451,21 @@ function handleSessionSelect(session) {
             router.push({ name: 'project', params: { projectId: projectId.value } })
         }
     } else if (isAllProjectsMode.value) {
+        // Preserve the active workspace explicitly so the router guard does not
+        // drop it when the destination project is outside the workspace (e.g.
+        // clicking a cross-filter pinned/active session owned by another project).
+        // This keeps the sidebar on its current workspace context — same
+        // behavior as the deep-linked "extra" session.
         router.push({
             name: 'projects-session',
-            params: { projectId: session.project_id, sessionId: session.id }
+            params: { projectId: session.project_id, sessionId: session.id },
+            query: activeWorkspaceId.value ? { workspace: activeWorkspaceId.value } : {},
         })
     } else {
         router.push({
             name: 'session',
-            params: { projectId: projectId.value, sessionId: session.id }
+            params: { projectId: projectId.value, sessionId: session.id },
+            query: activeWorkspaceId.value ? { workspace: activeWorkspaceId.value } : {},
         })
     }
 }
