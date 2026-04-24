@@ -9,10 +9,12 @@
 
 import { useCommandRegistry } from '../composables/useCommandRegistry'
 import { useSettingsStore, getModelRegistry, modelSupportsEffortXhigh, modelSupportsEffortMax } from '../stores/settings'
-import { useDataStore, sessionSortComparator } from '../stores/data'
+import { useDataStore, ALL_PROJECTS_ID } from '../stores/data'
 import { useWorkspacesStore } from '../stores/workspaces'
 import { useRoute } from 'vue-router'
 import { clearTabRouteParams } from '../utils/granularRoutes'
+import { computeSidebarSessionBlocks } from '../utils/sidebarSessions'
+import { toWorkspaceProjectId } from '../utils/workspaceIds'
 import {
     DISPLAY_MODE,
     COLOR_SCHEME,
@@ -44,10 +46,11 @@ const SESSION_NAV_LIMIT = 100
  *   4. Natural scope sessions for the current filter (project / workspace /
  *      all projects).
  *
- * Sticky groups get a thumbtack / signal icon so the user can tell at a
- * glance which ones come from outside the current filter. Navigation
- * preserves the active workspace query so the sidebar stays where it was,
- * same as clicking a cross-filter session directly in the sidebar.
+ * The grouping logic itself is shared with SessionList through
+ * `computeSidebarSessionBlocks` — this function only handles the mapping
+ * from blocks to palette items (labels, icons, actions) and the navigation
+ * rules that keep the sidebar where it was after opening a cross-filter
+ * session.
  */
 function buildSessionNavItems({
     data, workspaces, settings, route, router,
@@ -58,73 +61,25 @@ function buildSessionNavItems({
     const allProjects = isAllProjectsMode()
     const activeWorkspaceId = route.query.workspace || null
 
-    // Archived filters — same rules as SessionList (keep the selected session
-    // visible as an exception so a deep-linked archived session is reachable).
-    const showArchived = settings.isShowArchivedSessions
-    const showArchivedProjects = settings.isShowArchivedProjects
-    const archivedProjectIds = showArchivedProjects
-        ? null
-        : new Set(data.getProjects.filter(p => p.archived).map(p => p.id))
-    const passesArchiveFilter = (s) => (
-        (showArchived || !s.archived || s.id === currentSessionId)
-        && (!archivedProjectIds || !archivedProjectIds.has(s.project_id) || s.id === currentSessionId)
-    )
+    // Synthesize an `effectiveProjectId` matching the one ProjectView.vue
+    // derives for SessionList, so the shared helper reads from the same
+    // natural scope.
+    const effectiveProjectId = (() => {
+        if (!allProjects) return currentProjectId
+        if (activeWorkspaceId) return toWorkspaceProjectId(activeWorkspaceId)
+        return ALL_PROJECTS_ID
+    })()
 
-    // 1. Natural scope — mirrors SessionList.naturalSessions.
-    let natural
-    if (allProjects && activeWorkspaceId) {
-        const visibleIds = new Set(workspaces.getVisibleProjectIds(activeWorkspaceId))
-        natural = data.getAllSessions.filter(s => visibleIds.has(s.project_id))
-    } else if (allProjects) {
-        natural = data.getAllSessions
-    } else if (currentProjectId) {
-        natural = data.getProjectSessions(currentProjectId)
-    } else {
-        natural = data.getAllSessions
-    }
-    natural = natural.filter(s => !s.draft).filter(passesArchiveFilter)
-    const naturalIds = new Set(natural.map(s => s.id))
-
-    // 2. Cross-filter pinned — mirrors SessionList.crossFilterPinnedSessions.
-    const activeWs = activeWorkspaceId ? workspaces.getWorkspaceById(activeWorkspaceId) : null
-    const crossPinned = Object.values(data.sessions).filter(s => {
-        if (!s.pinned) return false
-        if (s.parent_session_id || s.draft) return false
-        if (naturalIds.has(s.id)) return false
-        if (s.pinned === 'all') return true
-        if (s.pinned === 'workspace' && activeWs) return activeWs.projectIds.includes(s.project_id)
-        return false
-    }).filter(passesArchiveFilter)
-    crossPinned.sort(sessionSortComparator(data.processStates))
-    const crossPinnedIds = new Set(crossPinned.map(s => s.id))
-
-    // 3. Cross-filter active — gated by the user setting, mirrors
-    //    SessionList.crossFilterActiveSessions.
-    let crossActive = []
-    if (settings.isShowActiveAcrossFilters) {
-        const processStates = data.processStates
-        crossActive = Object.values(data.sessions).filter(s => {
-            if (s.parent_session_id || s.draft) return false
-            if (naturalIds.has(s.id) || crossPinnedIds.has(s.id)) return false
-            const ps = processStates[s.id]
-            const hasProcess = ps != null
-            const isUnread = !!s.last_new_content_at
-                && (!s.last_viewed_at || s.last_new_content_at > s.last_viewed_at)
-            return hasProcess || isUnread
-        }).filter(passesArchiveFilter)
-        crossActive.sort(sessionSortComparator(data.processStates))
-    }
-    const crossActiveIds = new Set(crossActive.map(s => s.id))
-
-    // 4. Extra (selected session out of every other block).
-    let extra = null
-    if (currentSessionId
-        && !naturalIds.has(currentSessionId)
-        && !crossPinnedIds.has(currentSessionId)
-        && !crossActiveIds.has(currentSessionId)) {
-        const s = data.sessions[currentSessionId]
-        if (s && !s.parent_session_id && !s.draft) extra = s
-    }
+    const { extra, crossFilterPinned, crossFilterActive, natural } = computeSidebarSessionBlocks({
+        data,
+        workspaces,
+        effectiveProjectId,
+        activeWorkspaceId,
+        sessionId: currentSessionId,
+        showArchived: settings.isShowArchivedSessions,
+        showArchivedProjects: settings.isShowArchivedProjects,
+        showActiveAcrossFilters: settings.isShowActiveAcrossFilters,
+    })
 
     const navigate = (s) => {
         const name = allProjects ? 'projects-session' : 'session'
@@ -151,9 +106,9 @@ function buildSessionNavItems({
 
     const ordered = [
         ...(extra ? [toItem(extra, 'link')] : []),
-        ...crossPinned.map(s => toItem(s, 'thumbtack')),
-        ...crossActive.map(s => toItem(s, 'signal')),
-        ...natural.map(s => toItem(s, null)),
+        ...crossFilterPinned.map(s => toItem(s, 'thumbtack')),
+        ...crossFilterActive.map(s => toItem(s, 'signal')),
+        ...natural.filter(s => !s.draft).map(s => toItem(s, null)),
     ]
     return ordered.slice(0, SESSION_NAV_LIMIT)
 }

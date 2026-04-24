@@ -8,9 +8,10 @@
  */
 import { ref, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { useDataStore, ALL_PROJECTS_ID, sessionSortComparator } from '../stores/data'
+import { useDataStore, ALL_PROJECTS_ID } from '../stores/data'
 import { useWorkspacesStore } from '../stores/workspaces'
 import { isWorkspaceProjectId, extractWorkspaceId } from '../utils/workspaceIds'
+import { computeSidebarSessionBlocks } from '../utils/sidebarSessions'
 import VirtualScroller from './VirtualScroller.vue'
 import SessionListItem from './SessionListItem.vue'
 
@@ -53,6 +54,7 @@ const props = defineProps({
 })
 
 const store = useDataStore()
+const workspacesStore = useWorkspacesStore()
 const route = useRoute()
 
 // Natural scope project IDs for the current sidebar filter, passed down so
@@ -62,8 +64,7 @@ const route = useRoute()
 const scopeProjectIds = computed(() => {
     if (isWorkspaceProjectId(props.projectId)) {
         const wsId = extractWorkspaceId(props.projectId)
-        const wsStore = useWorkspacesStore()
-        return wsStore.getVisibleProjectIds(wsId)
+        return workspacesStore.getVisibleProjectIds(wsId)
     }
     if (props.projectId === ALL_PROJECTS_ID) return null
     return [props.projectId]
@@ -79,114 +80,21 @@ const activeWorkspaceId = computed(() => {
     return route.query.workspace || null
 })
 
-/**
- * Apply the "hide archived sessions / archived projects" filter, with the
- * usual exception: the currently selected session is never hidden (so a
- * deep-linked archived session stays visible even when the toggles are off).
- */
-function applyArchivedFilters(list) {
-    const archivedProjectIds = props.showArchivedProjects
-        ? null
-        : new Set(store.getProjects.filter(p => p.archived).map(p => p.id))
-    return list.filter(s =>
-        (props.showArchived || !s.archived || s.id === props.sessionId) &&
-        (!archivedProjectIds || !archivedProjectIds.has(s.project_id) || s.id === props.sessionId)
-    )
-}
+// All four sidebar blocks, computed in one shot by the shared helper so the
+// command palette's "Go to Session…" sub-picker can use the exact same
+// ordering / filtering / grouping logic.
+const sessionBlocks = computed(() => computeSidebarSessionBlocks({
+    data: store,
+    workspaces: workspacesStore,
+    effectiveProjectId: props.projectId,
+    activeWorkspaceId: activeWorkspaceId.value,
+    sessionId: props.sessionId,
+    showArchived: props.showArchived,
+    showArchivedProjects: props.showArchivedProjects,
+    showActiveAcrossFilters: props.showActiveAcrossFilters,
+}))
 
-// Sessions naturally in scope for the current sidebar filter (workspace, all
-// projects or single project). Already sorted by `sessionSortComparator` via
-// the store getters.
-const naturalSessions = computed(() => {
-    if (isWorkspaceProjectId(props.projectId)) {
-        const wsId = extractWorkspaceId(props.projectId)
-        const wsStore = useWorkspacesStore()
-        const visibleIds = new Set(wsStore.getVisibleProjectIds(wsId))
-        return applyArchivedFilters(store.getAllSessions.filter(s => visibleIds.has(s.project_id)))
-    }
-    if (props.projectId === ALL_PROJECTS_ID) {
-        return applyArchivedFilters(store.getAllSessions)
-    }
-    return applyArchivedFilters(store.getProjectSessions(props.projectId))
-})
-
-/**
- * Pinned sessions that do NOT naturally belong to the current sidebar filter
- * but should still appear thanks to their pin mode:
- *   - `all`       → always visible, regardless of filter
- *   - `workspace` → visible when an active workspace contains their project
- *   - `project`   → never cross-filter (only shown in its own project scope)
- *
- * Sorted by the standard comparator, which reduces to process-first → mtime
- * inside this group since every member is pinned.
- */
-const crossFilterPinnedSessions = computed(() => {
-    const naturalIds = new Set(naturalSessions.value.map(s => s.id))
-    const wsId = activeWorkspaceId.value
-    const wsStore = useWorkspacesStore()
-    const activeWs = wsId ? wsStore.getWorkspaceById(wsId) : null
-
-    const matches = Object.values(store.sessions).filter(s => {
-        if (!s.pinned) return false
-        if (s.parent_session_id) return false
-        if (naturalIds.has(s.id)) return false
-        if (s.pinned === 'all') return true
-        if (s.pinned === 'workspace' && activeWs) {
-            return activeWs.projectIds.includes(s.project_id)
-        }
-        return false
-    })
-
-    return applyArchivedFilters(matches).sort(sessionSortComparator(store.processStates))
-})
-
-/**
- * Sessions that have a running Claude SDK process or unread content but fall
- * outside the current sidebar filter (and are not cross-filter pinned already).
- * Gated by the `showActiveAcrossFilters` prop — when the setting is off, this
- * block is empty and the UI keeps its previous shape.
- *
- * "Unread" mirrors the DB-side check: `last_new_content_at` is set and is more
- * recent than `last_viewed_at` (or the session has never been viewed). We do
- * NOT apply the "only in user_turn" refinement used by `SessionListItem`'s
- * unread *indicator* — a session mid-assistant-turn still deserves to stay
- * surfaced. Drafts are excluded (they have no server-side activity).
- */
-const crossFilterActiveSessions = computed(() => {
-    if (!props.showActiveAcrossFilters) return []
-    const naturalIds = new Set(naturalSessions.value.map(s => s.id))
-    const pinnedIds = new Set(crossFilterPinnedSessions.value.map(s => s.id))
-    const processStates = store.processStates
-
-    const matches = Object.values(store.sessions).filter(s => {
-        if (s.parent_session_id) return false
-        if (s.draft) return false
-        if (naturalIds.has(s.id)) return false
-        if (pinnedIds.has(s.id)) return false
-        const ps = processStates[s.id]
-        const hasProcess = ps != null
-        const isUnread = !!s.last_new_content_at
-            && (!s.last_viewed_at || s.last_new_content_at > s.last_viewed_at)
-        return hasProcess || isUnread
-    })
-
-    return applyArchivedFilters(matches).sort(sessionSortComparator(processStates))
-})
-
-/**
- * Id of the selected session when it belongs to none of the upstream blocks —
- * i.e. a deep link to a session that nothing would otherwise bring on screen.
- * Prepended at the very top of the list with a divider below it.
- */
-const extraSessionId = computed(() => {
-    if (!props.sessionId) return null
-    if (naturalSessions.value.some(s => s.id === props.sessionId)) return null
-    if (crossFilterPinnedSessions.value.some(s => s.id === props.sessionId)) return null
-    if (crossFilterActiveSessions.value.some(s => s.id === props.sessionId)) return null
-    const s = store.sessions[props.sessionId]
-    if (!s || s.parent_session_id) return null
-    return s.id
-})
+const extraSessionId = computed(() => sessionBlocks.value.extra?.id ?? null)
 
 /**
  * Ids of the last item of each top block that should be followed by a divider.
@@ -195,23 +103,16 @@ const extraSessionId = computed(() => {
  * a trailing divider.
  */
 const dividerAfterIds = computed(() => {
-    const pinned = crossFilterPinnedSessions.value
-    const active = crossFilterActiveSessions.value
-    const natural = naturalSessions.value
-    const hasExtra = !!extraSessionId.value
-    const hasPinned = pinned.length > 0
-    const hasActive = active.length > 0
-    const hasNatural = natural.length > 0
-
+    const { extra, crossFilterPinned, crossFilterActive, natural } = sessionBlocks.value
     const ids = new Set()
-    if (hasExtra && (hasPinned || hasActive || hasNatural)) {
-        ids.add(extraSessionId.value)
+    if (extra && (crossFilterPinned.length || crossFilterActive.length || natural.length)) {
+        ids.add(extra.id)
     }
-    if (hasPinned && (hasActive || hasNatural)) {
-        ids.add(pinned[pinned.length - 1].id)
+    if (crossFilterPinned.length && (crossFilterActive.length || natural.length)) {
+        ids.add(crossFilterPinned[crossFilterPinned.length - 1].id)
     }
-    if (hasActive && hasNatural) {
-        ids.add(active[active.length - 1].id)
+    if (crossFilterActive.length && natural.length) {
+        ids.add(crossFilterActive[crossFilterActive.length - 1].id)
     }
     return ids
 })
@@ -220,14 +121,12 @@ const dividerAfterIds = computed(() => {
 //   [extra?, ...crossFilterPinned, ...crossFilterActive, ...natural]
 // Dividers live in the template, keyed off `dividerAfterIds`.
 const allSessions = computed(() => {
+    const { extra, crossFilterPinned, crossFilterActive, natural } = sessionBlocks.value
     const result = []
-    if (extraSessionId.value) {
-        const extra = store.sessions[extraSessionId.value]
-        if (extra) result.push(extra)
-    }
-    result.push(...crossFilterPinnedSessions.value)
-    result.push(...crossFilterActiveSessions.value)
-    result.push(...naturalSessions.value)
+    if (extra) result.push(extra)
+    result.push(...crossFilterPinned)
+    result.push(...crossFilterActive)
+    result.push(...natural)
     return result
 })
 
