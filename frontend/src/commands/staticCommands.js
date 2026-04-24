@@ -35,6 +35,57 @@ import {
 // the sticky groups visible.
 const SESSION_NAV_LIMIT = 100
 
+// Priority used to aggregate process states across a workspace: the highest
+// priority active state among the workspace's sessions wins.
+const PROCESS_STATE_PRIORITY = { starting: 3, assistant_turn: 2, user_turn: 1 }
+
+/**
+ * Aggregate activity across all sessions in a workspace for a compact summary
+ * in the command palette (and wherever else a single workspace-level
+ * indicator is useful).
+ *
+ * Walks every session whose project belongs to the workspace (skipping
+ * subagents, drafts and archived sessions) and folds two values:
+ *   - `processState`: the highest-priority state currently present in any
+ *     session of the workspace, or `null` when no session is running. The
+ *     priority mirrors the sidebar's "what requires attention first"
+ *     ordering: starting → assistant_turn → user_turn. `dead` is ignored.
+ *   - `hasUnread`: true as soon as any session has content added after it
+ *     was last viewed (or never viewed).
+ */
+function aggregateWorkspaceActivity(data, projectIds) {
+    const projectSet = new Set(projectIds || [])
+    if (projectSet.size === 0) return { processState: null, hasUnread: false }
+
+    let bestState = null
+    let bestPriority = -1
+    let hasUnread = false
+    const processStates = data.processStates
+    for (const s of Object.values(data.sessions)) {
+        if (!projectSet.has(s.project_id)) continue
+        if (s.parent_session_id) continue
+        if (s.draft) continue
+        if (s.archived) continue
+        const ps = processStates[s.id]
+        if (ps && ps.state && ps.state !== 'dead') {
+            const priority = PROCESS_STATE_PRIORITY[ps.state] ?? -1
+            if (priority > bestPriority) {
+                bestState = ps.state
+                bestPriority = priority
+            }
+        }
+        if (!hasUnread
+            && s.last_new_content_at
+            && (!s.last_viewed_at || s.last_new_content_at > s.last_viewed_at)) {
+            hasUnread = true
+        }
+    }
+    return {
+        processState: bestState ? { state: bestState } : null,
+        hasUnread,
+    }
+}
+
 /**
  * Build the "Go to Session…" sub-picker items so they mirror SessionList's
  * sidebar order and groups:
@@ -94,21 +145,35 @@ function buildSessionNavItems({
         router.push({ name, params, query })
     }
 
-    const toItem = (s, icon) => {
-        const item = {
+    // Each session item carries the visual metadata the palette uses to
+    // mirror a sidebar row: project color dot + pin icon on the left, process
+    // state indicator / unread flag on the right. `group` drives the
+    // inter-group divider rendered by CommandPalette in nested mode.
+    const toItem = (s, group) => {
+        const project = data.projects[s.project_id]
+        const processState = data.processStates[s.id] || null
+        const hasUnread = !!s.last_new_content_at
+            && (!s.last_viewed_at || s.last_new_content_at > s.last_viewed_at)
+        return {
             id: s.id,
             label: s.title || s.id,
             action: () => navigate(s),
+            group,
+            session: {
+                projectId: s.project_id,
+                projectColor: project?.color ?? null,
+                pinned: s.pinned || null,
+                processState,
+                hasUnread,
+            },
         }
-        if (icon) item.icon = icon
-        return item
     }
 
     const ordered = [
-        ...(extra ? [toItem(extra, 'link')] : []),
-        ...crossFilterPinned.map(s => toItem(s, 'thumbtack')),
-        ...crossFilterActive.map(s => toItem(s, 'signal')),
-        ...natural.filter(s => !s.draft).map(s => toItem(s, null)),
+        ...(extra ? [toItem(extra, 'extra')] : []),
+        ...crossFilterPinned.map(s => toItem(s, 'pinned')),
+        ...crossFilterActive.map(s => toItem(s, 'active')),
+        ...natural.filter(s => !s.draft).map(s => toItem(s, 'natural')),
     ]
     return ordered.slice(0, SESSION_NAV_LIMIT)
 }
@@ -220,11 +285,19 @@ export function initStaticCommands(router) {
             label: 'Go to Workspace\u2026',
             icon: 'layer-group',
             category: 'navigation',
-            items: () => workspaces.getSelectableWorkspaces.map(ws => ({
-                id: ws.id,
-                label: ws.name,
-                action: () => router.push({ name: 'projects-all', query: { workspace: ws.id } }),
-            })),
+            items: () => workspaces.getSelectableWorkspaces.map(ws => {
+                const { processState, hasUnread } = aggregateWorkspaceActivity(data, ws.projectIds)
+                return {
+                    id: ws.id,
+                    label: ws.name,
+                    action: () => router.push({ name: 'projects-all', query: { workspace: ws.id } }),
+                    workspace: {
+                        color: ws.color || null,
+                        processState,
+                        hasUnread,
+                    },
+                }
+            }),
         },
         {
             id: 'nav.search',

@@ -18,6 +18,7 @@
 import { ref, computed, watch, nextTick, shallowRef } from 'vue'
 import { useCommandRegistry } from '../composables/useCommandRegistry'
 import { fuzzyMatch } from '../utils/fuzzyMatch'
+import ProcessIndicator from './ProcessIndicator.vue'
 
 const { isOpen, availableCommands, commandsByCategory, openPalette, closePalette } = useCommandRegistry()
 
@@ -391,20 +392,65 @@ defineExpose({ open, close })
                 </template>
                 <!-- Nested mode -->
                 <template v-else>
-                    <div
-                        v-for="item in nestedResults"
-                        :key="item.id"
-                        class="command-item"
-                        :class="{ active: item.id === activeId }"
-                        :data-id="item.id"
-                        @click="selectNestedItem(item)"
-                        @pointerenter="activeId = item.id"
-                    >
-                        <wa-icon v-if="item.active" name="check" class="command-icon active-check" />
-                        <wa-icon v-else-if="item.icon" :name="item.icon" class="command-icon" />
-                        <span v-else class="command-icon-spacer" />
-                        <span class="command-label" v-html="item.highlighted" />
-                    </div>
+                    <template v-for="(item, i) in nestedResults" :key="item.id">
+                        <!-- Inter-group divider (e.g. between cross-filter pinned and natural sessions) -->
+                        <wa-divider
+                            v-if="i > 0 && item.group && item.group !== nestedResults[i - 1].group"
+                            class="palette-group-divider"
+                        ></wa-divider>
+                        <div
+                            class="command-item"
+                            :class="{ active: item.id === activeId, 'command-item--session': !!item.session, 'command-item--workspace': !!item.workspace }"
+                            :data-id="item.id"
+                            @click="selectNestedItem(item)"
+                            @pointerenter="activeId = item.id"
+                        >
+                            <!-- Session row: project color dot + pin icon on the left (mirrors sidebar) -->
+                            <template v-if="item.session">
+                                <span
+                                    class="palette-project-dot"
+                                    :style="item.session.projectColor ? { '--dot-color': item.session.projectColor } : null"
+                                ></span>
+                                <wa-icon
+                                    v-if="item.session.pinned"
+                                    name="thumbtack"
+                                    class="palette-pin-icon"
+                                ></wa-icon>
+                            </template>
+                            <!-- Workspace row: layer-group icon tinted with the workspace color -->
+                            <template v-else-if="item.workspace">
+                                <wa-icon
+                                    name="layer-group"
+                                    class="palette-workspace-icon"
+                                    :style="item.workspace.color ? { color: item.workspace.color } : null"
+                                ></wa-icon>
+                            </template>
+                            <!-- Regular sub-item: active check, icon, or spacer -->
+                            <template v-else>
+                                <wa-icon v-if="item.active" name="check" class="command-icon active-check" />
+                                <wa-icon v-else-if="item.icon" :name="item.icon" class="command-icon" />
+                                <span v-else class="command-icon-spacer" />
+                            </template>
+
+                            <span class="command-label" v-html="item.highlighted" />
+
+                            <!-- Session / workspace row: aggregated process state or unread flag on the right -->
+                            <template v-if="item.session || item.workspace">
+                                <ProcessIndicator
+                                    v-if="(item.session || item.workspace).processState"
+                                    :state="(item.session || item.workspace).processState.state"
+                                    :has-active-crons="(((item.session || item.workspace).processState.active_crons?.length) || 0) > 0"
+                                    size="small"
+                                    class="palette-process-indicator"
+                                />
+                                <wa-icon
+                                    v-else-if="(item.session || item.workspace).hasUnread"
+                                    name="eye"
+                                    class="palette-unread-icon"
+                                ></wa-icon>
+                            </template>
+                        </div>
+                    </template>
                 </template>
                 <!-- Empty state -->
                 <div v-if="visibleItems.length === 0" class="palette-empty">No matching commands</div>
@@ -525,6 +571,59 @@ wa-divider {
 }
 .active-check {
     color: var(--wa-color-success-60);
+}
+
+/* Divider rendered between session groups (extra → pinned → active →
+   natural) in nested mode; matches the sidebar's in-list divider. */
+.palette-group-divider {
+    --width: var(--divider-size);
+    --spacing: var(--wa-space-2xs);
+    margin-inline: var(--wa-space-m);
+}
+
+/* Session row: colored project dot on the left (inline with the label). */
+.palette-project-dot {
+    width: var(--wa-space-s);
+    height: var(--wa-space-s);
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1px solid;
+    box-sizing: border-box;
+    background-color: var(--dot-color, transparent);
+    border-color: var(--dot-color, var(--wa-color-border-quiet));
+}
+
+/* Session row: pin thumbtack, same color/rotation as the sidebar. */
+.palette-pin-icon {
+    flex-shrink: 0;
+    font-size: var(--wa-font-size-2xs);
+    color: var(--wa-color-yellow-80) !important;
+    transform: rotate(30deg);
+}
+
+/* Workspace row: layer-group icon inline with the label; the `style` binding
+   tints it with the workspace's configured color when one is set. */
+.palette-workspace-icon {
+    width: 1.25em;
+    text-align: center;
+    flex-shrink: 0;
+    font-size: 0.9em;
+    color: var(--wa-color-text-muted);
+}
+
+/* Session row: right-aligned process state indicator. */
+.palette-process-indicator {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: var(--wa-font-size-xs);
+}
+
+/* Session row: right-aligned unread flag (shown when no process state). */
+.palette-unread-icon {
+    margin-left: auto;
+    flex-shrink: 0;
+    color: var(--wa-color-warning-60);
+    font-size: var(--wa-font-size-xs);
 }
 
 .palette-empty {
