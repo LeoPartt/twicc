@@ -323,6 +323,7 @@ export function sendChangelogSeen(version) {
 // Pending resolve callbacks for usage file validation request-response
 let _usageFileValidateResolve = null
 let _usageDumpPathValidateResolve = null
+let _tmuxConfigPathValidateResolve = null
 
 /**
  * Validate a usage JSON file path (read mode) on the backend.
@@ -351,6 +352,22 @@ export function sendValidateUsageDumpPath(filePath) {
         const sent = sendWsMessage({ type: 'validate_usage_dump_path', file_path: filePath })
         if (!sent) {
             _usageDumpPathValidateResolve = null
+            resolve({ valid: false, message: 'Not connected' })
+        }
+    })
+}
+
+/**
+ * Validate a tmux config file path on the backend.
+ * @param {string} filePath - The file path to validate
+ * @returns {Promise<{valid: boolean, message: string}>}
+ */
+export function sendValidateTmuxConfigPath(filePath) {
+    return new Promise((resolve) => {
+        _tmuxConfigPathValidateResolve = resolve
+        const sent = sendWsMessage({ type: 'validate_tmux_config_path', file_path: filePath })
+        if (!sent) {
+            _tmuxConfigPathValidateResolve = null
             resolve({ valid: false, message: 'Not connected' })
         }
     })
@@ -832,6 +849,12 @@ export function useWebSocket() {
                 if (_usageDumpPathValidateResolve) {
                     _usageDumpPathValidateResolve({ valid: msg.valid, message: msg.message })
                     _usageDumpPathValidateResolve = null
+                }
+                break
+            case 'tmux_config_path_validated':
+                if (_tmuxConfigPathValidateResolve) {
+                    _tmuxConfigPathValidateResolve({ valid: msg.valid, message: msg.message })
+                    _tmuxConfigPathValidateResolve = null
                 }
                 break
             case 'synced_settings_updated':

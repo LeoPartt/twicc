@@ -45,6 +45,7 @@ SYNCED_SETTINGS_DEFAULTS: dict = {
     "defaultContextMax": 200_000,
     "autoUnpinOnArchive": True,
     "terminalUseTmux": True,
+    "terminalTmuxConfigPath": "",
     "waTheme": "default",
     "waBrand": "cyan",
     "usageJsonFileEnabled": False,

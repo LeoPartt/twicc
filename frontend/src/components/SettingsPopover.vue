@@ -9,7 +9,7 @@ import { DISPLAY_MODE, COLOR_SCHEME, SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SES
 import NotificationSettings from './NotificationSettings.vue'
 import AppTooltip from './AppTooltip.vue'
 import ChangelogDialog from './ChangelogDialog.vue'
-import { sendChangelogSeen, sendValidateUsageFile, sendValidateUsageDumpPath } from '../composables/useWebSocket'
+import { sendChangelogSeen, sendValidateUsageFile, sendValidateUsageDumpPath, sendValidateTmuxConfigPath } from '../composables/useWebSocket'
 import { vPopoverFocusFix } from '../directives/vPopoverFocusFix'
 
 const router = useRouter()
@@ -64,6 +64,10 @@ function selectSection(id) {
         usageFileValidation.value = null
         usageDumpPathInput.value = usageDumpFilePath.value || ''
         usageDumpValidation.value = null
+    }
+    if (id === 'terminal') {
+        tmuxConfigPathInput.value = terminalTmuxConfigPath.value || ''
+        tmuxConfigValidation.value = null
     }
 }
 
@@ -178,6 +182,7 @@ const titleGenerationEnabled = computed(() => store.isTitleGenerationEnabled)
 const titleAutoApply = computed(() => store.isTitleAutoApply)
 const titleSystemPrompt = computed(() => store.getTitleSystemPrompt)
 const terminalUseTmux = computed(() => store.isTerminalUseTmux)
+const terminalTmuxConfigPath = computed(() => store.getTerminalTmuxConfigPath)
 const compactSessionList = computed(() => store.isCompactSessionList)
 const defaultPermissionMode = computed(() => store.getDefaultPermissionMode)
 const defaultModel = computed(() => store.getDefaultModel)
@@ -215,6 +220,17 @@ const usageDumpPathModified = computed(() => usageDumpPathInput.value.trim() !==
 const usageDumpApplyIcon = computed(() => {
     if (usageDumpValidation.value?.valid === false) return 'x-circle'
     if (usageDumpPathModified.value) return 'triangle-exclamation'
+    return 'check'
+})
+
+// Tmux config path — local input + validation state
+const tmuxConfigPathInput = ref('')
+const tmuxConfigValidating = ref(false)
+const tmuxConfigValidation = ref(null) // { valid: boolean, message: string } | null
+const tmuxConfigPathModified = computed(() => tmuxConfigPathInput.value.trim() !== (terminalTmuxConfigPath.value || ''))
+const tmuxConfigApplyIcon = computed(() => {
+    if (tmuxConfigValidation.value?.valid === false) return 'x-circle'
+    if (tmuxConfigPathModified.value) return 'triangle-exclamation'
     return 'check'
 })
 
@@ -448,6 +464,32 @@ function onTitleSystemPromptChange(event) {
  */
 function onTmuxChange(event) {
     store.setTerminalUseTmux(event.target.checked)
+}
+
+function onTmuxConfigPathInputChange(event) {
+    tmuxConfigPathInput.value = event.target.value
+    if (tmuxConfigValidation.value) tmuxConfigValidation.value = null
+}
+
+async function onTmuxConfigPathApply() {
+    const path = tmuxConfigPathInput.value.trim()
+    if (!path) {
+        tmuxConfigValidation.value = null
+        store.setTerminalTmuxConfigPath('')
+        return
+    }
+    tmuxConfigValidating.value = true
+    tmuxConfigValidation.value = null
+    try {
+        const result = await sendValidateTmuxConfigPath(path)
+        if (result.valid) {
+            store.setTerminalTmuxConfigPath(path)
+        } else {
+            tmuxConfigValidation.value = result
+        }
+    } finally {
+        tmuxConfigValidating.value = false
+    }
 }
 
 /**
@@ -956,6 +998,42 @@ function onChangelogClose() {
                             size="small"
                         >Enabled</wa-switch>
                         <span class="setting-group-hint">Tmux sessions are destroyed when Claude sessions are archived.</span>
+                    </div>
+                    <div class="setting-group" v-if="terminalUseTmux">
+                        <label class="setting-group-label">Tmux config file <wa-icon name="cloud" class="synced-icon"></wa-icon></label>
+                        <div class="usage-file-input-row">
+                            <wa-input
+                                :value="tmuxConfigPathInput"
+                                @input="onTmuxConfigPathInputChange"
+                                @keydown.enter="onTmuxConfigPathApply"
+                                placeholder="/path/to/tmux.conf (leave empty to ignore)"
+                                size="small"
+                                :disabled="tmuxConfigValidating"
+                            ></wa-input>
+                            <wa-button
+                                size="small"
+                                variant="neutral"
+                                @click="onTmuxConfigPathApply"
+                                :disabled="tmuxConfigValidating"
+                            >
+                                <wa-spinner v-if="tmuxConfigValidating" slot="start"></wa-spinner>
+                                <wa-icon v-else :name="tmuxConfigApplyIcon" slot="start"></wa-icon>
+                                Apply
+                            </wa-button>
+                        </div>
+                        <span class="setting-group-hint">
+                            TwiCC always runs tmux on a dedicated socket (<code>-L twicc</code>) and forces
+                            <code>mouse off</code> after session creation — these invariants are required for
+                            frontend selection and scroll to work. Your config is loaded first (so status bar,
+                            colors, bindings apply), then the mouse option is overridden at the session level.
+                            Leave empty to ignore any config. Applies to new terminals only.
+                        </span>
+                        <wa-callout
+                            v-if="tmuxConfigValidation && !tmuxConfigValidation.valid"
+                            variant="danger"
+                            size="small"
+                            class="usage-file-validation"
+                        >{{ tmuxConfigValidation.message }}</wa-callout>
                     </div>
                 </section>
 

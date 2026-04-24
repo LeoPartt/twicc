@@ -156,6 +156,39 @@ def wants_tmux(scope: dict) -> bool:
     return params.get("tmux", ["0"])[0] == "1"
 
 
+def validate_tmux_config_path(file_path: str) -> tuple[bool, str]:
+    """Validate that a tmux config file exists and is readable.
+
+    Does not attempt to parse the file — tmux itself will report errors on
+    start if the syntax is invalid. We only gate path-level issues here.
+
+    Returns a ``(valid, message)`` tuple.
+    """
+    if not file_path:
+        return False, "No file path provided"
+
+    path = os.path.expanduser(file_path)
+    if not os.path.isfile(path):
+        return False, "File not found"
+    if not os.access(path, os.R_OK):
+        return False, "File is not readable"
+    return True, "Valid tmux config"
+
+
+def resolve_tmux_config_path(file_path: str) -> str | None:
+    """Return an absolute usable tmux config path, or None if unusable.
+
+    Expands ``~`` and verifies the path is readable. Invalid or missing paths
+    return None so the caller can fall back to ``/dev/null`` (no config).
+    """
+    if not file_path:
+        return None
+    path = os.path.expanduser(file_path)
+    if not os.path.isfile(path) or not os.access(path, os.R_OK):
+        return None
+    return path
+
+
 def tmux_session_name(terminal_context: str, terminal_index: int = 0) -> str:
     """Return the tmux session name for a given terminal context and index.
 
@@ -227,14 +260,25 @@ def spawn_pty(cwd: str) -> tuple[int, int]:
     return child_pid, master_fd
 
 
-def spawn_tmux_pty(cwd: str, terminal_context: str, terminal_index: int = 0) -> tuple[int, int]:
+def spawn_tmux_pty(
+    cwd: str,
+    terminal_context: str,
+    terminal_index: int = 0,
+    config_path: str | None = None,
+) -> tuple[int, int]:
     """Fork a PTY running tmux, attaching to or creating a named terminal.
 
-    Uses ``tmux -L twicc -f /dev/null new-session -A -s <name>`` which:
-    - ``-L twicc``: use a dedicated socket (isolation from user's tmux)
-    - ``-f /dev/null``: ignore user's tmux.conf
+    Uses ``tmux -L twicc -f <cfg> new-session -A -s <name>`` which:
+    - ``-L twicc``: always use a dedicated socket (isolation from user's tmux)
+    - ``-f <cfg>``: config file — ``/dev/null`` unless a valid user path is passed
     - ``new-session -A``: attach if session exists, create if not
     - ``-s <name>``: deterministic session name
+
+    The dedicated socket is non-negotiable. When a user config is loaded, the
+    caller must still force ``mouse off`` at session level after the session is
+    created (see ``terminal_application``). This protects the frontend's
+    mouse-driven selection and scroll from any ``set -g mouse on`` in the user's
+    config.
 
     Returns (child_pid, master_fd) — same interface as spawn_pty.
     The child_pid is the tmux *client* process, not the server.
@@ -243,6 +287,8 @@ def spawn_tmux_pty(cwd: str, terminal_context: str, terminal_index: int = 0) -> 
     tmux_path = get_tmux_path()
     if tmux_path is None:
         raise FileNotFoundError("tmux is not installed")
+
+    config_arg = config_path if config_path else "/dev/null"
 
     name = tmux_session_name(terminal_context, terminal_index)
     child_pid, master_fd = pty.fork()
@@ -259,7 +305,7 @@ def spawn_tmux_pty(cwd: str, terminal_context: str, terminal_index: int = 0) -> 
         os.execvp(tmux_path, [
             "tmux",
             "-L", TMUX_SOCKET_NAME,
-            "-f", "/dev/null",
+            "-f", config_arg,
             "new-session", "-A",
             "-s", name,
         ])
@@ -653,9 +699,26 @@ async def terminal_application(scope, receive, send):
     if use_tmux and archived and not tmux_session_exists(terminal_context, terminal_index):
         use_tmux = False
 
+    tmux_config_path: str | None = None
+    if use_tmux:
+        # Resolve user-provided tmux config (synced setting), fall back to no
+        # config if missing or unreadable. The dedicated socket and forced
+        # `mouse off` (set below after creation) remain non-negotiable.
+        from twicc.synced_settings import read_synced_settings
+        synced = await sync_to_async(read_synced_settings)()
+        configured_path = synced.get("terminalTmuxConfigPath") or ""
+        tmux_config_path = resolve_tmux_config_path(configured_path)
+        if configured_path and tmux_config_path is None:
+            logger.warning(
+                "Configured tmux config path is unreadable, falling back to default: %s",
+                configured_path,
+            )
+
     try:
         if use_tmux:
-            child_pid, master_fd = spawn_tmux_pty(cwd, terminal_context, terminal_index)
+            child_pid, master_fd = spawn_tmux_pty(
+                cwd, terminal_context, terminal_index, config_path=tmux_config_path,
+            )
         else:
             child_pid, master_fd = spawn_pty(cwd)
     except OSError:
@@ -672,6 +735,11 @@ async def terminal_application(scope, receive, send):
     # mouse events. All scroll and selection is handled by the frontend
     # (touch handlers on mobile, capture-phase handlers on desktop).
     # Tmux scrollback is handled via the tmux_scroll backend command.
+    #
+    # This override is critical when a user-provided tmux config is loaded:
+    # any `set -g mouse on` in that config would otherwise break frontend
+    # selection. The session-level set-option below overrides the global
+    # one loaded from the config file.
     if use_tmux:
         # Wait for the tmux session to be fully created — spawn_tmux_pty
         # forks and returns immediately, but the child needs time to exec
@@ -682,7 +750,7 @@ async def terminal_application(scope, receive, send):
             await asyncio.sleep(0.1)
 
         # Force mouse off at both session and global level — ensures clean
-        # state regardless of prior tmux server configuration.
+        # state regardless of prior tmux server configuration or user config.
         await asyncio.to_thread(tmux_set_option, terminal_context, "mouse", "off", terminal_index=terminal_index)
         await asyncio.to_thread(_tmux_set_global_option, "mouse", "off")
 

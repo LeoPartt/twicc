@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - New "Always show active sessions" sidebar option that surfaces running and unread sessions from other projects at the top, so you never lose track of them while working in a different scope
 - New `/` and `@` buttons below the message input textarea to quickly open the slash command picker and the file path picker
 - Command palette can now change Claude settings for the current session
+- New "Tmux config file" setting in the Terminal section to load your own `tmux.conf` (status bar, colors, key bindings, etc.) in TwiCC terminals
 
 ### Changed
 

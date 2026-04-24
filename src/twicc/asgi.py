@@ -654,6 +654,7 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         - kill_terminal: kill a secondary terminal's tmux session and broadcast
         - validate_usage_file: validate a usage JSON file path (read mode) and return result
         - validate_usage_dump_path: validate a usage dump file path (write mode) and return result
+        - validate_tmux_config_path: validate a tmux config file path and return result
         - changelog_seen: acknowledge that the user has seen the changelog for a version
         """
         msg_type = content.get("type")
@@ -715,6 +716,9 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
         elif msg_type == "validate_usage_dump_path":
             await self._handle_validate_usage_dump_path(content)
+
+        elif msg_type == "validate_tmux_config_path":
+            await self._handle_validate_tmux_config_path(content)
 
         elif msg_type == "changelog_seen":
             await self._handle_changelog_seen(content)
@@ -1309,6 +1313,18 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
         valid, message = await sync_to_async(validate_usage_dump_path)(file_path.strip())
         await self.send_json({"type": "usage_dump_path_validated", "valid": valid, "message": message})
+
+    async def _handle_validate_tmux_config_path(self, content: dict) -> None:
+        """Validate a tmux config file path and return the result to the client."""
+        file_path = content.get("file_path", "")
+        if not isinstance(file_path, str) or not file_path.strip():
+            await self.send_json({"type": "tmux_config_path_validated", "valid": False, "message": "No file path provided"})
+            return
+
+        from twicc.terminal import validate_tmux_config_path
+
+        valid, message = await sync_to_async(validate_tmux_config_path)(file_path.strip())
+        await self.send_json({"type": "tmux_config_path_validated", "valid": valid, "message": message})
 
     async def _handle_update_workspaces(self, content: dict) -> None:
         """Handle workspace definitions update from a client."""

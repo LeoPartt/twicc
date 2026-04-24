@@ -346,6 +346,7 @@ export const SYNCED_SETTINGS_KEYS = new Set([
     'defaultContextMax',
     'autoUnpinOnArchive',
     'terminalUseTmux',
+    'terminalTmuxConfigPath',
     'waTheme',
     'waBrand',
     'usageJsonFileEnabled',

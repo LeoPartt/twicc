@@ -48,6 +48,7 @@ export const SETTINGS_SCHEMA = {
     titleSystemPrompt: null,
     autoUnpinOnArchive: null,
     terminalUseTmux: null,
+    terminalTmuxConfigPath: null,
     defaultPermissionMode: null,
     defaultModel: null,
     defaultEffort: null,
@@ -87,6 +88,7 @@ const SETTINGS_VALIDATORS = {
     maxCachedSessions: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 50,
     autoUnpinOnArchive: (v) => typeof v === 'boolean',
     terminalUseTmux: (v) => typeof v === 'boolean',
+    terminalTmuxConfigPath: (v) => typeof v === 'string',
     showDiffs: (v) => typeof v === 'boolean',
     toolDiffWordWrap: (v) => typeof v === 'boolean',
     toolDiffSideBySide: (v) => typeof v === 'boolean',
@@ -274,6 +276,7 @@ export const useSettingsStore = defineStore('settings', {
         getMaxCachedSessions: (state) => state.maxCachedSessions,
         isAutoUnpinOnArchive: (state) => state.autoUnpinOnArchive,
         isTerminalUseTmux: (state) => state.terminalUseTmux,
+        getTerminalTmuxConfigPath: (state) => state.terminalTmuxConfigPath,
         isShowDiffs: (state) => state.showDiffs,
         isToolDiffWordWrap: (state) => state.toolDiffWordWrap,
         isToolDiffSideBySide: (state) => state.toolDiffSideBySide,
@@ -447,6 +450,17 @@ export const useSettingsStore = defineStore('settings', {
         setTerminalUseTmux(enabled) {
             if (SETTINGS_VALIDATORS.terminalUseTmux(enabled)) {
                 this.terminalUseTmux = enabled
+            }
+        },
+
+        /**
+         * Set the path of a tmux configuration file to load when spawning
+         * terminals. Empty string means "ignore user config".
+         * @param {string} path
+         */
+        setTerminalTmuxConfigPath(path) {
+            if (SETTINGS_VALIDATORS.terminalTmuxConfigPath(path)) {
+                this.terminalTmuxConfigPath = path
             }
         },
 
@@ -824,6 +838,7 @@ export function initSettings() {
             maxCachedSessions: store.maxCachedSessions,
             autoUnpinOnArchive: store.autoUnpinOnArchive,
             terminalUseTmux: store.terminalUseTmux,
+            terminalTmuxConfigPath: store.terminalTmuxConfigPath,
             showDiffs: store.showDiffs,
             toolDiffWordWrap: store.toolDiffWordWrap,
             toolDiffSideBySide: store.toolDiffSideBySide,
