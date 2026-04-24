@@ -2,11 +2,24 @@
 import { computed, watch, ref, readonly, provide, inject, onActivated, onDeactivated, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDataStore } from '../stores/data'
-import { useSettingsStore } from '../stores/settings'
+import { useSettingsStore, getModelRegistry } from '../stores/settings'
 import { useCommandRegistry } from '../composables/useCommandRegistry'
 import { killProcess, requestTitleSuggestion, notifySessionViewed, forceNotifySessionViewed } from '../composables/useWebSocket'
 import { useDragHover } from '../composables/useDragHover'
-import { PROCESS_STATE } from '../constants'
+import {
+    PROCESS_STATE,
+    PERMISSION_MODE,
+    PERMISSION_MODE_LABELS,
+    EFFORT,
+    EFFORT_LABELS,
+    THINKING,
+    THINKING_LABELS,
+    CLAUDE_IN_CHROME,
+    CLAUDE_IN_CHROME_LABELS,
+    CONTEXT_MAX,
+    CONTEXT_MAX_LABELS,
+    getModelLabel,
+} from '../constants'
 import SessionHeader from '../components/SessionHeader.vue'
 import SessionItemsList from '../components/SessionItemsList.vue'
 import SessionContent from '../components/SessionContent.vue'
@@ -803,6 +816,12 @@ const SESSION_COMMAND_IDS = [
     'session.stop',
     'session.delete-draft',
     'session.focus-input',
+    'session.model',
+    'session.effort',
+    'session.permission',
+    'session.thinking',
+    'session.context',
+    'session.chrome',
 ]
 
 function registerSessionCommands() {
@@ -908,7 +927,250 @@ function registerSessionCommands() {
                 }
             },
         },
+        ...buildSessionSettingsCommands(),
     ])
+}
+
+// ─── Session settings commands (mirror of MessageInput settings popover) ────
+
+function formatRetirementDate(isoDate) {
+    return new Date(isoDate + 'T00:00:00').toLocaleDateString(undefined, {
+        month: 'short', day: 'numeric', year: 'numeric',
+    })
+}
+
+function sessionSettingsGate() {
+    const s = store.getSession(sessionId.value)
+    if (!s) return null
+    const gate = sessionItemsListRef.value?.getSessionGateState()
+    if (!gate) return null
+    if (gate.isStarting) return null
+    return gate
+}
+
+function getSessionSettingValue(key) {
+    return sessionItemsListRef.value?.getSessionSetting(key) ?? null
+}
+
+function setSessionSettingValue(key, value) {
+    sessionItemsListRef.value?.setSessionSetting(key, value)
+}
+
+function buildSessionSettingsCommands() {
+    const isAvailable = () => !!sessionSettingsGate()
+
+    return [
+        {
+            id: 'session.model',
+            label: 'Change Session Model…',
+            icon: 'robot',
+            category: 'session',
+            when: isAvailable,
+            items: () => {
+                const current = getSessionSettingValue('selected_model')
+                const defaultModel = settingsStore.getDefaultModel
+                const registry = getModelRegistry()
+                const defaultEntry = registry.find(e => e.selectedModel === defaultModel)
+                const defaultSuffix = defaultEntry?.latest ? ` (latest: ${defaultEntry.version})` : ''
+                const defaultLabel = `${getModelLabel(defaultModel)}${defaultSuffix}`
+
+                const items = [
+                    {
+                        id: '__default__',
+                        group: 'default',
+                        label: `Default: ${defaultLabel}`,
+                        action: () => setSessionSettingValue('selected_model', null),
+                        active: current === null,
+                    },
+                ]
+                for (const entry of registry.filter(e => e.latest)) {
+                    items.push({
+                        id: entry.selectedModel,
+                        group: 'latest',
+                        label: `${getModelLabel(entry.selectedModel)} (latest: ${entry.version})`,
+                        action: () => setSessionSettingValue('selected_model', entry.selectedModel),
+                        active: current === entry.selectedModel,
+                    })
+                }
+                for (const entry of registry.filter(e => !e.latest)) {
+                    items.push({
+                        id: entry.selectedModel,
+                        group: 'older',
+                        label: `${getModelLabel(entry.selectedModel)} (until ${formatRetirementDate(entry.retirementDate)})`,
+                        action: () => setSessionSettingValue('selected_model', entry.selectedModel),
+                        active: current === entry.selectedModel,
+                    })
+                }
+                return items
+            },
+        },
+        {
+            id: 'session.effort',
+            label: 'Change Session Effort…',
+            icon: 'gauge',
+            category: 'session',
+            when: isAvailable,
+            items: () => {
+                const gate = sessionSettingsGate()
+                if (!gate) return []
+                const current = getSessionSettingValue('effort')
+                const defaultEffort = settingsStore.getDefaultEffort
+
+                const items = [
+                    {
+                        id: '__default__',
+                        group: 'default',
+                        label: `Default: ${EFFORT_LABELS[defaultEffort]}`,
+                        action: () => setSessionSettingValue('effort', null),
+                        active: current === null,
+                    },
+                ]
+                for (const value of Object.values(EFFORT)) {
+                    if (value === EFFORT.X_HIGH && !gate.isEffortXhighAvailable) continue
+                    if (value === EFFORT.MAX && !gate.isEffortMaxAvailable) continue
+                    items.push({
+                        id: value,
+                        group: 'force',
+                        label: EFFORT_LABELS[value],
+                        action: () => setSessionSettingValue('effort', value),
+                        active: current === value,
+                    })
+                }
+                return items
+            },
+        },
+        {
+            id: 'session.thinking',
+            label: 'Change Session Thinking…',
+            icon: 'brain',
+            category: 'session',
+            when: isAvailable,
+            items: () => {
+                const current = getSessionSettingValue('thinking_enabled')
+                const defaultThinking = settingsStore.getDefaultThinking
+                return [
+                    {
+                        id: '__default__',
+                        group: 'default',
+                        label: `Default: ${THINKING_LABELS[defaultThinking]}`,
+                        action: () => setSessionSettingValue('thinking_enabled', null),
+                        active: current === null,
+                    },
+                    {
+                        id: 'enabled',
+                        group: 'force',
+                        label: THINKING_LABELS[THINKING.ENABLED],
+                        action: () => setSessionSettingValue('thinking_enabled', THINKING.ENABLED),
+                        active: current === THINKING.ENABLED,
+                    },
+                    {
+                        id: 'disabled',
+                        group: 'force',
+                        label: THINKING_LABELS[THINKING.DISABLED],
+                        action: () => setSessionSettingValue('thinking_enabled', THINKING.DISABLED),
+                        active: current === THINKING.DISABLED,
+                    },
+                ]
+            },
+        },
+        {
+            id: 'session.permission',
+            label: 'Change Session Permission Mode…',
+            icon: 'shield-halved',
+            category: 'session',
+            when: isAvailable,
+            items: () => {
+                const current = getSessionSettingValue('permission_mode')
+                const defaultPermission = settingsStore.getDefaultPermissionMode
+
+                const items = [
+                    {
+                        id: '__default__',
+                        group: 'default',
+                        label: `Default: ${PERMISSION_MODE_LABELS[defaultPermission]}`,
+                        action: () => setSessionSettingValue('permission_mode', null),
+                        active: current === null,
+                    },
+                ]
+                for (const value of Object.values(PERMISSION_MODE)) {
+                    items.push({
+                        id: value,
+                        group: 'force',
+                        label: PERMISSION_MODE_LABELS[value],
+                        action: () => setSessionSettingValue('permission_mode', value),
+                        active: current === value,
+                    })
+                }
+                return items
+            },
+        },
+        {
+            id: 'session.context',
+            label: 'Change Session Context Size…',
+            icon: 'window-maximize',
+            category: 'session',
+            when: () => {
+                const gate = sessionSettingsGate()
+                if (!gate) return false
+                return !gate.isContextMaxForced && !gate.isContextMaxForcedByModel
+            },
+            items: () => {
+                const current = getSessionSettingValue('context_max')
+                const defaultContext = settingsStore.getDefaultContextMax
+
+                const items = [
+                    {
+                        id: '__default__',
+                        group: 'default',
+                        label: `Default: ${CONTEXT_MAX_LABELS[defaultContext]}`,
+                        action: () => setSessionSettingValue('context_max', null),
+                        active: current === null,
+                    },
+                ]
+                for (const value of Object.values(CONTEXT_MAX)) {
+                    items.push({
+                        id: String(value),
+                        group: 'force',
+                        label: CONTEXT_MAX_LABELS[value],
+                        action: () => setSessionSettingValue('context_max', value),
+                        active: current === value,
+                    })
+                }
+                return items
+            },
+        },
+        {
+            id: 'session.chrome',
+            label: 'Change Session Claude in Chrome MCP…',
+            icon: 'globe',
+            category: 'session',
+            when: isAvailable,
+            items: () => {
+                const current = getSessionSettingValue('claude_in_chrome')
+                const defaultChrome = settingsStore.getDefaultClaudeInChrome
+
+                const items = [
+                    {
+                        id: '__default__',
+                        group: 'default',
+                        label: `Default: ${CLAUDE_IN_CHROME_LABELS[defaultChrome]}`,
+                        action: () => setSessionSettingValue('claude_in_chrome', null),
+                        active: current === null,
+                    },
+                ]
+                for (const value of Object.values(CLAUDE_IN_CHROME)) {
+                    items.push({
+                        id: String(value),
+                        group: 'force',
+                        label: CLAUDE_IN_CHROME_LABELS[value],
+                        action: () => setSessionSettingValue('claude_in_chrome', value),
+                        active: current === value,
+                    })
+                }
+                return items
+            },
+        },
+    ]
 }
 
 onBeforeUnmount(() => {

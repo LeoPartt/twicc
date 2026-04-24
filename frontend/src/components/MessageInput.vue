@@ -1468,7 +1468,28 @@ function openMessageSnippetsDialog() {
     messageSnippetsDialogRef.value?.open()
 }
 
-defineExpose({ insertTextAtCursor })
+function getSessionSetting(key) {
+    const ref_ = SELECTED_REFS[key]
+    return ref_ ? ref_.value : null
+}
+
+function setSessionSetting(key, value) {
+    const ref_ = SELECTED_REFS[key]
+    if (ref_) ref_.value = value
+}
+
+function getSessionGateState() {
+    return {
+        isStarting: isStarting.value,
+        isContextMaxForced: isContextMaxForced.value,
+        isContextMaxForcedByModel: isContextMaxForcedByModel.value,
+        isEffortXhighAvailable: isEffortXhighAvailable.value,
+        isEffortMaxAvailable: isEffortMaxAvailable.value,
+        effectiveModel: selectedModel.value ?? settingsStore.getDefaultModel,
+    }
+}
+
+defineExpose({ insertTextAtCursor, getSessionSetting, setSessionSetting, getSessionGateState })
 </script>
 
 <template>

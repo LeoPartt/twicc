@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Pin a session to your current project, across a whole workspace, or across every project — pinned sessions stay at the top of the sidebar in every matching context
 - New "Always show active sessions" sidebar option that surfaces running and unread sessions from other projects at the top, so you never lose track of them while working in a different scope
 - New `/` and `@` buttons below the message input textarea to quickly open the slash command picker and the file path picker
+- Command palette can now change Claude settings for the current session
 
 ### Changed
 

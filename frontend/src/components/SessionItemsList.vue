@@ -1481,6 +1481,9 @@ defineExpose({
     getScrollerElement,
     handleForwardedDrop,
     insertTextAtCursor: (text) => messageInputRef.value?.insertTextAtCursor(text),
+    getSessionSetting: (key) => messageInputRef.value?.getSessionSetting(key) ?? null,
+    setSessionSetting: (key, value) => messageInputRef.value?.setSessionSetting(key, value),
+    getSessionGateState: () => messageInputRef.value?.getSessionGateState() ?? null,
 })
 </script>
 

@@ -24,6 +24,8 @@ import {
     EFFORT_LABELS,
     THINKING,
     THINKING_LABELS,
+    CLAUDE_IN_CHROME,
+    CLAUDE_IN_CHROME_LABELS,
     CONTEXT_MAX,
     CONTEXT_MAX_LABELS,
     getModelLabel,
@@ -693,6 +695,18 @@ export function initStaticCommands(router) {
                 label: CONTEXT_MAX_LABELS[value],
                 action: () => settings.setDefaultContextMax(value),
                 active: settings.defaultContextMax === value,
+            })),
+        },
+        {
+            id: 'claude.chrome',
+            label: 'Change Default Claude in Chrome MCP\u2026',
+            icon: 'globe',
+            category: 'claude',
+            items: () => Object.values(CLAUDE_IN_CHROME).map(value => ({
+                id: String(value),
+                label: CLAUDE_IN_CHROME_LABELS[value],
+                action: () => settings.setDefaultClaudeInChrome(value),
+                active: settings.defaultClaudeInChrome === value,
             })),
         },
 
