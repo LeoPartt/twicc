@@ -704,9 +704,13 @@ function handleStopConfirm({ mode }) {
 .session-menu {
     display: block;
     position: absolute;
-    top: var(--wa-space-xs);
-    right: 0;
+    top: var(--wa-space-2xs);
+    right: var(--wa-space-xs);
     z-index: 1;
+}
+.session-item-wrapper--compact .session-menu {
+    top: 0;
+    right: var(--wa-space-xs);
 }
 
 .session-menu-trigger {
