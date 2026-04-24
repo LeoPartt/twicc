@@ -61,13 +61,18 @@ const messageSnippetsDialogRef = ref(null)
 
 // File picker popup state (@ mention)
 const filePickerRef = ref(null)
-const atCursorPosition = ref(null)  // cursor position right after the '@' character
-const fileMirroredLength = ref(0)   // length of filter text mirrored into textarea after '@'
+const atCursorPosition = ref(null)  // cursor position right after the '@' character (typed-trigger mode)
+const fileMirroredLength = ref(0)   // length of filter text mirrored into textarea after '@' (typed-trigger mode)
+const atButtonMode = ref(false)     // true when opened via snippets bar button (no trigger char inserted)
+const atInsertPosition = ref(null)  // cursor position where the file path will be inserted (button mode)
+let atLastCloseTime = 0             // timestamp of last close (to prevent reopen on same click)
 
 // Slash command picker popup state (/ at start)
 const slashPickerRef = ref(null)
-const slashCursorPosition = ref(null)  // cursor position right after the '/' character
-const slashMirroredLength = ref(0)     // length of filter text mirrored into textarea after '/'
+const slashCursorPosition = ref(null)  // cursor position right after the '/' character (typed-trigger mode)
+const slashMirroredLength = ref(0)     // length of filter text mirrored into textarea after '/' (typed-trigger mode)
+const slashButtonMode = ref(false)     // true when opened via snippets bar button (no trigger char inserted)
+let slashLastCloseTime = 0             // timestamp of last close (to prevent reopen on same click)
 
 // Message history picker popup state (! at start, or PageUp on first line)
 const historyPickerRef = ref(null)
@@ -740,48 +745,81 @@ function mirrorFilterToTextarea(pos, mirroredLengthRef, filterText) {
 /**
  * Handle filter text changes from the file picker popup.
  * Mirrors the typed filter text into the textarea right after the '@'.
+ * In button mode, no mirroring — the filter stays inside the popup.
  */
 function onFilePickerFilterChange(filterText) {
+    if (atButtonMode.value) return
     mirrorFilterToTextarea(atCursorPosition.value, fileMirroredLength, filterText)
 }
 
 /**
  * Handle filter text changes from the slash command picker popup.
  * Mirrors the typed filter text into the textarea right after the '/'.
+ * In button mode, no mirroring — the filter stays inside the popup.
  */
 function onSlashPickerFilterChange(filterText) {
+    if (slashButtonMode.value) return
     mirrorFilterToTextarea(slashCursorPosition.value, slashMirroredLength, filterText)
 }
 
 /**
  * Handle file selection from the file picker popup.
- * Inserts the relative path right after the '@' character at the recorded position.
+ * Typed-trigger mode: replaces '@' + mirrored filter with '@path '.
+ * Button mode: inserts '[space?]@path ' at the memorized cursor position.
  */
 async function onFilePickerSelect(relativePath) {
-    const pos = atCursorPosition.value
-    if (pos != null && pos <= messageText.value.length) {
-        const before = messageText.value.slice(0, pos)
-        // Skip the mirrored filter text that was transparently inserted
-        const after = messageText.value.slice(pos + fileMirroredLength.value)
-        // Add a trailing space unless the text after already starts with one
-        const space = after.startsWith(' ') ? '' : ' '
-        const newText = before + relativePath + space + after
-        messageText.value = newText
+    if (atButtonMode.value) {
+        const pos = atInsertPosition.value
+        if (pos != null && pos <= messageText.value.length) {
+            const before = messageText.value.slice(0, pos)
+            const after = messageText.value.slice(pos)
+            // Prepend a space if the preceding char is non-whitespace (so '@' parses correctly)
+            const prevChar = pos > 0 ? messageText.value[pos - 1] : ''
+            const needsLeadingSpace = pos > 0 && !/\s/.test(prevChar)
+            const leading = needsLeadingSpace ? ' ' : ''
+            const trailing = after.startsWith(' ') ? '' : ' '
+            const insertion = leading + '@' + relativePath + trailing
+            const newText = before + insertion + after
+            messageText.value = newText
 
-        // Force update the web component and inner textarea
-        if (textareaRef.value) {
-            textareaRef.value.value = newText
-            const inner = textareaRef.value.shadowRoot?.querySelector('textarea')
-            if (inner) {
-                inner.value = newText
-                const newPos = pos + relativePath.length + space.length
-                inner.setSelectionRange(newPos, newPos)
+            if (textareaRef.value) {
+                textareaRef.value.value = newText
+                const inner = textareaRef.value.shadowRoot?.querySelector('textarea')
+                if (inner) {
+                    inner.value = newText
+                    const newPos = pos + insertion.length
+                    inner.setSelectionRange(newPos, newPos)
+                }
+            }
+        }
+    } else {
+        const pos = atCursorPosition.value
+        if (pos != null && pos <= messageText.value.length) {
+            const before = messageText.value.slice(0, pos)
+            // Skip the mirrored filter text that was transparently inserted
+            const after = messageText.value.slice(pos + fileMirroredLength.value)
+            // Add a trailing space unless the text after already starts with one
+            const space = after.startsWith(' ') ? '' : ' '
+            const newText = before + relativePath + space + after
+            messageText.value = newText
+
+            // Force update the web component and inner textarea
+            if (textareaRef.value) {
+                textareaRef.value.value = newText
+                const inner = textareaRef.value.shadowRoot?.querySelector('textarea')
+                if (inner) {
+                    inner.value = newText
+                    const newPos = pos + relativePath.length + space.length
+                    inner.setSelectionRange(newPos, newPos)
+                }
             }
         }
     }
 
     atCursorPosition.value = null
     fileMirroredLength.value = 0
+    atButtonMode.value = false
+    atInsertPosition.value = null
     await nextTick()
     textareaRef.value?.focus()
     adjustTextareaHeight()
@@ -793,15 +831,23 @@ async function onFilePickerSelect(relativePath) {
  * trigger character + any filter text that was mirrored.
  */
 function onFilePickerClose() {
+    atLastCloseTime = Date.now()
+    const isButtonMode = atButtonMode.value
     const pos = atCursorPosition.value
     const mirrorLen = fileMirroredLength.value
+    const buttonPos = atInsertPosition.value
     atCursorPosition.value = null
     fileMirroredLength.value = 0
+    atButtonMode.value = false
+    atInsertPosition.value = null
 
     textareaRef.value?.focus()
-    if (pos != null) {
-        const inner = textareaRef.value?.shadowRoot?.querySelector('textarea')
-        if (inner) {
+    const inner = textareaRef.value?.shadowRoot?.querySelector('textarea')
+    if (inner) {
+        if (isButtonMode && buttonPos != null) {
+            // Button mode: restore cursor to the memorized position, textarea untouched
+            inner.setSelectionRange(buttonPos, buttonPos)
+        } else if (pos != null) {
             const cursorTarget = pos + mirrorLen
             inner.setSelectionRange(cursorTarget, cursorTarget)
         }
@@ -811,10 +857,13 @@ function onFilePickerClose() {
 /**
  * Handle slash command selection from the slash command picker popup.
  * Replaces the entire textarea content with the selected command text.
+ * (The button is only enabled when textarea is empty, so typed-trigger and
+ * button-mode behave identically here: the final textarea is just the command.)
  */
 async function onSlashCommandSelect(commandText) {
     slashCursorPosition.value = null
     slashMirroredLength.value = 0
+    slashButtonMode.value = false
     messageText.value = commandText
 
     // Force update the web component and inner textarea
@@ -839,10 +888,19 @@ async function onSlashCommandSelect(commandText) {
  * trigger character + any filter text that was mirrored.
  */
 function onSlashCommandPickerClose() {
+    slashLastCloseTime = Date.now()
+    const isButtonMode = slashButtonMode.value
     const pos = slashCursorPosition.value
     const mirrorLen = slashMirroredLength.value
     slashCursorPosition.value = null
     slashMirroredLength.value = 0
+    slashButtonMode.value = false
+
+    // Button mode: nothing to restore — textarea was never modified
+    if (isButtonMode) {
+        textareaRef.value?.focus()
+        return
+    }
 
     textareaRef.value?.focus()
     if (pos != null) {
@@ -1004,6 +1062,53 @@ function openHistoryFromButton() {
     histCursorPosition.value = null
     histMirroredLength.value = 0
     nextTick(() => historyPickerRef.value?.open())
+}
+
+/**
+ * Open the slash command picker from the snippets bar button.
+ * Only available when the textarea is empty. Does NOT insert '/' in the
+ * textarea — the trigger character is added only if the user actually
+ * selects a command. If the popup is already open, clicking elsewhere
+ * closes it via the popup's click-outside handler; the 300ms guard
+ * prevents reopening on the same click.
+ */
+async function openSlashFromButton() {
+    // If the picker just closed (via click-outside from this same click), skip reopening
+    if (Date.now() - slashLastCloseTime < 300) return
+    if (slashPickerRef.value?.isOpen) return
+    // Guard: button should already be disabled when not empty, but double-check
+    if (messageText.value.length > 0) return
+
+    slashButtonMode.value = true
+    slashCursorPosition.value = null
+    slashMirroredLength.value = 0
+    await nextTick()
+    slashPickerRef.value?.open()
+}
+
+/**
+ * Open the file picker from the snippets bar button.
+ * Does NOT insert '@' in the textarea — the trigger character is added
+ * only if the user actually selects a file path. The cursor position is
+ * memorized so the selected path can be inserted at the right place.
+ * If the popup is already open, clicking elsewhere closes it via the
+ * popup's click-outside handler; the 300ms guard prevents reopening on
+ * the same click.
+ */
+async function openAtFromButton() {
+    // If the picker just closed (via click-outside from this same click), skip reopening
+    if (Date.now() - atLastCloseTime < 300) return
+    if (filePickerRef.value?.isOpen) return
+
+    const inner = textareaRef.value?.shadowRoot?.querySelector('textarea')
+    const cursorPos = inner ? inner.selectionStart : messageText.value.length
+
+    atButtonMode.value = true
+    atInsertPosition.value = cursorPos
+    atCursorPosition.value = null
+    fileMirroredLength.value = 0
+    await nextTick()
+    filePickerRef.value?.open()
 }
 
 /**
@@ -1442,10 +1547,13 @@ defineExpose({ insertTextAtCursor })
         <MessageSnippetsBar
             :snippets="snippetsForProject"
             :show-history-button="!isDraft"
+            :can-open-slash="messageText.length === 0"
             @snippet-press="handleSnippetPress"
             @snippet-disabled-press="handleSnippetDisabledPress"
             @manage-snippets="openMessageSnippetsDialog"
             @open-history="openHistoryFromButton"
+            @open-slash="openSlashFromButton"
+            @open-at="openAtFromButton"
         />
 
         <!-- Message snippets dialog (teleported out of the flex container) -->

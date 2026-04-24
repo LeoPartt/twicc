@@ -17,9 +17,21 @@ defineProps({
         type: Boolean,
         default: false,
     },
+    /** Whether the slash command button is enabled (disabled when textarea is not empty). */
+    canOpenSlash: {
+        type: Boolean,
+        default: true,
+    },
 })
 
-const emit = defineEmits(['snippet-press', 'snippet-disabled-press', 'manage-snippets', 'open-history'])
+const emit = defineEmits([
+    'snippet-press',
+    'snippet-disabled-press',
+    'manage-snippets',
+    'open-history',
+    'open-slash',
+    'open-at',
+])
 
 const messageSnippetsStore = useMessageSnippetsStore()
 const dataStore = useDataStore()
@@ -66,7 +78,26 @@ function handleSnippetClick(snippet) {
         >
             <wa-icon name="arrow-up"></wa-icon>
         </button>
-        <wa-divider v-if="showHistoryButton" orientation="vertical" class="history-divider"></wa-divider>
+        <button
+            :id="canOpenSlash ? undefined : 'slash-btn-disabled'"
+            class="snippet-btn slash-btn"
+            :class="{ 'snippet-disabled': !canOpenSlash }"
+            :title="canOpenSlash ? 'Insert a slash command' : undefined"
+            @click="canOpenSlash && emit('open-slash')"
+        >
+            <wa-icon name="slash"></wa-icon>
+        </button>
+        <AppTooltip v-if="!canOpenSlash" for="slash-btn-disabled">
+            Clear the message first to use a slash command
+        </AppTooltip>
+        <button
+            class="snippet-btn at-btn"
+            title="Insert a file path"
+            @click="emit('open-at')"
+        >
+            <wa-icon name="at"></wa-icon>
+        </button>
+        <wa-divider orientation="vertical" class="history-divider"></wa-divider>
         <template v-if="snippets.length > 0">
             <template v-for="(snippet, i) in snippets" :key="i">
                 <button
@@ -253,9 +284,16 @@ button {
     align-self: center;
 }
 
-/* ── History button ───────────────────────────────────────────────── */
-.snippet-btn.history-btn {
+/* ── Icon-only buttons (history, slash, at) ──────────────────────── */
+.snippet-btn.history-btn,
+.snippet-btn.slash-btn,
+.snippet-btn.at-btn {
     padding: 0 var(--wa-space-2xs);
+}
+
+/* Mirror the "slash" icon since Web Awesome free tier lacks "slash-forward". */
+.snippet-btn.slash-btn wa-icon {
+    transform: scaleX(-1);
 }
 
 .history-divider {
