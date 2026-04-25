@@ -1,120 +1,68 @@
 <script setup>
-import { computed, ref, watch, onUnmounted } from 'vue'
-import { AGENT_TOOL_NAMES } from '../../constants'
+import { computed } from 'vue'
+import { useDataStore } from '../../stores/data'
+import { computeToolSummary, getVerb } from '../../utils/toolSummary'
 import ProcessIndicator from '../ProcessIndicator.vue'
 
 const props = defineProps({
-    label: {
-        type: String,
-        default: null
-    },
-    processState: {
-        type: String,
-        default: 'assistant_turn'
-    },
-    toolUse: {
-        type: Object,
-        default: null
-    },
-    toolUseCompleted: {
-        type: Boolean,
-        default: false
-    }
+    label: { type: String, default: null },
+    processState: { type: String, default: 'assistant_turn' },
+    tools: { type: Array, default: () => [] },
+    lastStartedToolId: { type: String, default: null },
+    sessionId: { type: String, default: null },
 })
 
-/**
- * Convert a tool name to a gerund form for display.
- *
- * Task tool: uses subagent_type from input to pick a friendly label:
- *   "Explore" → "exploring", "Plan" → "planning", "Bash" → "bashing", other → "agenting"
- *
- * MCP tools (prefixed "mcp__"): show "mcping (server-name)".
- *   "mcp__my-server__some_tool" → "mcping (my-server)"
- *
- * Regular tools: lowercase, strip trailing vowels, add "ing".
- *   "Bash" → "bashing", "Write" → "writing", "Read" → "reading"
- */
-const TASK_SUBAGENT_LABELS = {
-    explore: 'exploring',
-    plan: 'planning',
-    bash: 'bashing',
+const dataStore = useDataStore()
+
+const sessionBaseDir = computed(() => {
+    if (!props.sessionId) return null
+    const session = dataStore.getSession(props.sessionId)
+    return session?.git_directory || session?.cwd || null
+})
+
+const plainPhrase = computed(() => {
+    if (props.label) return props.label
+    const tools = props.tools || []
+    if (tools.length === 0) return 'thinking'
+    return null
+})
+
+const phraseGroups = computed(() => {
+    if (plainPhrase.value !== null) return null
+    return buildPhraseGroups(props.tools, sessionBaseDir.value, props.lastStartedToolId)
+})
+
+function buildPhraseGroups(tools, baseDir, lastStartedToolId) {
+    // Group tools by verb, preserving first-occurrence order from the current frame.
+    const map = new Map()
+    for (const t of tools) {
+        const verb = getVerb(t.name, t.input)
+        if (!verb) continue
+        const { inline } = computeToolSummary(t.name, t.input, baseDir)
+        if (!map.has(verb)) map.set(verb, [])
+        map.get(verb).push(inline)
+    }
+
+    // Skip parens when there's a single active tool AND it's the most recently
+    // started one — its tool card sits right above, so the parenthesised target
+    // would be redundant. Otherwise (multiple tools, or a single survivor that
+    // isn't the latest), parens disambiguate which tool we're talking about.
+    const isLoneLatest = tools.length === 1 && tools[0].id === lastStartedToolId
+    const showSummaries = !isLoneLatest
+
+    return Array.from(map, ([verb, summaries]) => {
+        if (!showSummaries) return { verb, targets: null }
+        const filtered = summaries.filter(s => s != null)
+        return { verb, targets: filtered.length > 0 ? filtered : null }
+    })
 }
-
-const toolAction = computed(() => {
-    if (!props.toolUse?.name) return null
-    const name = props.toolUse.name
-
-    // Agent tool (Task or Agent): derive label from subagent_type input
-    if (AGENT_TOOL_NAMES.has(name)) {
-        const subtype = props.toolUse.input?.subagent_type?.toLowerCase()
-        if (subtype && TASK_SUBAGENT_LABELS[subtype]) {
-            return TASK_SUBAGENT_LABELS[subtype]
-        }
-        return 'agenting'
-    }
-
-    // MCP tools: mcp__<server>__<tool> → "mcping (<server>)"
-    if (name.startsWith('mcp__')) {
-        const parts = name.split('__')
-        const server = parts[1] || 'mcp'
-        return `mcping (${server})`
-    }
-
-    const lower = name.toLowerCase()
-    const withoutTrailingVowels = lower.replace(/[aeiou]+$/, '')
-    return withoutTrailingVowels + 'ing'
-})
-
-/**
- * Displayed action with a delayed fallback to "working".
- *
- * - Tool in progress (toolUseCompleted=false): show its name immediately,
- *   keep it on screen indefinitely until the result arrives or a new tool starts.
- * - Tool completed (toolUseCompleted=true): keep showing the tool name for
- *   FALLBACK_DELAY_MS, then fall back to null/"working".
- * - If a new (different) tool starts during the delay, it shows immediately
- *   and cancels the pending fallback.
- */
-const FALLBACK_DELAY_MS = 5000
-
-const displayedAction = ref(null)
-let pendingTimer = null
-
-watch(
-    () => ({ action: toolAction.value, completed: props.toolUseCompleted }),
-    ({ action, completed }) => {
-        if (pendingTimer) {
-            clearTimeout(pendingTimer)
-            pendingTimer = null
-        }
-
-        if (action != null && !completed) {
-            // Tool in progress → show immediately, keep indefinitely
-            displayedAction.value = action
-        } else if (action != null && completed) {
-            // Tool just completed → show it immediately, then schedule fallback
-            displayedAction.value = action
-            pendingTimer = setTimeout(() => {
-                displayedAction.value = null
-                pendingTimer = null
-            }, FALLBACK_DELAY_MS)
-        } else {
-            // No tool at all → fall back to "working" immediately
-            displayedAction.value = null
-        }
-    },
-    { immediate: true }
-)
-
-onUnmounted(() => {
-    if (pendingTimer) clearTimeout(pendingTimer)
-})
 </script>
 
 <template>
     <div class="working-assistant-message text-content">
         <ProcessIndicator :state="processState" size="small" :animate-states="['starting', 'assistant_turn']" />
-        <span>Claude is {{ label || displayedAction || 'thinking' }}...</span>
+        <span v-if="plainPhrase !== null">Claude is {{ plainPhrase }}...</span>
+        <span v-else>Claude is <template v-for="(group, gi) in phraseGroups" :key="gi"><template v-if="gi > 0 && gi === phraseGroups.length - 1"> and </template><template v-else-if="gi > 0">, </template><template v-if="phraseGroups.length > 1"><strong>{{ group.verb }}</strong></template><template v-else>{{ group.verb }}</template><template v-if="group.targets"> (<template v-for="(t, ti) in group.targets" :key="`${gi}-${ti}`"><template v-if="ti > 0">, </template><code>{{ t }}</code></template>)</template></template>...</span>
     </div>
 </template>
 
@@ -125,5 +73,12 @@ onUnmounted(() => {
     gap: var(--wa-space-s);
     font-style: italic;
     font-size: var(--wa-font-size-m);
+}
+
+code {
+    background: var(--wa-color-neutral-fill-quiet);
+    border-radius: var(--wa-border-radius-s);
+    padding: 0 var(--wa-space-3xs);
+    font-size: 0.95em;
 }
 </style>

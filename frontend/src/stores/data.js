@@ -1412,36 +1412,6 @@ export const useDataStore = defineStore('data', {
             if (isAssistantTurn && !hasActiveTextStreaming) {
                 const { lineNum, kind: syntheticKind } = SYNTHETIC_ITEM.WORKING_ASSISTANT_MESSAGE
 
-                // Walk backwards through items to find the most recent tool_use.
-                // Skip over tool_result items (content_items whose content is all
-                // tool_result entries) so that the status line keeps showing the
-                // current tool name even after its result has arrived.
-                // Also track whether we skipped any tool_result items: if so, the
-                // tool_use has completed; otherwise it is still in progress.
-                let toolUse = null
-                let toolUseCompleted = false
-                for (let i = items.length - 1; i >= 0; i--) {
-                    const item = items[i]
-                    if (item.kind === 'system') continue
-                    if (item.kind !== 'assistant_message' && item.kind !== 'content_items') break
-                    const parsed = getParsedContent(item)
-                    if (!parsed) break
-                    const contentArray = parsed?.message?.content
-                    if (!Array.isArray(contentArray) || contentArray.length === 0) break
-                    const lastContent = contentArray[contentArray.length - 1]
-                    if (lastContent.type === 'tool_use') {
-                        toolUse = lastContent
-                        break
-                    }
-                    // If every entry is a tool_result, skip this item and keep looking
-                    if (contentArray.every(c => c.type === 'tool_result')) {
-                        toolUseCompleted = true
-                        continue
-                    }
-                    // Otherwise (text, image, etc.) stop searching
-                    break
-                }
-
                 workingMessage = {
                     line_num: lineNum,
                     content: null,
@@ -1454,9 +1424,9 @@ export const useDataStore = defineStore('data', {
                 setParsedContent(workingMessage, {
                     type: 'assistant',
                     syntheticKind,
-                    toolUse,
-                    toolUseCompleted,
                     label: processState?.label || null,
+                    tools: processState?.tools || [],
+                    lastStartedToolId: processState?.lastStartedToolId || null,
                     message: {
                         role: 'assistant',
                         content: []
@@ -2153,6 +2123,9 @@ export const useDataStore = defineStore('data', {
                     active_crons: extra.active_crons || null,
                     session_title: extra.session_title || null,
                     project_name: extra.project_name || null,
+                    tools: [],
+                    lastStartedToolId: null,
+                    _toolsClearTimer: null,
                 }
 
                 // Auto-unarchive: running and archived are mutually exclusive
@@ -2196,6 +2169,9 @@ export const useDataStore = defineStore('data', {
                         active_crons: p.active_crons || null,
                         session_title: p.session_title || null,
                         project_name: p.project_name || null,
+                        tools: [],
+                        lastStartedToolId: null,
+                        _toolsClearTimer: null,
                     }
 
                     // Auto-unarchive: running and archived are mutually exclusive

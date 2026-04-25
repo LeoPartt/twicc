@@ -808,6 +808,31 @@ export function useWebSocket() {
                 }
                 break
             }
+            case 'process_tools': {
+                // Active-tool list for the WorkingAssistantMessage status line.
+                const ps = store.processStates[msg.session_id]
+                if (!ps) break
+                const tools = Array.isArray(msg.tools) ? msg.tools : []
+                const lastStartedId = msg.last_started_id || null
+                if (tools.length === 0) {
+                    // Debounce empty-list transitions to avoid a "thinking" flash
+                    // between PostToolUse(A) and PreToolUse(B) of parallel tools.
+                    if (ps._toolsClearTimer) break
+                    ps._toolsClearTimer = setTimeout(() => {
+                        ps.tools = []
+                        ps.lastStartedToolId = null
+                        ps._toolsClearTimer = null
+                    }, 1000)
+                } else {
+                    if (ps._toolsClearTimer) {
+                        clearTimeout(ps._toolsClearTimer)
+                        ps._toolsClearTimer = null
+                    }
+                    ps.tools = tools
+                    ps.lastStartedToolId = lastStartedId
+                }
+                break
+            }
             case 'agent_link_created': {
                 // New agent link created — populate cache and create synthetic process state
                 const agentSessionId = msg.agent_session_id

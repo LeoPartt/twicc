@@ -31,24 +31,12 @@ from twicc.claude_plugin import get_plugin_dir
 
 from .sdk_logger import patch_client as patch_client_for_logging
 from .states import PendingRequest, ProcessInfo, ProcessState, get_process_memory
+from .tool_label_filter import filter_tool_input
 
 logger = logging.getLogger(__name__)
 
 # Type alias for the state change callback
 StateChangeCallback = Callable[["ClaudeProcess"], Coroutine[Any, Any, None]]
-
-
-async def _pre_tool_use_hook(input_data: dict, tool_use_id: str, context: Any) -> dict:
-    """SDK PreToolUse hook: captures original file content before Edit/Write tools.
-
-    Also serves as the required PreToolUse hook that keeps the stream open for
-    can_use_tool callbacks (the SDK requires at least one PreToolUse hook registered
-    for can_use_tool to fire during streaming mode).
-    """
-    tool_name = input_data.get("tool_name", "")
-    if tool_name in ("Edit", "Write"):
-        _capture_original_file(input_data, tool_use_id)
-    return {"continue_": True}
 
 
 def _capture_original_file(input_data: dict, tool_use_id: str) -> None:
@@ -165,6 +153,8 @@ class ClaudeProcess:
         # own can_use_tool callback. Both dicts are keyed by request_id (UUID).
         self._pending_requests: dict[str, PendingRequest] = {}
         self._pending_futures: dict[str, asyncio.Future[PermissionResultAllow | PermissionResultDeny]] = {}
+        self._active_tools: dict[str, dict[str, Any]] = {}
+        self._last_started_tool_id: str | None = None
         self._get_session_slug = get_session_slug
         self._on_cron_created = on_cron_created
         self._on_cron_deleted = on_cron_deleted
@@ -818,6 +808,8 @@ class ClaudeProcess:
         )
 
         try:
+            self._active_tools = {}
+            self._last_started_tool_id = None
             # Create options - either resume existing session or create new with custom ID
             # Build thinking config from boolean flag
             thinking_config = None
@@ -830,6 +822,39 @@ class ClaudeProcess:
             # hook can persist cron changes via the on_cron_created/on_cron_deleted callbacks.
             async def _on_cron_tool(input_data: dict, tool_use_id: str | None, context: Any) -> dict:
                 await self._handle_cron_tool_event(input_data)
+                return {"continue_": True}
+
+            async def _pre_tool_use(input_data: dict, tool_use_id: str | None, context: Any) -> dict:
+                tool_name = input_data.get("tool_name", "") or ""
+                # Subagent tools carry an "agent_id" field; the parent session must
+                # ignore them so its working-status feed stays scoped to its own work.
+                is_subagent_tool = "agent_id" in input_data
+                if tool_name in ("Edit", "Write") and not is_subagent_tool:
+                    _capture_original_file(input_data, tool_use_id)
+                if tool_use_id and not is_subagent_tool:
+                    tool_input = input_data.get("tool_input", {}) or {}
+                    self._active_tools[tool_use_id] = {
+                        "name": tool_name,
+                        "input": filter_tool_input(tool_name, tool_input),
+                    }
+                    self._last_started_tool_id = tool_use_id
+                    logger.debug(
+                        "PreToolUse session=%s tool=%s active_tools=%d",
+                        self.session_id, tool_name, len(self._active_tools),
+                    )
+                    await self._broadcast_process_tools()
+                return {"continue_": True}
+
+            async def _post_tool_use(input_data: dict, tool_use_id: str | None, context: Any) -> dict:
+                if tool_use_id and tool_use_id in self._active_tools:
+                    entry = self._active_tools.pop(tool_use_id, None)
+                    logger.debug(
+                        "PostToolUse session=%s tool=%s active_tools=%d",
+                        self.session_id,
+                        entry["name"] if entry else "?",
+                        len(self._active_tools),
+                    )
+                    await self._broadcast_process_tools()
                 return {"continue_": True}
 
             extra_args: dict[str, str | None] = {
@@ -853,8 +878,11 @@ class ClaudeProcess:
                 plugins=[{"type": "local", "path": str(get_plugin_dir())}],
                 can_use_tool=self._handle_pending_request,
                 hooks={
-                    "PreToolUse": [HookMatcher(matcher=None, hooks=[_pre_tool_use_hook])],
-                    "PostToolUse": [HookMatcher(matcher="CronCreate|CronDelete", hooks=[_on_cron_tool])],
+                    "PreToolUse": [HookMatcher(matcher=None, hooks=[_pre_tool_use])],
+                    "PostToolUse": [
+                        HookMatcher(matcher=None, hooks=[_post_tool_use]),
+                        HookMatcher(matcher="CronCreate|CronDelete", hooks=[_on_cron_tool]),
+                    ],
                 },
                 stderr=self._log_stderr,
                 max_buffer_size=10 * 1024 * 1024,  # 10 MB — prevent crashes on large tool outputs
@@ -1575,6 +1603,23 @@ class ClaudeProcess:
                 "type": "process_label",
                 "session_id": self.session_id,
                 "label": label,
+            }},
+        )
+
+    async def _broadcast_process_tools(self) -> None:
+        """Broadcast the current list of in-progress tools for the status display."""
+        channel_layer = get_channel_layer()
+        tools = [
+            {"id": tool_use_id, "name": entry["name"], "input": entry["input"]}
+            for tool_use_id, entry in self._active_tools.items()
+        ]
+        await channel_layer.group_send(
+            "updates",
+            {"type": "broadcast", "data": {
+                "type": "process_tools",
+                "session_id": self.session_id,
+                "tools": tools,
+                "last_started_id": self._last_started_tool_id,
             }},
         )
 

@@ -6,13 +6,13 @@ import CodeCommentsIndicator from '../../CodeCommentsIndicator.vue'
 import { useDataStore } from '../../../stores/data'
 import { useSettingsStore } from '../../../stores/settings'
 import { apiFetch } from '../../../utils/api'
-import { getIconUrl, getFileIconId } from '../../../utils/fileIcons'
 import { getLanguageFromPath } from '../../../utils/languages'
+import { computeToolSummary } from '../../../utils/toolSummary'
 import { AGENT_TOOL_NAMES, PROCESS_STATE, PROCESS_STATE_COLORS } from '../../../constants'
 import { stopAgent } from '../../../composables/useWebSocket'
 import { getSessionCutoffMs } from '../../../utils/sessions'
 import { getParsedContent, hasContent } from '../../../utils/parsedContent'
-import { getTodoDescription, isValidTodos } from '../../../utils/todoList'
+import { isValidTodos } from '../../../utils/todoList'
 import JsonHumanView from '../../JsonHumanView.vue'
 import MarkdownContent from '../../MarkdownContent.vue'
 import AppTooltip from '../../AppTooltip.vue'
@@ -413,15 +413,34 @@ const readResultCode = computed(() => {
     }
 })
 
-// Tools that show file_path instead of description in the summary
-const FILE_PATH_TOOLS = new Set(['Edit', 'Write', 'Read'])
-const usesFilePath = computed(() => FILE_PATH_TOOLS.has(props.name) && !!props.input?.file_path)
-
 // Make file_path relative to session's working directory when possible
 const sessionBaseDir = computed(() => {
     const session = dataStore.getSession(props.sessionId)
     return session?.git_directory || session?.cwd || null
 })
+
+const summary = computed(() => computeToolSummary(props.name, props.input, sessionBaseDir.value))
+
+// Convenience refs so the template stays readable without value-piercing.
+const displayName = computed(() => summary.value.displayName)
+const summaryDescription = computed(() => summary.value.rich.description)
+const summaryFileIconSrc = computed(() => summary.value.rich.fileIconSrc)
+const summarySkill = computed(() => summary.value.rich.skill)
+const summaryGrep = computed(() => summary.value.rich.grep)
+const summaryGlob = computed(() => summary.value.rich.globPattern)
+const summaryWebFetchUrl = computed(() => summary.value.rich.webFetchUrl)
+const summaryWebSearchQuery = computed(() => summary.value.rich.webSearchQuery)
+const summaryToolSearchQuery = computed(() => summary.value.rich.toolSearchQuery)
+const summaryTodo = computed(() => summary.value.rich.todoDescription)
+
+// Local guards still used by the body rendering / non-summary code paths.
+const isTodoWrite = computed(() => props.name === 'TodoWrite')
+const todosValid = computed(() => isTodoWrite.value && isValidTodos(props.input?.todos))
+
+// File-path detection still drives canViewInFilesTab and shouldAutoOpen.
+const usesFilePath = computed(
+    () => (props.name === 'Edit' || props.name === 'Write' || props.name === 'Read') && !!props.input?.file_path
+)
 
 // First modified line number from the backend patch (for "View in Files tab" navigation)
 const firstModifiedLine = computed(() => {
@@ -456,97 +475,6 @@ function openInFilesTab() {
     viewFileInFilesTab(props.input.file_path, { lineNum })
 }
 
-// File icon URL for file tools (null if no specific icon found)
-const fileIconSrc = computed(() => {
-    if (!usesFilePath.value) return null
-    const filename = props.input.file_path.split('/').pop() || props.input.file_path
-    const iconId = getFileIconId(filename)
-    return iconId !== 'default-file' ? getIconUrl(iconId) : null
-})
-
-// Extract summary detail: file_path for file tools, description for others
-const description = computed(() => {
-    if (usesFilePath.value) {
-        const filePath = props.input.file_path
-        const baseDir = sessionBaseDir.value
-        if (baseDir && filePath.startsWith(baseDir + '/')) {
-            return filePath.slice(baseDir.length + 1)
-        }
-        return filePath
-    }
-    // Special tools have their own summary rendering
-    if (isSkill.value || isGrep.value || isGlob.value || isTodoWrite.value || isWebFetch.value || isWebSearch.value || isToolSearch.value) return null
-    return props.input?.description || null
-})
-
-// --- Skill tool summary ---
-const isSkill = computed(() => props.name === 'Skill')
-const skillDescription = computed(() => {
-    if (!isSkill.value || !props.input?.skill) return null
-    const skill = props.input.skill
-    const colonIdx = skill.indexOf(':')
-    if (colonIdx >= 0) {
-        return {
-            name: capitalize(skill.slice(colonIdx + 1)),
-            namespace: capitalize(skill.slice(0, colonIdx))
-        }
-    }
-    return { name: capitalize(skill), namespace: null }
-})
-
-// --- Grep tool summary ---
-const isGrep = computed(() => props.name === 'Grep')
-const grepParts = computed(() => {
-    if (!isGrep.value) return null
-    const pattern = props.input?.pattern || null
-    // Use "type" if available, otherwise fall back to "glob"
-    const fileType = props.input?.type || props.input?.glob || null
-    const rawPath = props.input?.path || null
-    if (!pattern && !fileType && !rawPath) return null
-
-    let path = null
-    let pathIconSrc = null
-    if (rawPath) {
-        const baseDir = sessionBaseDir.value
-        path = (baseDir && rawPath.startsWith(baseDir + '/'))
-            ? rawPath.slice(baseDir.length + 1)
-            : rawPath
-        const filename = rawPath.split('/').pop() || rawPath
-        const iconId = getFileIconId(filename)
-        pathIconSrc = iconId !== 'default-file' ? getIconUrl(iconId) : null
-    }
-
-    return { pattern, fileType, path, pathIconSrc }
-})
-
-// --- Glob tool summary ---
-const isGlob = computed(() => props.name === 'Glob')
-const globPattern = computed(() => {
-    if (!isGlob.value) return null
-    return props.input?.pattern || null
-})
-
-// --- WebFetch tool summary ---
-const isWebFetch = computed(() => props.name === 'WebFetch')
-const webFetchUrl = computed(() => {
-    if (!isWebFetch.value) return null
-    return props.input?.url || null
-})
-
-// --- WebSearch tool summary ---
-const isWebSearch = computed(() => props.name === 'WebSearch')
-const webSearchQuery = computed(() => {
-    if (!isWebSearch.value) return null
-    return props.input?.query || null
-})
-
-// --- ToolSearch tool summary ---
-const isToolSearch = computed(() => props.name === 'ToolSearch')
-const toolSearchQuery = computed(() => {
-    if (!isToolSearch.value) return null
-    return props.input?.query || null
-})
-
 // --- Edit tool: dedicated diff display ---
 const isEdit = computed(() => props.name === 'Edit')
 const editValid = computed(() => isEdit.value && 'old_string' in props.input && 'new_string' in props.input)
@@ -554,14 +482,6 @@ const editValid = computed(() => isEdit.value && 'old_string' in props.input && 
 // --- Write tool: dedicated code display ---
 const isWrite = computed(() => props.name === 'Write')
 const writeValid = computed(() => isWrite.value && 'content' in props.input)
-
-// --- TodoWrite tool summary ---
-const isTodoWrite = computed(() => props.name === 'TodoWrite')
-const todosValid = computed(() => isTodoWrite.value && isValidTodos(props.input?.todos))
-const todoDescription = computed(() => {
-    if (!isTodoWrite.value) return null
-    return getTodoDescription(props.input?.todos)
-})
 
 // Input without description for display
 const displayInput = computed(() => {
@@ -760,25 +680,6 @@ const toolSpinnerId = computed(() => `tool-spinner-${props.toolId}`)
 
 // --- View Agent button for Task tool_use ---
 
-// Task tool: display subagent_type instead of "Task"
-// "silent-failure-hunter" → "Silent failure hunter"
-function capitalize(str) {
-    return str.replace(/-/g, ' ').replace(/^\w/, c => c.toUpperCase())
-}
-
-const taskDisplayName = computed(() => {
-    if (!isTask.value || !props.input?.subagent_type || props.input.subagent_type === 'general-purpose') return null
-    const sat = props.input.subagent_type
-    const colonIdx = sat.indexOf(':')
-    if (colonIdx >= 0) {
-        return {
-            name: capitalize(sat.slice(colonIdx + 1)),
-            namespace: capitalize(sat.slice(0, colonIdx))
-        }
-    }
-    return { name: capitalize(sat), namespace: null }
-})
-
 // Agent link: reactive lookup from the store cache.
 // The cache is populated by fetchSubagentsState (on session load) and
 // by the WS agent_link_created handler — no polling needed.
@@ -853,61 +754,61 @@ function handleStopAgent() {
     <wa-details ref="toolUseDetailsRef" :open="isOpen" :style="instantOpen ? { '--show-duration': '0ms', '--hide-duration': '0ms' } : null" class="item-details tool-use" :class="{'with-right-part' : (isTask && !parentSessionId) || isToolRunning || isToolError || fileChangeStats || canViewInFilesTab}" icon-placement="start" @wa-show.self="onToolUseOpen" @wa-hide.self="onToolUseClose">
         <span slot="summary" class="items-details-summary">
             <span class="items-details-summary-left">
-                <strong v-if="taskDisplayName" class="items-details-summary-name">{{ taskDisplayName.name }}<span v-if="taskDisplayName.namespace" class="items-details-summary-quiet"> ({{ taskDisplayName.namespace }})</span></strong>
+                <strong v-if="isTask && displayName" class="items-details-summary-name">{{ displayName.name }}<span v-if="displayName.namespace" class="items-details-summary-quiet"> ({{ displayName.namespace }})</span></strong>
                 <strong v-else-if="isTodoWrite" class="items-details-summary-name">Todo</strong>
                 <strong v-else class="items-details-summary-name">{{ name.replaceAll('__', ' ') }}</strong>
-                <template v-if="description">
+                <template v-if="summaryDescription">
                     <span class="items-details-summary-separator"> — </span>
-                    <span v-if="fileIconSrc" class="items-details-summary-file">
-                        <img :src="fileIconSrc" class="items-details-summary-file-icon" loading="lazy" width="16" height="16" />
-                        <span class="items-details-summary-description">{{ description }}</span>
+                    <span v-if="summaryFileIconSrc" class="items-details-summary-file">
+                        <img :src="summaryFileIconSrc" class="items-details-summary-file-icon" loading="lazy" width="16" height="16" />
+                        <span class="items-details-summary-description">{{ summaryDescription }}</span>
                     </span>
-                    <span v-else class="items-details-summary-description">{{ description }}</span>
+                    <span v-else class="items-details-summary-description">{{ summaryDescription }}</span>
                     <CodeCommentsIndicator :count="toolCommentsCount" :show-tooltip="false" class="tool-comments-indicator" />
                 </template>
                 <!-- Skill tool: show skill name, with namespace in quiet mode -->
-                <template v-else-if="skillDescription">
+                <template v-else-if="summarySkill">
                     <span class="items-details-summary-separator"> — </span>
-                    <span class="items-details-summary-description">{{ skillDescription.name }}<span v-if="skillDescription.namespace" class="items-details-summary-quiet"> ({{ skillDescription.namespace }})</span></span>
+                    <span class="items-details-summary-description">{{ summarySkill.name }}<span v-if="summarySkill.namespace" class="items-details-summary-quiet"> ({{ summarySkill.namespace }})</span></span>
                 </template>
                 <!-- Grep tool: "`pattern` in `type` files in [path]" -->
-                <template v-else-if="grepParts">
+                <template v-else-if="summaryGrep">
                     <span class="items-details-summary-separator"> — </span>
                     <span class="items-details-summary-description items-details-summary-grep">
-                        <code v-if="grepParts.pattern">{{ grepParts.pattern }}</code>
-                        <span v-if="grepParts.fileType"><span class="grep-connector">in</span> <code>{{ grepParts.fileType }}</code> <span class="grep-connector">files</span></span>
-                        <span v-if="grepParts.path"><span class="grep-connector">in</span>
-                            <span v-if="grepParts.pathIconSrc" class="items-details-summary-file">
-                                <img :src="grepParts.pathIconSrc" class="items-details-summary-file-icon" loading="lazy" width="16" height="16" />
-                                <span>{{ grepParts.path }}</span>
+                        <code v-if="summaryGrep.pattern">{{ summaryGrep.pattern }}</code>
+                        <span v-if="summaryGrep.fileType"><span class="grep-connector">in</span> <code>{{ summaryGrep.fileType }}</code> <span class="grep-connector">files</span></span>
+                        <span v-if="summaryGrep.path"><span class="grep-connector">in</span>
+                            <span v-if="summaryGrep.pathIconSrc" class="items-details-summary-file">
+                                <img :src="summaryGrep.pathIconSrc" class="items-details-summary-file-icon" loading="lazy" width="16" height="16" />
+                                <span>{{ summaryGrep.path }}</span>
                             </span>
-                            <span v-else>{{ grepParts.path }}</span>
+                            <span v-else>{{ summaryGrep.path }}</span>
                         </span>
                     </span>
                 </template>
                 <!-- Glob tool: show pattern in code -->
-                <template v-else-if="globPattern">
+                <template v-else-if="summaryGlob">
                     <span class="items-details-summary-separator"> — </span>
-                    <span class="items-details-summary-description"><code>{{ globPattern }}</code></span>
+                    <span class="items-details-summary-description"><code>{{ summaryGlob }}</code></span>
                 </template>
                 <!-- WebFetch tool: show URL as a link -->
-                <template v-else-if="webFetchUrl">
+                <template v-else-if="summaryWebFetchUrl">
                     <span class="items-details-summary-separator"> — </span>
-                    <a :href="webFetchUrl" target="_blank" rel="noopener noreferrer nofollow" class="items-details-summary-description items-details-summary-link" @click.stop>{{ webFetchUrl }}<wa-icon name="arrow-up-right-from-square" class="items-details-summary-link-icon"></wa-icon></a>
+                    <a :href="summaryWebFetchUrl" target="_blank" rel="noopener noreferrer nofollow" class="items-details-summary-description items-details-summary-link" @click.stop>{{ summaryWebFetchUrl }}<wa-icon name="arrow-up-right-from-square" class="items-details-summary-link-icon"></wa-icon></a>
                 </template>
                 <!-- WebSearch tool: show query -->
-                <template v-else-if="webSearchQuery">
+                <template v-else-if="summaryWebSearchQuery">
                     <span class="items-details-summary-separator"> — </span>
-                    <span class="items-details-summary-description">{{ webSearchQuery }}</span>
+                    <span class="items-details-summary-description">{{ summaryWebSearchQuery }}</span>
                 </template>
                 <!-- ToolSearch tool: show query -->
-                <template v-else-if="toolSearchQuery">
+                <template v-else-if="summaryToolSearchQuery">
                     <span class="items-details-summary-separator"> — </span>
-                    <span class="items-details-summary-description">{{ toolSearchQuery }}</span>
+                    <span class="items-details-summary-description">{{ summaryToolSearchQuery }}</span>
                 </template>
                 <!-- TodoWrite tool: show progress description -->
-                <template v-else-if="todoDescription">
-                    <template v-for="(part, i) in todoDescription" :key="i">
+                <template v-else-if="summaryTodo">
+                    <template v-for="(part, i) in summaryTodo" :key="i">
                         <span class="items-details-summary-separator"> — </span>
                         <span class="items-details-summary-description" :class="{ 'no-wrap': !part.status }">{{ part.text }}<wa-icon v-if="part.status === 'completed'" name="check" class="todo-icon todo-icon-completed"></wa-icon></span>
                     </template>
