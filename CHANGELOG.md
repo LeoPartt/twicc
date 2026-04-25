@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Floating toolbar on rendered markdown content with buttons to view the raw markdown source and copy it to the clipboard
+- Floating toolbar on rendered markdown content with buttons to view the raw markdown source and copy it to the clipboard (proposed by @didouye)
   - ![Markdown toolbar](frontend/public/whats-new/v1.5.1/markdown-toolbar.webp)
 - Pin a session to your current project, across a whole workspace, or across every project — pinned sessions stay at the top of the sidebar in every matching context
   - ![Pin modes](frontend/public/whats-new/v1.5.1/pin-modes.webp)
@@ -22,13 +22,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - ![Claude presets 3](frontend/public/whats-new/v1.5.1/claude-presets3.webp)
   - ![Claude presets 4](frontend/public/whats-new/v1.5.1/claude-presets4.webp)
   - ![Claude presets 5](frontend/public/whats-new/v1.5.1/claude-presets5.webp)
-- Triple-press Escape quickly on a session's chat tab to stop the running Claude Code process
+- Triple-press Escape quickly on a session's chat tab to stop the running Claude Code process (proposed by @LeoPartt and @dguerizec)
   - ![Triple escape shortcut](frontend/public/whats-new/v1.5.1/triple-escape.webp)
 - New `/` and `@` buttons below the message input textarea to quickly open the slash command picker and the file path picker
   - ![New textarea buttons](frontend/public/whats-new/v1.5.1/slash-arobase.webp)
 - Command palette can now change Claude settings for the current session
   - ![Change session settings in command palette](frontend/public/whats-new/v1.5.1/session-claude-settings-palette.webp)
-- New "Tmux config file" setting in the Terminal section to load your own `tmux.conf` (status bar, colors, key bindings, etc.) in TwiCC terminals
+- New "Tmux config file" setting in the Terminal section to load your own `tmux.conf` (status bar, colors, key bindings, etc.) in TwiCC terminals (proposed by @LeoPartt)
   - ![Tmux conf new settings](frontend/public/whats-new/v1.5.1/tmux-conf-settings.webp)
 
 ### Changed
@@ -40,7 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- Parallel tool permission requests are now all shown and answered one by one, instead of only the last one being visible
+- Parallel tool permission requests are now all shown and answered one by one, instead of only the last one being visible (bug report by @LeoPartt)
 - Code comments gutter button is now correctly positioned on the hovered line
 - Git commit selector no longer renders raw error JSON and stays interactive (opens the commit list) when the requested commit cannot be found
 
