@@ -574,49 +574,6 @@ watch(
 )
 
 /**
- * Keep the scroller pinned to the bottom while streaming blocks are actively
- * receiving deltas. stickToBottom ensures that every ResizeObserver callback
- * (triggered by the growing streaming content) scrolls to bottom automatically.
- * Disabled when streaming ends or the user scrolls away from the bottom.
- */
-let streamingStickToBottom = false
-watch(
-    () => store.hasActiveStreaming(props.sessionId),
-    (active) => {
-        const scroller = scrollerRef.value
-        if (!scroller) return
-        if (active && !streamingStickToBottom) {
-            if (isAutoScrollingToBottom.value || scroller.isAtBottom(AUTO_SCROLL_THRESHOLD)) {
-                streamingStickToBottom = true
-                scroller.enableStickToBottom()
-            }
-        } else if (!active && streamingStickToBottom) {
-            streamingStickToBottom = false
-            scroller.disableStickToBottom()
-        }
-    }
-)
-
-/**
- * Sync stickToBottom with user scroll position during active streaming.
- * - Scrolls away from bottom → disable stickToBottom (user wants to read)
- * - Scrolls back to bottom → re-enable stickToBottom (user wants to follow)
- */
-function onStreamingScrollCheck() {
-    if (!store.hasActiveStreaming(props.sessionId)) return
-    const scroller = scrollerRef.value
-    if (!scroller) return
-    const atBottom = scroller.isAtBottom(AUTO_SCROLL_THRESHOLD)
-    if (streamingStickToBottom && !atBottom) {
-        streamingStickToBottom = false
-        scroller.disableStickToBottom()
-    } else if (!streamingStickToBottom && atBottom) {
-        streamingStickToBottom = true
-        scroller.enableStickToBottom()
-    }
-}
-
-/**
  * Handle item resize events from VirtualScroller.
  * Used to detect when items have finished resizing for scroll stability detection.
  */
@@ -630,7 +587,6 @@ function onItemResized() {
 
         // Set new timeout - if no more resizes happen within STABILITY_DEBOUNCE_MS,
         // we consider it stable
-        // Note: The actual scrolling to bottom is handled by stickToBottom mode in the composable
         stabilityTimeoutId = setTimeout(() => {
             stabilityTimeoutId = null
             if (onStabilizedCallback) {
@@ -645,22 +601,16 @@ function onItemResized() {
 /**
  * Scroll to bottom and wait until the scroll position stabilizes.
  *
- * Algorithm:
- * 1. Enable "stick to bottom" mode - any height changes will automatically scroll to bottom
- * 2. Scroll to bottom immediately
- * 3. Wait for item-resized events to stop (debounced)
- * 4. Disable "stick to bottom" mode
- *
- * The key insight: instead of trying to scroll after each resize event,
- * we let the composable's stickToBottom mode handle it automatically.
- * This ensures we stay at the bottom even as items resize.
- *
- * Sets isAutoScrollingToBottom flag during the operation so that if new
- * items arrive while scrolling, we know to continue scrolling.
+ * The first scroll-to-bottom brings the sentinel into view, after which
+ * native browser scroll anchoring takes over and keeps us at the bottom as
+ * items continue to resize (CodeMirror, mermaid, etc. rendering async).
+ * We still wait for stability before revealing the scroller on initial load
+ * so the user doesn't see a visible jump from the first scroll position to
+ * the final settled position.
  *
  * @param {Object} [options] - Options for the scroll operation
- * @param {boolean} [options.isInitial=false] - Whether this is the initial scroll after session load
- *   When true, the scroller is kept invisible until scroll is stable to prevent visual jumping
+ * @param {boolean} [options.isInitial=false] - Whether this is the initial scroll after session load.
+ *   When true, the scroller is kept invisible until scroll is stable to prevent visual jumping.
  */
 async function scrollToBottomUntilStable(options = {}) {
     const { isInitial = false } = options
@@ -690,11 +640,8 @@ async function scrollToBottomUntilStable(options = {}) {
             isInitialScrolling.value = true
         }
 
-        // Enable stick to bottom mode - the composable will automatically
-        // scroll to bottom whenever heights change
-        scroller.enableStickToBottom()
-
-        // Scroll to bottom immediately
+        // Scroll to bottom: brings the anchor sentinel into view so native
+        // scroll anchoring engages for any subsequent height growth.
         scroller.scrollToBottom({ behavior: 'auto' })
 
         // Wait for stability: no more resize events for STABILITY_DEBOUNCE_MS
@@ -723,9 +670,6 @@ async function scrollToBottomUntilStable(options = {}) {
                 }, 0)
             })
         })
-
-        // Disable stick to bottom mode now that we're stable
-        scroller.disableStickToBottom()
 
         // Final scroll to bottom to ensure we're at the very bottom
         scroller.scrollToBottom({ behavior: 'auto' })
@@ -1084,8 +1028,9 @@ provide('searchHighlightTerms', searchHighlightTerms)
 
 // Provide a function for child components (e.g., ToolUseContent) to request
 // scroll-to-bottom when they are about to expand (auto-open diffs, etc.).
-// This enables stickToBottom mode so the expansion animation doesn't break
-// the auto-scroll by drifting away from the bottom frame by frame.
+// Native scroll anchoring on the sentinel keeps us pinned during the expansion
+// animation; the explicit scroll-to-bottom call brings us back to the sentinel
+// in case rendering jitter pushed it slightly out of view.
 provide('requestScrollToBottomIfNeeded', () => {
     if (props.parentSessionId) return // Subagent sessions don't auto-scroll
     const scroller = scrollerRef.value
@@ -1566,7 +1511,6 @@ defineExpose({
             @update="onScrollerUpdate"
             @item-resized="onItemResized"
             @became-visible="onScrollerBecameVisible"
-            @scroll="onStreamingScrollCheck"
         >
             <template #default="{ item, index }">
                 <!-- Placeholder (no content loaded yet) -->

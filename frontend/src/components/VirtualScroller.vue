@@ -274,8 +274,6 @@ const {
     isAtBottom,
     isAtTop,
     invalidateZeroHeights,
-    enableStickToBottom: composableEnableStickToBottom,
-    disableStickToBottom: composableDisableStickToBottom,
     preventAutoScrollToBottom: composablePreventAutoScrollToBottom,
     suspended: composableSuspended,
     suspend: composableSuspend,
@@ -519,21 +517,6 @@ function onScroll(event) {
 }
 
 /**
- * Enable "stick to bottom" mode.
- * While enabled, any height changes will automatically scroll to bottom.
- */
-function enableStickToBottom() {
-    composableEnableStickToBottom()
-}
-
-/**
- * Disable "stick to bottom" mode.
- */
-function disableStickToBottom() {
-    composableDisableStickToBottom()
-}
-
-/**
  * Suspend the scroller (save scroll anchor before KeepAlive detachment).
  * Called automatically by onDeactivated, but can also be called manually.
  */
@@ -578,9 +561,6 @@ defineExpose({
     // Additional utility methods that may be useful
     isAtBottom,
     isAtTop,
-    // Stick to bottom mode control
-    enableStickToBottom,
-    disableStickToBottom,
     // Prevent implicit "stay at bottom" on resize (writable ref)
     preventAutoScrollToBottom: composablePreventAutoScrollToBottom,
     // KeepAlive support (also called automatically via onActivated/onDeactivated)
@@ -618,15 +598,18 @@ defineExpose({
             class="virtual-scroller-spacer virtual-scroller-spacer-after"
             :style="{ height: spacerAfterHeight + 'px' }"
         />
+
+        <!-- Scroll anchor sentinel: enables native pin-to-bottom via overflow-anchor.
+             When visible (user at bottom), the browser keeps it in viewport as content
+             grows above it, achieving pin-to-bottom without any JS scroll writes.
+             When out of view (user scrolled up), anchoring naturally stops. -->
+        <div class="virtual-scroller-anchor" aria-hidden="true" />
     </div>
 </template>
 
 <style scoped>
 .virtual-scroller {
     overflow-y: auto;
-    /* Disable browser's native scroll anchoring - we manage scroll position manually
-       when item heights change above the viewport */
-    overflow-anchor: none;
     /* Prevent scroll chaining to parent (e.g., pull-to-refresh on mobile) */
     overscroll-behavior: contain;
 
@@ -651,6 +634,24 @@ defineExpose({
     /* Spacers are purely for maintaining scroll position and scrollbar size.
        They should not create a new stacking context or interfere with layout.
        flex-shrink: 0 prevents spacers from being compressed in flex layout. */
+    flex-shrink: 0;
+    /* Disqualify spacers as scroll-anchor candidates so the browser only ever
+       picks the sentinel below. */
+    overflow-anchor: none;
+}
+
+/* Disqualify all rendered content from being a scroll-anchor candidate. Combined
+   with the sentinel below, this restricts the browser's native scroll anchoring
+   to a single, predictable target: pinning to the bottom when the sentinel is
+   visible, and doing nothing when the user has scrolled away. */
+.virtual-scroller :deep(*) {
+    overflow-anchor: none;
+}
+
+.virtual-scroller-anchor {
+    overflow-anchor: auto;
+    /* Must have non-zero size to be a valid anchor candidate. */
+    height: 1px;
     flex-shrink: 0;
 }
 </style>

@@ -89,14 +89,6 @@ export function useVirtualScroll(options) {
     let isProgrammaticScroll = false
 
     /**
-     * Flag to track if we should stick to the bottom during height changes.
-     * When true, batchUpdateItemHeights will always scroll to bottom after updates.
-     * Used during initial scroll-to-bottom operations where we want to stay at bottom
-     * until all items have finished resizing.
-     */
-    let stickToBottom = false
-
-    /**
      * When true, the implicit "stay at bottom on resize" behavior in
      * batchUpdateItemHeights is disabled. This is used for subagent sessions
      * that should open at the top: without this flag, items initially fit in
@@ -438,23 +430,14 @@ export function useVirtualScroll(options) {
             return results
         }
 
-        // If stickToBottom is enabled, apply updates and scroll to bottom
-        if (stickToBottom) {
-            for (const [key, { newHeight, oldHeight }] of actualUpdates) {
-                heightCache.set(key, newHeight)
-                results.push({ key, height: newHeight, oldHeight })
-            }
-            // Scroll to bottom after applying updates
-            const maxScrollTop = Math.max(0, totalHeight.value - viewportHeight.value)
-            if (Number.isFinite(maxScrollTop) && maxScrollTop >= 0) {
-                container.scrollTop = maxScrollTop
-                scrollTop.value = maxScrollTop
-            }
-            return results
-        }
-
         // ══════════════════════════════════════════════════════════════════
         // ANCHOR-BASED SCROLLING
+        //
+        // Pin-to-bottom is handled by native browser scroll anchoring on the
+        // sentinel element rendered at the end of the scroller (see
+        // VirtualScroller.vue). This block only handles preserving scroll
+        // position relative to a visible item when items above the viewport
+        // change height (e.g., a code block far above the viewport renders).
         // ══════════════════════════════════════════════════════════════════
 
         const currentScrollTop = container.scrollTop
@@ -488,9 +471,6 @@ export function useVirtualScroll(options) {
         // Offset = how far into the anchor item the viewport starts
         const offsetInAnchor = currentScrollTop - anchorOriginalTop
 
-        // Check if we were at the bottom (special case)
-        const wasAtBottom = isAtBottom(AT_BOTTOM_THRESHOLD)
-
         // 2. APPLY all height changes to the cache
         for (const [key, { newHeight, oldHeight }] of actualUpdates) {
             heightCache.set(key, newHeight)
@@ -500,17 +480,6 @@ export function useVirtualScroll(options) {
         // 3. RESTORE scroll position relative to anchor
         // The positions computed will auto-recompute due to reactivity
         const newPosArray = positions.value
-
-        // Special case: if we were at bottom, stay at bottom
-        // (unless preventAutoScrollToBottom is set, e.g., for subagent tabs)
-        if (wasAtBottom && !preventAutoScrollToBottom.value) {
-            const maxScrollTop = Math.max(0, totalHeight.value - viewportHeight.value)
-            if (Number.isFinite(maxScrollTop) && maxScrollTop >= 0) {
-                container.scrollTop = maxScrollTop
-                scrollTop.value = maxScrollTop
-            }
-            return results
-        }
 
         // Find the anchor in the new positions
         const newAnchorItem = newPosArray.find(p => p.key === anchorKey)
@@ -764,23 +733,6 @@ export function useVirtualScroll(options) {
     }
 
     /**
-     * Enable "stick to bottom" mode.
-     * While enabled, any height changes will automatically scroll to bottom.
-     * Use this during initial scroll-to-bottom operations.
-     */
-    function enableStickToBottom() {
-        stickToBottom = true
-    }
-
-    /**
-     * Disable "stick to bottom" mode.
-     * Call this when the scroll position has stabilized.
-     */
-    function disableStickToBottom() {
-        stickToBottom = false
-    }
-
-    /**
      * Check if the scroller is currently at or near the top.
      *
      * @param {number} [threshold=5] - Pixel threshold for "at top" detection
@@ -836,37 +788,13 @@ export function useVirtualScroll(options) {
             return
         }
 
-        // If we were at bottom before the resize, stay at bottom after.
-        // Without this, shrinking the scroller (e.g., textarea growing) leaves
-        // scrollTop unchanged while the container gets shorter, causing the bottom
-        // content to disappear below the fold. Native scroll anchoring is disabled
-        // (overflow-anchor: none), so we must compensate manually.
-        //
-        // We cannot use isAtBottom() here because the container already has its
-        // new dimensions by the time the ResizeObserver fires. Instead, compute
-        // the "was at bottom" check using the PREVIOUS viewportHeight — scrollTop
-        // and scrollHeight haven't changed yet at this point.
-        const container = containerRef.value
-        const previousHeight = viewportHeight.value
-        // Use totalHeight (virtual content height) instead of container.scrollHeight
-        // (DOM height) for the "at bottom" check. scrollToBottom() scrolls to
-        // totalHeight - viewportHeight, but container.scrollHeight includes CSS
-        // padding (e.g., padding-bottom on the scroller element). Using scrollHeight
-        // would produce a false "not at bottom" when the scroller is actually at the
-        // composable's logical bottom.
-        const wasAtBottom = container
-            && previousHeight > 0
-            && (totalHeight.value - container.scrollTop - previousHeight) <= AT_BOTTOM_THRESHOLD
-
+        // Pin-to-bottom is delegated to native browser scroll anchoring on the
+        // sentinel element rendered at the end of the scroller (see
+        // VirtualScroller.vue). When the viewport shrinks (e.g., textarea
+        // growing), the browser will keep the sentinel visible if it was
+        // visible before, achieving the same effect without a manual scrollTop
+        // assignment.
         viewportHeight.value = height
-
-        if (wasAtBottom && !preventAutoScrollToBottom.value && container) {
-            const maxScrollTop = Math.max(0, totalHeight.value - height)
-            if (Number.isFinite(maxScrollTop) && maxScrollTop >= 0) {
-                container.scrollTop = maxScrollTop
-                scrollTop.value = maxScrollTop
-            }
-        }
     }
 
     /**
@@ -908,9 +836,6 @@ export function useVirtualScroll(options) {
         }
 
         suspended.value = true
-        // Reset stickToBottom which may have been left true if a
-        // scrollToBottomUntilStable was interrupted by deactivation.
-        stickToBottom = false
     }
 
     /**
@@ -1235,10 +1160,6 @@ export function useVirtualScroll(options) {
         getScrollState,
         isAtBottom,
         isAtTop,
-
-        // Stick to bottom mode (for initial scroll operations)
-        enableStickToBottom,
-        disableStickToBottom,
 
         // Prevent implicit "stay at bottom" on resize
         preventAutoScrollToBottom,

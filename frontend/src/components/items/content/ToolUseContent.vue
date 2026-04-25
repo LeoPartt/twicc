@@ -542,8 +542,9 @@ let hasAutoOpened = false
 watch(shouldAutoOpen, (val) => {
     if (val && !hasAutoOpened && !isOpen.value) {
         hasAutoOpened = true
-        // Request scroll-to-bottom BEFORE expanding, so stickToBottom mode
-        // keeps the viewport at the bottom as the item height grows.
+        // Request scroll-to-bottom BEFORE expanding so the anchor sentinel is
+        // in view; native scroll anchoring then keeps the viewport at the
+        // bottom as the item height grows during the auto-open expansion.
         requestScrollToBottomIfNeeded?.()
         isOpen.value = true
         // Always skip animation for auto-open (whether during setup or after mount).

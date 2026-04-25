@@ -33,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Improved auto scroll to bottom behavior in the chat tab
 - Word wrap and side-by-side toggles in diff and editor toolbars now persist across sessions and stay in sync with the Settings panel (proposed by @LeoPartt)
 - Bump `claude-agent-sdk` from 0.1.63 to 0.1.68 (bundled Claude Code CLI: 2.1.114 → 2.1.119)
 - Minor improvements to the command palette (added some missing commands, added indicators for workspaces, projects, and sessions)
