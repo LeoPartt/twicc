@@ -75,6 +75,43 @@ Conséquence : à chaque recompute, on calcule les blocs *à neuf* (objets et ar
 
 Ajouter un cache au niveau bloc serait de la sur-ingénierie : le coût d'un re-walk de la slot function de Vue est marginal, et la stabilité de référence des items à l'intérieur fait tout le travail utile.
 
+### Cas particulier : streaming via `_onBufferDrain`
+
+`data.js:_onBufferDrain` (ligne ~2234) **mute en place** `sessionVisualItems[sessionId][idx]` à chaque frame du streaming (driven par RAF, ~60 Hz), via :
+
+```js
+const newVi = { ...visualItems[idx] }
+setParsedContent(newVi, newParsed)
+visualItems[idx] = newVi
+this.localState.visualItemCache[sessionId].set(targetLineNum, newVi)
+```
+
+… **sans** appeler `recomputeVisualItems`. Conséquence : avec le design ci-dessus, `block.items[i]` (capturé à la dernière `recomputeVisualItems`) continuerait à pointer vers l'ancien `visualItem`, et le `SessionItem` rendu via le slot recevrait la stale référence → texte streamé figé jusqu'au prochain recompute (ce qui n'arrive qu'à `streamBlockStop`).
+
+**Solution :** étendre `_onBufferDrain` pour aussi patcher l'index correspondant dans le bloc :
+
+```js
+const blockKey = this.localState.sessionLineNumToBlockKey[sessionId]?.get(targetLineNum)
+if (blockKey != null) {
+    const blocks = this.localState.sessionVisualBlocks[sessionId]
+    if (blocks) {
+        // Linear scan over blocks (small N, <100). Could be optimized via a Map<blockKey, block>
+        // if needed, but unnecessary for current scale.
+        for (const block of blocks) {
+            if (block.blockKey === blockKey) {
+                const itemIdx = block.items.findIndex(it => it.lineNum === targetLineNum)
+                if (itemIdx !== -1) block.items[itemIdx] = newVi
+                break
+            }
+        }
+    }
+}
+```
+
+Pinia rend `localState` réactif, donc cette mutation profonde déclenche la réactivité Vue : le slot est ré-évalué, le `v-for :key="item.lineNum"` reuse l'instance `SessionItem`, qui reçoit les nouveaux props (nouveau `item` ref → `getParsedContent(item)` retourne le nouveau parsed text) → re-render correct.
+
+Pourquoi pas appeler `recomputeVisualItems` à la place : c'est un O(N) sur tous les items affichés, déclenché à 60 Hz pendant le streaming. La mutation ciblée ci-dessus est O(blocs) (≤ 100 typiquement) puis O(items_in_block) pour le findIndex (≤ 100), donc négligeable.
+
 ### Placement de la logique de groupement
 
 Dans le store (`data.js`), à la fin de `recomputeVisualItems`, après le calcul de `stableItems` :
@@ -163,14 +200,16 @@ Choix : `BLOCK_LOAD_BUFFER = 1`.
 
 Actuellement (`SessionItemsList.vue:1150-1226`) : trouve l'item par `lineNum` dans `visualItems` puis appelle `scroller.scrollToKey(lineNum)`.
 
-Avec les blocs, le scroller indexe par `blockKey`, pas par `lineNum`. Adaptation :
+Avec les blocs, le scroller indexe par `blockKey`, pas par `lineNum`. **Important :** `composableScrollToKey` avec `align: 'center'` centre **le bloc**, pas l'item à l'intérieur. Pour un sous-bloc qui peut faire jusqu'à 100 items et plusieurs viewports de hauteur, l'item ciblé peut se retrouver complètement hors viewport.
+
+Adaptation :
 
 1. Recherche de l'item dans `visualItems` (inchangé) ; si nécessaire, `ensureBlockDetailed` en mode conversation (inchangé).
 2. Pré-chargement du buffer de contenu autour de la cible (inchangé sur le principe ; on cible toujours `lineNum` dans `visualItems` pour le buffer LOAD_BUFFER en items).
 3. Récupérer `blockKey = store.localState.sessionLineNumToBlockKey[sessionId].get(lineNum)`.
-4. Appeler `scroller.scrollToKey(blockKey, { align: 'center' })` — ça scrolle au bloc.
-5. Une fois le bloc visible (DOM rendu), faire un `scrollIntoView` sur l'élément `[data-line-num="X"]` à l'intérieur du `[data-item-key="${blockKey}"]` pour amener précisément l'item au centre. Vu que tout le bloc est rendu en une fois, l'élément existe.
-6. Étape 5 (highlight scroll) reste fonctionnelle.
+4. Appeler `await scroller.scrollToKey(blockKey, { align: 'center' })` → scrolle le bloc au centre du viewport.
+5. **Toujours** ensuite (peu importe la taille du bloc, sans check préalable) : trouver le DOM element `.session-item[data-line-num="${lineNum}"]` (via `scrollerEl.querySelector(...)`) et faire `el.scrollIntoView({ block: 'center', behavior: 'instant' })`. Pour un item déjà au centre (cas des petits blocs), c'est un no-op naturel ; pour un item dans un long bloc, c'est ce qui ramène l'item dans le viewport. Vu que tout le bloc est rendu d'un coup, l'élément existe en DOM dès que `scrollToKey` a résolu.
+6. L'étape 5 historique (`scrollToFirstHighlight`, défile le scroller jusqu'au 1er `mark.search-highlight` *dans* l'item s'il est plus grand que le viewport) reste fonctionnelle telle quelle. Elle s'applique après le scrollIntoView de l'item — l'utilisateur voit en pratique un seul mouvement composé.
 
 ### `commentedToolLineNums` / `blocksWithComments` / `groupCommentsCount`
 
@@ -268,6 +307,7 @@ export function groupVisualItemsIntoBlocks(visualItems, maxBlockSize) {
   this.localState.sessionLineNumToBlockKey[sessionId] = lineNumToBlockKey
   ```
 - Dans le bloc qui supprime tout pour un sessionId (vers data.js:1267-1273), ajouter le delete de `sessionVisualBlocks` et `sessionLineNumToBlockKey`.
+- Étendre `_onBufferDrain` pour patcher aussi `block.items[itemIdx]` après la mutation de `sessionVisualItems[idx]` (voir section "Cas particulier : streaming via `_onBufferDrain`").
 - Importer `groupVisualItemsIntoBlocks` et `MAX_BLOCK_SIZE`.
 
 ### `frontend/src/components/SessionItemsList.vue`
@@ -295,8 +335,9 @@ export function groupVisualItemsIntoBlocks(visualItems, maxBlockSize) {
   }
   ```
   Renommer/remplacer la constante `LOAD_BUFFER` par `BLOCK_LOAD_BUFFER = 1`.
-- `scrollToLineNum` : après l'étape 4 actuelle (chargement du buffer de contenu), récupérer le `blockKey` via la map du store et passer `blockKey` à `scroller.scrollToKey(...)` au lieu de `lineNum`. Après que la promise se résout, `scrollIntoView` sur `[data-line-num="${lineNum}"]` à l'intérieur du DOM si l'élément n'est pas centré (réutiliser la logique existante de `scrollToFirstHighlight` adaptée).
+- `scrollToLineNum` : après l'étape 4 actuelle (chargement du buffer de contenu), récupérer le `blockKey` via `store.localState.sessionLineNumToBlockKey[sessionId].get(lineNum)` et passer `blockKey` à `scroller.scrollToKey(...)` au lieu de `lineNum`. Une fois la promise résolue, **systématiquement** (sans check préalable) appeler `scrollerEl.querySelector('.session-item[data-line-num="${lineNum}"]')?.scrollIntoView({ block: 'center', behavior: 'instant' })` pour ramener l'item au centre dans le cas d'un sous-bloc plus grand que le viewport. Pour un item déjà au centre, c'est un no-op naturel — pas besoin de logique conditionnelle. **Ne pas réutiliser** `scrollToFirstHighlight` ici : ce helper cible `mark.search-highlight` *à l'intérieur* d'un item (problème orthogonal), il reste tel quel pour l'étape 5 historique du flow de recherche.
 - L'auto-scroll-on-new-items watch (`watch(() => visualItems.value?.length, ...)`) reste sur `visualItems` plat ; pas de lien direct avec les blocs.
+- Dans `handleRetry` (`SessionItemsList.vue:485-510`), où le composant fait `delete store.sessionItems[sId]` et `delete store.sessionVisualItems[sId]` avant de relancer un load, ajouter le cleanup symétrique de `store.localState.sessionVisualBlocks[sId]` et `store.localState.sessionLineNumToBlockKey[sId]`. Sans cela, on retomberait sur des données obsolètes le temps que `recomputeVisualItems` les régénère.
 
 ### `frontend/src/components/SessionItem.vue`
 
@@ -317,6 +358,8 @@ CSS adapté par l'utilisateur. Pas de modification JS/template par moi.
 - **Régression du toggle de groupes (mode simplified) et de detail blocks (mode conversation).** Tester : ouvrir/fermer plusieurs groupes successifs, le DOM ne doit pas sauter.
 - **Sessions très longues (>1000 items dans un run réel).** Tester sur les 3 sessions identifiées en analyse statistique (si accessibles), sinon sur une session synthétique large.
 - **Mode debug avec beaucoup de `system`.** Tester rapidement, pas de garantie de fluidité comparable mais doit rester fonctionnel.
+- **Streaming text en assistant_turn (corrigé).** Tester explicitement : démarrer une session, observer le streaming d'une réponse longue → le texte doit progresser dans le DOM en temps réel. C'est le scénario du bug que la mutation `_onBufferDrain` ciblée doit éviter.
+- **Lazy loading en mode conversation (avec `BLOCK_LOAD_BUFFER = 1`).** En mode conversation, les blocs sont souvent petits (1 user_message + 1 assistant_message kept). Le buffer de chargement de 1 bloc voisin charge donc moins de contenu spéculativement qu'avec l'ancien `LOAD_BUFFER = 50` items. Vérifier qu'on ne voit pas plus de placeholders pendant le scroll qu'avant. Si gênant, on pourra remonter à 2-3 blocs voisins.
 
 ## Ordre d'implémentation suggéré
 
