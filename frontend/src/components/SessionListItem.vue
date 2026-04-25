@@ -3,7 +3,7 @@
  * SessionListItem - Renders a single session entry in the SessionList.
  *
  * Extracted from SessionList to isolate per-item store lookups into computed
- * properties. Previously, getProcessState() and getPendingRequest() were
+ * properties. Previously, getProcessState() and getPendingRequests() were
  * called ~9 and ~4 times respectively in the template for the same session.
  * Now each is called once via a computed, and Vue caches the result.
  */
@@ -93,8 +93,8 @@ const hasCodeComments = computed(() =>
 /** Process state for this session — single lookup, used everywhere in template. */
 const processState = computed(() => store.getProcessState(props.session.id))
 
-/** Pending request for this session — single lookup. */
-const pendingRequest = computed(() => store.getPendingRequest(props.session.id))
+/** Whether this session has any pending request waiting for user response. */
+const pendingRequest = computed(() => store.getPendingRequests(props.session.id).length > 0)
 
 /** Whether the process has active cron jobs. */
 const hasActiveCrons = computed(() => processState.value?.active_crons?.length > 0)

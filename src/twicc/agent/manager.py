@@ -489,25 +489,30 @@ class ProcessManager:
             return False
 
     async def resolve_pending_request(
-        self, session_id: str, response: PermissionResultAllow | PermissionResultDeny
+        self,
+        session_id: str,
+        request_id: str,
+        response: PermissionResultAllow | PermissionResultDeny,
     ) -> bool:
-        """Resolve a pending request on a process.
+        """Resolve a specific pending request on a process.
 
-        Routes the user's response to the correct process based on session_id.
-        Called by the WebSocket handler when a pending_request_response message
-        arrives from the frontend.
+        Routes the user's response to the correct process based on session_id and
+        the specific in-flight request based on request_id. Multiple permission
+        asks can be concurrent within one session (parallel concurrency-safe tools),
+        so request_id is required to disambiguate.
 
         Args:
             session_id: The session to resolve
+            request_id: UUID of the pending request to resolve
             response: The permission result to send to the SDK
 
         Returns:
-            True if resolved, False if no matching process or no pending request
+            True if resolved, False if no matching process or no matching request
         """
         process = self._processes.get(session_id)
         if process is None:
             return False
-        return process.resolve_pending_request(response)
+        return process.resolve_pending_request(request_id, response)
 
     async def shutdown(self, timeout: float = 5.0) -> None:
         """Shutdown all active processes and the timeout monitor.
@@ -833,7 +838,7 @@ class ProcessManager:
 
         for session_id, process in processes_snapshot:
             # Don't timeout processes waiting for user input
-            if process.pending_request is not None:
+            if process.pending_requests:
                 continue
 
             # Don't timeout processes with active cron jobs — the CLI has

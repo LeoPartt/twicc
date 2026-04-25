@@ -31,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Parallel tool permission requests are now all shown and answered one by one, instead of only the last one being visible
 - Code comments gutter button is now correctly positioned on the hovered line
 - Git commit selector no longer renders raw error JSON and stays interactive (opens the commit list) when the requested commit cannot be found
 

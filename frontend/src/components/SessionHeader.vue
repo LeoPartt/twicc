@@ -392,12 +392,12 @@ defineExpose({
 
                 <!-- Pending request indicator (shown when waiting for user response) -->
                 <wa-icon
-                    v-if="store.getPendingRequest(sessionId)"
+                    v-if="store.getPendingRequests(sessionId).length > 0"
                     :id="`session-header-${sessionId}-pending-request`"
                     name="hand"
                     class="pending-request-indicator"
                 ></wa-icon>
-                <AppTooltip v-if="store.getPendingRequest(sessionId)" :for="`session-header-${sessionId}-pending-request`">Waiting for your response</AppTooltip>
+                <AppTooltip v-if="store.getPendingRequests(sessionId).length > 0" :for="`session-header-${sessionId}-pending-request`">Waiting for your response</AppTooltip>
             </div>
 
             <!-- Clickable zone: title + project + context ring + chevron toggle compact mode -->

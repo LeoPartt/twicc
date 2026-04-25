@@ -433,12 +433,18 @@ function notifyProcessStateChange(msg, previousState, route) {
     }
 
     // --- Pending request: "Claude needs your attention" ---
-    if (msg.pending_request && !previousState?.pending_request) {
+    // Notify when at least one new pending request appeared (transition from
+    // 0 → ≥1, or any growth in count for parallel concurrency-safe tools).
+    const newPendingCount = msg.pending_requests?.length || 0
+    const previousPendingCount = previousState?.pending_requests?.length || 0
+    if (newPendingCount > previousPendingCount) {
         // Skip toast if the user is already viewing this session (they see the
         // pending-request indicator directly in the Chat tab)
         const isViewingSession = route?.params?.sessionId === sessionId
         if (!isViewingSession) {
-            const pendingTitle = msg.pending_request.request_type === 'ask_user_question'
+            // Use the freshest (last-arrived) request to title the toast.
+            const latest = msg.pending_requests[newPendingCount - 1]
+            const pendingTitle = latest?.request_type === 'ask_user_question'
                 ? '🖐️ Claude has a question for you'
                 : '🖐️ Claude needs your approval'
             toast.session(sessionId, { type: 'warning', title: pendingTitle })
@@ -775,7 +781,7 @@ export function useWebSocket() {
                     state_changed_at: msg.state_changed_at,
                     memory: msg.memory,
                     error: msg.error,
-                    pending_request: msg.pending_request,
+                    pending_requests: msg.pending_requests,
                     active_crons: msg.active_crons,
                     session_title: msg.session_title,
                     project_name: msg.project_name,

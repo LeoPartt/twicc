@@ -290,7 +290,7 @@ export const useDataStore = defineStore('data', {
         getSession: (state) => (id) => state.sessions[id],
         getSessionItems: (state) => (sessionId) => state.sessionItems[sessionId] || [],
 
-        // Process state getter - returns { state, error?, pending_request? } or null if no active process
+        // Process state getter - returns { state, error?, pending_requests? } or null if no active process
         getProcessState: (state) => (sessionId) => state.processStates[sessionId] || null,
 
         /**
@@ -307,9 +307,11 @@ export const useDataStore = defineStore('data', {
             return streaming?.blocks.some(b => !b.stopped) ?? false
         },
 
-        // Pending request getter - returns the pending_request object or null
-        getPendingRequest: (state) => (sessionId) =>
-            state.processStates[sessionId]?.pending_request || null,
+        // Pending requests getter - returns an array (oldest first) of pending requests,
+        // or an empty array if none. Multiple permission asks can be concurrent within
+        // a single session (parallel concurrency-safe tools like Read + Glob).
+        getPendingRequests: (state) => (sessionId) =>
+            state.processStates[sessionId]?.pending_requests || [],
 
         /**
          * Count sessions with unread content in a project.
@@ -2015,7 +2017,7 @@ export const useDataStore = defineStore('data', {
                 state_changed_at: startedAtUnix,
                 memory: null,
                 error: null,
-                pending_request: null,
+                pending_requests: [],
                 session_title: null,
                 project_name: null,
                 synthetic: true,
@@ -2126,7 +2128,7 @@ export const useDataStore = defineStore('data', {
          * @param {string} sessionId
          * @param {string} projectId - The project ID this session belongs to
          * @param {string} state - 'starting' | 'assistant_turn' | 'user_turn' | 'dead'
-         * @param {object} extra - Additional fields: started_at, state_changed_at, memory, error, pending_request, session_title, project_name
+         * @param {object} extra - Additional fields: started_at, state_changed_at, memory, error, pending_requests, session_title, project_name
          */
         setProcessState(sessionId, projectId, state, extra = {}) {
             const previousState = this.processStates[sessionId]?.state
@@ -2147,7 +2149,7 @@ export const useDataStore = defineStore('data', {
                     state_changed_at: extra.state_changed_at || null,
                     memory: extra.memory || null,
                     error: extra.error || null,
-                    pending_request: extra.pending_request || null,
+                    pending_requests: extra.pending_requests || [],
                     active_crons: extra.active_crons || null,
                     session_title: extra.session_title || null,
                     project_name: extra.project_name || null,
@@ -2190,7 +2192,7 @@ export const useDataStore = defineStore('data', {
                         state_changed_at: p.state_changed_at || null,
                         memory: p.memory || null,
                         error: p.error || null,
-                        pending_request: p.pending_request || null,
+                        pending_requests: p.pending_requests || [],
                         active_crons: p.active_crons || null,
                         session_title: p.session_title || null,
                         project_name: p.project_name || null,

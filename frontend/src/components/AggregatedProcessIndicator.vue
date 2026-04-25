@@ -53,7 +53,7 @@ const processInfo = computed(() => {
     for (const ps of Object.values(dataStore.processStates)) {
         if (!projectIdSet.value.has(ps.project_id)) continue
         processCount++
-        if (ps.pending_request) pendingRequestCount++
+        pendingRequestCount += ps.pending_requests?.length || 0
         if (ps.state === 'assistant_turn') hasAssistantTurn = true
         activeCronCount += ps.active_crons?.length || 0
     }

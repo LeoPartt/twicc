@@ -79,8 +79,21 @@ const props = defineProps({
     pendingRequest: {
         type: Object,
         required: true
+    },
+    /**
+     * Total number of pending requests for this session, including this one.
+     * When > 1, a counter badge is shown to indicate that more requests are queued
+     * behind the current one (parallel concurrency-safe tools like Read + Glob can
+     * each have their own permission ask within a single assistant turn).
+     */
+    pendingCount: {
+        type: Number,
+        default: 1
     }
 })
+
+// Number of additional pending requests waiting behind this one (>= 0).
+const extraPendingCount = computed(() => Math.max(0, props.pendingCount - 1))
 
 const store = useDataStore()
 
@@ -585,6 +598,16 @@ function handleSubmitQuestions() {
             <div class="pending-request-header">
                 <wa-icon name="shield-halved" class="pending-request-icon"></wa-icon>
                 <span class="pending-request-title">Tool approval requested</span>
+                <span
+                    v-if="extraPendingCount > 0"
+                    class="pending-count-badge"
+                    :id="`pending-count-${sessionId}-tool`"
+                    role="status"
+                >+{{ extraPendingCount }} pending</span>
+                <AppTooltip
+                    v-if="extraPendingCount > 0"
+                    :for="`pending-count-${sessionId}-tool`"
+                >{{ extraPendingCount }} more request{{ extraPendingCount > 1 ? 's' : '' }} waiting after this one</AppTooltip>
                 <wa-button
                     variant="neutral"
                     appearance="plain"
@@ -749,6 +772,16 @@ function handleSubmitQuestions() {
             <div class="pending-request-header">
                 <wa-icon name="circle-question" class="pending-request-icon question-icon"></wa-icon>
                 <span class="pending-request-title">Claude needs your input</span>
+                <span
+                    v-if="extraPendingCount > 0"
+                    class="pending-count-badge"
+                    :id="`pending-count-${sessionId}-question`"
+                    role="status"
+                >+{{ extraPendingCount }} pending</span>
+                <AppTooltip
+                    v-if="extraPendingCount > 0"
+                    :for="`pending-count-${sessionId}-question`"
+                >{{ extraPendingCount }} more request{{ extraPendingCount > 1 ? 's' : '' }} waiting after this one</AppTooltip>
                 <wa-button
                     variant="neutral"
                     appearance="plain"
@@ -861,6 +894,19 @@ wa-divider {
 
 .pending-request-title {
     flex: 1;
+}
+
+.pending-count-badge {
+    display: inline-flex;
+    align-items: center;
+    background: var(--wa-color-warning-fill-loud);
+    color: var(--wa-color-warning-on-loud);
+    font-size: var(--wa-font-size-xs);
+    font-weight: 600;
+    padding: 2px var(--wa-space-xs);
+    border-radius: var(--wa-border-radius-pill);
+    line-height: 1;
+    white-space: nowrap;
 }
 
 .expand-toggle-btn {

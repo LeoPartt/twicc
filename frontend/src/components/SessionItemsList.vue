@@ -141,11 +141,16 @@ const hasError = computed(() => store.didSessionItemsFailToLoad(props.sessionId)
 // Process state for this session (starting, assistant_turn, user_turn, dead)
 const processState = computed(() => store.getProcessState(props.sessionId))
 
-// Pending request for this session (tool approval or ask user question)
-const pendingRequest = computed(() => store.getPendingRequest(props.sessionId))
+// Pending requests for this session (tool approvals and/or ask-user questions).
+// The CLI can run multiple concurrency-safe tools in parallel, each with its own
+// permission ask, so this is a list ordered oldest-first.
+const pendingRequests = computed(() => store.getPendingRequests(props.sessionId))
+
+// The next request to show (oldest first — FIFO queue)
+const pendingRequest = computed(() => pendingRequests.value[0] || null)
 
 // Whether any pending request is active (hides MessageInput, shows PendingRequestForm)
-const hasPendingRequest = computed(() => pendingRequest.value != null)
+const hasPendingRequest = computed(() => pendingRequests.value.length > 0)
 
 /**
  * Whether the VirtualScroller should be visible.
@@ -1619,11 +1624,14 @@ defineExpose({
                     </div>
                 </wa-callout>
             </div>
-            <!-- Pending request form (replaces MessageInput when Claude requests approval or asks a question) -->
+            <!-- Pending request form (replaces MessageInput when Claude requests approval or asks a question).
+                 When multiple parallel requests are pending, the oldest is shown and a counter
+                 is displayed for the others. -->
             <PendingRequestForm
                 v-else-if="hasPendingRequest"
                 :session-id="sessionId"
                 :pending-request="pendingRequest"
+                :pending-count="pendingRequests.length"
             />
             <!-- Message input (only for main sessions, not subagents, hidden during pending requests) -->
             <MessageInput

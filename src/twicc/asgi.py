@@ -1090,12 +1090,13 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         """
         session_id = content.get("session_id")
         request_type = content.get("request_type")
+        request_id = content.get("request_id")
 
-        if not session_id or not request_type:
+        if not session_id or not request_type or not request_id:
             logger.warning(
-                "pending_request_response missing required fields: session_id=%s, request_type=%s",
-                session_id,
-                request_type,
+                "pending_request_response missing required fields: "
+                "session_id=%s, request_type=%s, request_id=%s",
+                session_id, request_type, request_id,
             )
             return
 
@@ -1123,15 +1124,21 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
         elif request_type == "ask_user_question":
             answers = content.get("answers", {})
-            # Retrieve original questions from the process's pending request
+            # Retrieve the original questions from the matching pending request
             process_info = manager.get_process_info(session_id)
-            if process_info is None or process_info.pending_request is None:
+            matching = None
+            if process_info is not None:
+                matching = next(
+                    (pr for pr in process_info.pending_requests if pr.request_id == request_id),
+                    None,
+                )
+            if matching is None:
                 logger.warning(
-                    "pending_request_response: no pending request for session %s",
-                    session_id,
+                    "pending_request_response: no pending request %s for session %s",
+                    request_id, session_id,
                 )
                 return
-            original_input = process_info.pending_request.tool_input
+            original_input = matching.tool_input
             response = PermissionResultAllow(
                 updated_input={
                     "questions": original_input.get("questions", []),
@@ -1160,12 +1167,12 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
                         )
                         break  # Only one setMode should be applied
 
-        resolved = await manager.resolve_pending_request(session_id, response)
+        resolved = await manager.resolve_pending_request(session_id, request_id, response)
         if not resolved:
             logger.warning(
-                "pending_request_response: failed to resolve for session %s "
-                "(no pending request or already resolved)",
-                session_id,
+                "pending_request_response: failed to resolve request %s for session %s "
+                "(no matching pending request or already resolved)",
+                request_id, session_id,
             )
 
     async def _handle_suggest_title(self, content: dict) -> None:

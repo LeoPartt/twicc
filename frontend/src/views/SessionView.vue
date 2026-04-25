@@ -1218,7 +1218,7 @@ onBeforeUnmount(() => {
                             Chat
                             <CodeCommentsIndicator slot="end" :count="chatCommentsCount" :show-tooltip="false" class="tab-comments-indicator" />
                             <wa-icon
-                                v-if="store.getPendingRequest(sessionId)"
+                                v-if="store.getPendingRequests(sessionId).length > 0"
                                 slot="end"
                                 name="hand"
                                 class="pending-request-indicator"
@@ -1314,14 +1314,14 @@ onBeforeUnmount(() => {
                     Chat
                     <CodeCommentsIndicator slot="end" :count="chatCommentsCount" :show-tooltip="false" class="tab-comments-indicator" />
                     <wa-icon
-                        v-if="store.getPendingRequest(sessionId)"
+                        v-if="store.getPendingRequests(sessionId).length > 0"
                         slot="end"
                         :id="`session-tab-chat-${sessionId}-pending-request`"
                         name="hand"
                         class="pending-request-indicator"
                     ></wa-icon>
                 </wa-button>
-                <AppTooltip v-if="store.getPendingRequest(sessionId)" :for="`session-tab-chat-${sessionId}-pending-request`">Waiting for your response</AppTooltip>
+                <AppTooltip v-if="store.getPendingRequests(sessionId).length > 0" :for="`session-tab-chat-${sessionId}-pending-request`">Waiting for your response</AppTooltip>
             </wa-tab>
 
             <!-- Subagent tabs with close button -->

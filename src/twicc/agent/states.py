@@ -99,7 +99,10 @@ class ProcessInfo(NamedTuple):
         error: Error message if state is DEAD due to error, None otherwise
         memory_rss: RSS memory usage in bytes, or None if unavailable
         kill_reason: Reason for death if DEAD (e.g., "manual", "error", "shutdown")
-        pending_request: Active pending request if Claude is waiting for user input, None otherwise
+        pending_requests: Active pending requests waiting for user response, ordered
+            from oldest to newest. Empty when Claude is not waiting on any request.
+            The CLI can run multiple concurrency-safe tools in parallel within the same
+            assistant turn (e.g., Read + Glob + Grep), each with its own permission ask.
     """
 
     session_id: str
@@ -112,7 +115,7 @@ class ProcessInfo(NamedTuple):
     error: str | None = None
     memory_rss: int | None = None
     kill_reason: str | None = None
-    pending_request: PendingRequest | None = None
+    pending_requests: tuple[PendingRequest, ...] = ()
 
     @property
     def memory_rss_human(self) -> str | None:
@@ -144,14 +147,18 @@ def serialize_process_info(info: ProcessInfo) -> dict:
         data["memory"] = info.memory_rss
     if info.kill_reason is not None:
         data["kill_reason"] = info.kill_reason
-    if info.pending_request is not None:
-        data["pending_request"] = {
-            "request_id": info.pending_request.request_id,
-            "request_type": info.pending_request.request_type,
-            "tool_name": info.pending_request.tool_name,
-            "tool_input": info.pending_request.tool_input,
-            "created_at": info.pending_request.created_at,
-        }
-        if info.pending_request.permission_suggestions:
-            data["pending_request"]["permission_suggestions"] = info.pending_request.permission_suggestions
+    if info.pending_requests:
+        serialized = []
+        for pr in info.pending_requests:
+            entry = {
+                "request_id": pr.request_id,
+                "request_type": pr.request_type,
+                "tool_name": pr.tool_name,
+                "tool_input": pr.tool_input,
+                "created_at": pr.created_at,
+            }
+            if pr.permission_suggestions:
+                entry["permission_suggestions"] = pr.permission_suggestions
+            serialized.append(entry)
+        data["pending_requests"] = serialized
     return data
