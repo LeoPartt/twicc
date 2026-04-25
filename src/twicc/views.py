@@ -2046,6 +2046,7 @@ def bootstrap(request):
     terminal config, and message snippets in a single response so the
     frontend doesn't have to wait for the WebSocket connection.
     """
+    from twicc.claude_settings_presets import read_claude_settings_presets
     from twicc.message_snippets import read_message_snippets_config
     from twicc.model_registry import serialize_model_registry
     from twicc.synced_settings import CLAUDE_SETTINGS_CATEGORIES, SYNCED_SETTINGS_DEFAULTS, prepare_settings_for_client, read_synced_settings
@@ -2064,6 +2065,7 @@ def bootstrap(request):
         "workspaces": workspaces_data.get("workspaces", []),
         "terminal_config": read_terminal_config(),
         "message_snippets": read_message_snippets_config(),
+        "claude_settings_presets": read_claude_settings_presets(),
         "model_registry": serialize_model_registry(),
     })
 

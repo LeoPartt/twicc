@@ -29,6 +29,7 @@ from twicc.synced_settings import _settings_lock, prepare_settings_for_client, r
 from twicc.workspaces import read_workspaces, write_workspaces
 from twicc.message_snippets import read_message_snippets_config, write_message_snippets_config
 from twicc.terminal_config import read_terminal_config, write_terminal_config
+from twicc.claude_settings_presets import read_claude_settings_presets, write_claude_settings_presets
 from twicc.usage_task import get_usage_message_for_connection
 from twicc.terminal import terminal_application
 
@@ -609,6 +610,10 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
             message_snippets = await sync_to_async(read_message_snippets_config)()
             await self.send_json({"type": "message_snippets_updated", "config": message_snippets})
 
+        if self._should_send("claude_settings_presets_updated"):
+            presets = await sync_to_async(read_claude_settings_presets)()
+            await self.send_json({"type": "claude_settings_presets_updated", "config": presets})
+
         if self._should_send("workspaces_updated"):
             workspaces = await sync_to_async(read_workspaces)()
             await self.send_json({"type": "workspaces_updated", "workspaces": workspaces.get("workspaces", [])})
@@ -695,6 +700,9 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
         elif msg_type == "update_message_snippets":
             await self._handle_update_message_snippets(content)
+
+        elif msg_type == "update_claude_settings_presets":
+            await self._handle_update_claude_settings_presets(content)
 
         elif msg_type == "session_viewed":
             await self._handle_session_viewed(content)
@@ -1393,6 +1401,16 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
                 },
             },
         )
+
+    async def _handle_update_claude_settings_presets(self, content: dict) -> None:
+        config = content.get("config")
+        if not isinstance(config, dict):
+            return
+        await sync_to_async(write_claude_settings_presets)(config)
+        await self.channel_layer.group_send("updates", {
+            "type": "broadcast",
+            "data": {"type": "claude_settings_presets_updated", "config": config},
+        })
 
     async def _handle_session_viewed(self, content: dict) -> None:
         """Handle session_viewed notification from client.

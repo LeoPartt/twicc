@@ -20,6 +20,9 @@ import MessageSnippetsBar from './MessageSnippetsBar.vue'
 import MessageSnippetsDialog from './MessageSnippetsDialog.vue'
 import { useMessageSnippetsStore } from '../stores/messageSnippets'
 import { useWorkspacesStore } from '../stores/workspaces'
+import { useClaudeSettingsPresetsStore } from '../stores/claudeSettingsPresets'
+import { formatPresetSummary } from '../utils/presetFormat'
+import ClaudePresetsDialog from './ClaudePresetsDialog.vue'
 import { getUnavailablePlaceholders, resolveSnippetText } from '../utils/snippetPlaceholders'
 
 const props = defineProps({
@@ -38,6 +41,7 @@ const route = useRoute()
 const store = useDataStore()
 const settingsStore = useSettingsStore()
 const codeCommentsStore = useCodeCommentsStore()
+const presetsStore = useClaudeSettingsPresetsStore()
 
 // Detect "All Projects" mode from route name
 const isAllProjectsMode = computed(() => route.name?.startsWith('projects-'))
@@ -258,6 +262,35 @@ const selectedEffort = ref(null)
 const selectedThinking = ref(null)
 const selectedClaudeInChrome = ref(null)
 const selectedContextMax = ref(null)
+
+// Claude config presets (apply to the six selects above).
+const presets = computed(() => presetsStore.presets)
+const hasPresets = computed(() => presets.value.length > 0)
+const claudePresetsDialogOpen = ref(false)
+
+function handlePresetSelect(event) {
+    const item = event.detail?.item
+    const value = item?.value
+    if (value === undefined || value === null || value === '') return
+    if (value === '__reset__') {
+        resetAllToDefaults()
+        return
+    }
+    if (value === '__manage__') {
+        claudePresetsDialogOpen.value = true
+        return
+    }
+    const index = Number(value)
+    if (!Number.isInteger(index)) return
+    const preset = presets.value[index]
+    if (!preset) return
+    selectedModel.value = preset.model
+    selectedContextMax.value = preset.context_max
+    selectedEffort.value = preset.effort
+    selectedThinking.value = preset.thinking
+    selectedPermissionMode.value = preset.permission_mode
+    selectedClaudeInChrome.value = preset.claude_in_chrome
+}
 
 // Get process state for this session
 const processState = computed(() => store.getProcessState(props.sessionId))
@@ -1669,13 +1702,40 @@ defineExpose({ insertTextAtCursor, getSessionSetting, setSessionSetting, getSess
                     placement="top"
                     class="settings-popover"
                 >
+                    <!-- Apply preset / Reset / Manage (non-scrollable) -->
+                    <div class="settings-panel-presets">
+                        <wa-dropdown @wa-select="handlePresetSelect">
+                            <wa-button slot="trigger" size="small" appearance="outlined" :disabled="isStarting">
+                                <wa-icon slot="start" name="sliders"></wa-icon>
+                                Reset / Presets
+                                <wa-icon slot="end" name="caret-down"></wa-icon>
+                            </wa-button>
+                            <wa-dropdown-item value="__reset__" :disabled="!anySettingForced">
+                                <wa-icon slot="icon" name="arrow-rotate-left"></wa-icon>
+                                Reset to defaults
+                            </wa-dropdown-item>
+                            <wa-divider></wa-divider>
+                            <wa-dropdown-item v-if="hasPresets" disabled>Presets</wa-dropdown-item>
+                            <wa-dropdown-item
+                                v-for="(preset, i) in presets"
+                                :key="i"
+                                :value="String(i)"
+                                class="preset-item"
+                            >
+                                <span>{{ preset.name }}</span>
+                                <span class="option-description">{{ formatPresetSummary(preset) }}</span>
+                            </wa-dropdown-item>
+                            <wa-divider v-if="hasPresets"></wa-divider>
+                            <wa-dropdown-item value="__manage__">
+                                <wa-icon slot="icon" name="pen-to-square"></wa-icon>
+                                Manage presets
+                            </wa-dropdown-item>
+                        </wa-dropdown>
+                    </div>
+
                     <!-- Actions & callouts (non-scrollable) — hidden on drafts since there's no process to apply to -->
-                    <div v-if="anySettingForced || (!isDraft && hasDropdownsChanged) || startupSettingsWarning" class="settings-panel-actions">
-                        <div v-if="anySettingForced || (!isDraft && hasDropdownsChanged)" class="settings-panel-links">
-                            <a v-if="anySettingForced" class="settings-action-link" @click.prevent="resetAllToDefaults">
-                                <wa-icon name="arrow-rotate-left"></wa-icon>
-                                Reset all to defaults
-                            </a>
+                    <div v-if="(!isDraft && hasDropdownsChanged) || startupSettingsWarning" class="settings-panel-actions">
+                        <div v-if="!isDraft && hasDropdownsChanged" class="settings-panel-links">
                             <a v-if="!isDraft && hasDropdownsChanged" class="settings-action-link" @click.prevent="restoreSettings">
                                 <wa-icon name="xmark"></wa-icon>
                                 Discard unsaved changes
@@ -1860,6 +1920,8 @@ defineExpose({ insertTextAtCursor, getSessionSetting, setSessionSetting, getSess
                 </wa-button>
             </div>
         </div>
+
+        <ClaudePresetsDialog v-model:open="claudePresetsDialogOpen" />
     </div>
 </template>
 
@@ -1953,6 +2015,17 @@ body.sidebar-closed .message-input-toolbar {
     width: 100%;
 }
 
+.settings-panel-presets {
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+    padding-bottom: var(--wa-space-s);
+    wa-dropdown::part(menu) {
+        max-width: 90vw !important;
+        width: auto;
+    }
+}
+
 .settings-panel-actions {
     display: flex;
     flex-direction: column;
@@ -2028,6 +2101,11 @@ body.sidebar-closed .message-input-toolbar {
     display: block;
     font-size: var(--wa-font-size-s);
     color: var(--wa-color-text-quiet);
+}
+
+.preset-item::part(label) {
+    white-space: normal;
+    max-width: 25rem;
 }
 
 .message-input-actions {

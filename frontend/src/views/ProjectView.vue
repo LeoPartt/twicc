@@ -1683,6 +1683,10 @@ wa-split-panel::part(divider) {
 
 .session-options-dropdown {
     flex-shrink: 0;
+    &::part(menu) {
+        max-width: 90vw !important;
+        width: auto;
+    }
 }
 
 /* Secondary hint line under a dropdown-item label (same style as the

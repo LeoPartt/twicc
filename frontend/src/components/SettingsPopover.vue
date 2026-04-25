@@ -9,6 +9,7 @@ import { DISPLAY_MODE, COLOR_SCHEME, SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SES
 import NotificationSettings from './NotificationSettings.vue'
 import AppTooltip from './AppTooltip.vue'
 import ChangelogDialog from './ChangelogDialog.vue'
+import ClaudePresetsDialog from './ClaudePresetsDialog.vue'
 import { sendChangelogSeen, sendValidateUsageFile, sendValidateUsageDumpPath, sendValidateTmuxConfigPath } from '../composables/useWebSocket'
 import { vPopoverFocusFix } from '../directives/vPopoverFocusFix'
 
@@ -174,6 +175,10 @@ const sessionTimeFormatOptions = [
 const notificationSettingsRef = ref(null)
 const changelogDialogRef = ref(null)
 const forcedChangelogOpen = ref(false)
+const claudePresetsDialogOpen = ref(false)
+function openClaudePresetsDialog() {
+    claudePresetsDialogOpen.value = true
+}
 
 // Settings from store
 const displayMode = computed(() => store.getDisplayMode)
@@ -849,6 +854,16 @@ function onChangelogClose() {
                             </wa-option>
                         </wa-select>
                     </div>
+                    <div class="setting-group">
+                        <label class="setting-group-label">Presets</label>
+                        <span class="setting-group-hint">
+                            Define bundles of Claude settings to quickly apply to a session
+                        </span>
+                        <wa-button size="small" @click="openClaudePresetsDialog">
+                            <wa-icon slot="start" name="sliders"></wa-icon>
+                            Manage presets…
+                        </wa-button>
+                    </div>
                 </section>
 
                 <!-- Notifications Section -->
@@ -1212,6 +1227,7 @@ function onChangelogClose() {
         </footer>
     </wa-popover>
     <ChangelogDialog ref="changelogDialogRef" @close="onChangelogClose" />
+    <ClaudePresetsDialog v-model:open="claudePresetsDialogOpen" />
 </template>
 
 <style scoped>

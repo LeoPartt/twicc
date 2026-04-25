@@ -309,6 +309,16 @@ export function sendMessageSnippetsConfig(config) {
 }
 
 /**
+ * Send Claude settings presets config to the backend for persistence.
+ * The backend will broadcast the updated config to all connected clients.
+ * @param {Object} config - The Claude settings presets config
+ * @returns {boolean} - True if message was sent, false if not connected
+ */
+export function sendClaudeSettingsPresets(config) {
+    return sendWsMessage({ type: 'update_claude_settings_presets', config })
+}
+
+/**
  * Acknowledge that the user has seen the forced changelog for a version.
  * @param {string} version - The version that was displayed
  * @returns {boolean} - True if message was sent
@@ -889,6 +899,11 @@ export function useWebSocket() {
                 // Lazy import to avoid circular dependency (useWebSocket.js → messageSnippets.js)
                 import('../stores/messageSnippets').then(({ useMessageSnippetsStore }) => {
                     useMessageSnippetsStore().applyConfig(msg.config)
+                })
+                break
+            case 'claude_settings_presets_updated':
+                import('../stores/claudeSettingsPresets').then(({ useClaudeSettingsPresetsStore }) => {
+                    useClaudeSettingsPresetsStore().applyConfig(msg.config)
                 })
                 break
             case 'terminal_list':

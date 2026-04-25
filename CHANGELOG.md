@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - ![Pin modes](frontend/public/whats-new/v1.5.1/pin-modes.webp)
 - New "Always show active sessions" sidebar option that surfaces running and unread sessions from other projects at the top, so you never lose track of them while working in a different scope
   - ![Active session toggle](frontend/public/whats-new/v1.5.1/show-active-sessions.webp)
+- Define reusable Claude config presets (model, context, effort, thinking, permission, Chrome MCP) and apply them in one click from a session's settings panel
 - Triple-press Escape quickly on a session's chat tab to stop the running Claude Code process
   - ![Triple escape shortcut](frontend/public/whats-new/v1.5.1/triple-escape.webp)
 - New `/` and `@` buttons below the message input textarea to quickly open the slash command picker and the file path picker

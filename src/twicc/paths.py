@@ -104,6 +104,10 @@ def get_workspaces_path() -> Path:
     return get_data_dir() / "workspaces.json"
 
 
+def get_claude_settings_presets_path() -> Path:
+    return get_data_dir() / "claude-settings-presets.json"
+
+
 def ensure_data_dirs() -> None:
     """Create the data directory structure if it doesn't exist."""
     get_db_dir().mkdir(parents=True, exist_ok=True)
