@@ -360,7 +360,7 @@ function navigateToResult(result) {
         destination = {
             name: 'projects-session',
             params: { projectId: result.project_id, sessionId: result.session_id },
-            query: { ...route.query, workspace: workspaceFilterId.value },
+            query: { ...route.query, workspace: filterWorkspaceId.value },
         }
     } else if (filters.projectId) {
         destination = {
