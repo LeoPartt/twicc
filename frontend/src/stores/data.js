@@ -2168,8 +2168,8 @@ export const useDataStore = defineStore('data', {
                         active_crons: p.active_crons || null,
                         session_title: p.session_title || null,
                         project_name: p.project_name || null,
-                        tools: [],
-                        lastStartedToolId: null,
+                        tools: Array.isArray(p.active_tools) ? p.active_tools : [],
+                        lastStartedToolId: p.last_started_tool_id || null,
                     }
 
                     // Auto-unarchive: running and archived are mutually exclusive

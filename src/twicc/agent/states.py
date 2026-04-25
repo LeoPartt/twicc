@@ -103,6 +103,11 @@ class ProcessInfo(NamedTuple):
             from oldest to newest. Empty when Claude is not waiting on any request.
             The CLI can run multiple concurrency-safe tools in parallel within the same
             assistant turn (e.g., Read + Glob + Grep), each with its own permission ask.
+        active_tools: In-progress tools tracked for the working-status display, in
+            insertion order. Populated from streaming partials and cleared by
+            PostToolUse. Each entry: {"id", "name", "input", "streaming"}.
+        last_started_tool_id: ID of the most recently started tool, used by the
+            "lone latest tool" parens rule on the frontend.
     """
 
     session_id: str
@@ -116,6 +121,8 @@ class ProcessInfo(NamedTuple):
     memory_rss: int | None = None
     kill_reason: str | None = None
     pending_requests: tuple[PendingRequest, ...] = ()
+    active_tools: tuple[dict, ...] = ()
+    last_started_tool_id: str | None = None
 
     @property
     def memory_rss_human(self) -> str | None:
@@ -161,4 +168,8 @@ def serialize_process_info(info: ProcessInfo) -> dict:
                 entry["permission_suggestions"] = pr.permission_suggestions
             serialized.append(entry)
         data["pending_requests"] = serialized
+    if info.active_tools:
+        data["active_tools"] = list(info.active_tools)
+    if info.last_started_tool_id is not None:
+        data["last_started_tool_id"] = info.last_started_tool_id
     return data

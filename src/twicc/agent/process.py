@@ -369,6 +369,15 @@ class ClaudeProcess:
         """Get an immutable snapshot of the process state."""
         # Don't query memory for dead processes - the subprocess no longer exists
         memory_rss = None if self.state == ProcessState.DEAD else self.get_memory_rss()
+        active_tools = tuple(
+            {
+                "id": tool_use_id,
+                "name": entry["name"],
+                "input": entry["input"],
+                "streaming": entry.get("streaming", False),
+            }
+            for tool_use_id, entry in self._active_tools.items()
+        )
         return ProcessInfo(
             session_id=self.session_id,
             project_id=self.project_id,
@@ -381,6 +390,8 @@ class ClaudeProcess:
             memory_rss=memory_rss,
             kill_reason=self.kill_reason,
             pending_requests=self.pending_requests,
+            active_tools=active_tools,
+            last_started_tool_id=self._last_started_tool_id,
         )
 
     def get_permission_suggestions(
@@ -1391,6 +1402,14 @@ class ClaudeProcess:
                                 "[ToolUse block_stop tool=%s id=%s] => STOP",
                                 current_stream_tool_name, current_stream_tool_id,
                             )
+                            # Flip streaming=False as soon as the block ends — input is
+                            # final, no more deltas. This is the earliest reliable point;
+                            # PreToolUse-based flip stays as a redundant safety net.
+                            if current_stream_tool_id in self._active_tools:
+                                entry = self._active_tools[current_stream_tool_id]
+                                if entry.get("streaming"):
+                                    entry["streaming"] = False
+                                    await self._broadcast_process_tools()
                             current_stream_tool_id = None
                             current_stream_tool_name = None
                             current_stream_tool_input_raw = ""
