@@ -47,7 +47,11 @@ function buildPhraseGroups(tools, baseDir, lastStartedToolId) {
     // started one — its tool card sits right above, so the parenthesised target
     // would be redundant. Otherwise (multiple tools, or a single survivor that
     // isn't the latest), parens disambiguate which tool we're talking about.
-    const isLoneLatest = tools.length === 1 && tools[0].id === lastStartedToolId
+    // Exception: while the latest tool is still streaming its input, no real
+    // tool card exists yet, so we always show the summary to give the user
+    // visible feedback as the input fills in.
+    const latest = tools.length === 1 ? tools[0] : null
+    const isLoneLatest = latest && latest.id === lastStartedToolId && !latest.streaming
     const showSummaries = !isLoneLatest
 
     return Array.from(map, ([verb, summaries]) => {

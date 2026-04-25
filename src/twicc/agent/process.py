@@ -26,6 +26,7 @@ from claude_agent_sdk import (
 )
 
 from channels.layers import get_channel_layer
+import json_repair
 
 from twicc.claude_plugin import get_plugin_dir
 
@@ -831,18 +832,15 @@ class ClaudeProcess:
                 is_subagent_tool = "agent_id" in input_data
                 if tool_name in ("Edit", "Write") and not is_subagent_tool:
                     _capture_original_file(input_data, tool_use_id)
-                if tool_use_id and not is_subagent_tool:
-                    tool_input = input_data.get("tool_input", {}) or {}
-                    self._active_tools[tool_use_id] = {
-                        "name": tool_name,
-                        "input": filter_tool_input(tool_name, tool_input),
-                    }
-                    self._last_started_tool_id = tool_use_id
-                    logger.debug(
-                        "PreToolUse session=%s tool=%s active_tools=%d",
-                        self.session_id, tool_name, len(self._active_tools),
-                    )
-                    await self._broadcast_process_tools()
+                # Streaming registered the tool with streaming=True so the frontend
+                # always shows its summary while input chunks were arriving. By the
+                # time PreToolUse fires, the input is final — flip the flag off so
+                # the "lone latest tool → no parens" rule can apply again.
+                if tool_use_id and tool_use_id in self._active_tools:
+                    entry = self._active_tools[tool_use_id]
+                    if entry.get("streaming"):
+                        entry["streaming"] = False
+                        await self._broadcast_process_tools()
                 return {"continue_": True}
 
             async def _post_tool_use(input_data: dict, tool_use_id: str | None, context: Any) -> dict:
@@ -1256,6 +1254,7 @@ class ClaudeProcess:
 
         logger.debug("Entering message loop for session %s", self.session_id)
 
+        # State variables when streaming is about assistant messages and thinking
         current_stream_message_id: str | None = None
         current_stream_block_index: int | None = None
         current_stream_block_type: str | None = None
@@ -1265,6 +1264,13 @@ class ClaudeProcess:
         last_finished_block_index: int | None = None
         last_finished_block_type: str | None = None
 
+        # State variables when streaming is about tools
+        current_stream_tool_id: str | None = None
+        current_stream_tool_name: str | None = None
+        current_stream_tool_input_raw: str = ""
+        current_stream_tool_input: dict | None = None
+        current_stream_tool_input_cleaned: dict | None = None
+
         try:
             async for msg in self._client.receive_messages():
                 self.last_activity = time.time()
@@ -1273,8 +1279,9 @@ class ClaudeProcess:
                     event = msg.event
                     event_type = event.get("type")
                     match event_type:
+                        # HANDLE SIMPLE MESSAGES AND THINKING
                         case "message_start" if (
-                            (message := event.get("message") or {})
+                            isinstance(message := event.get("message"), dict)
                             and message.get("type") == "message"
                             and message.get("role") == "assistant"
                             and (message_id := message.get("id"))
@@ -1284,8 +1291,8 @@ class ClaudeProcess:
                         case "content_block_start" if (
                             current_stream_message_id
                             and (block_index := event.get("index")) is not None
-                            and (block_type := (event.get("content_block") or {}).get("type"))
-                            and block_type in ("text", "thinking")
+                            and isinstance(block := event.get("content_block"), dict)
+                            and (block_type := block.get("type")) in ("text", "thinking")
                         ):
                             current_stream_block_index = block_index
                             current_stream_block_type = block_type
@@ -1301,7 +1308,7 @@ class ClaudeProcess:
                             })
                         case "content_block_delta" if (
                             current_stream_block_type
-                            and (delta := event.get("delta") or {})
+                            and isinstance(delta := event.get("delta"), dict)
                             and delta.get("type") == f"{current_stream_block_type}_delta"
                             and (delta_text := delta.get(current_stream_block_type))
                         ):
@@ -1331,6 +1338,64 @@ class ClaudeProcess:
                             current_stream_message_id = None
                             last_finished_block_index = None
                             last_finished_block_type = None
+
+                        # HANDLE TOOL CALLS
+                        case "content_block_start" if (
+                            (block_index := event.get("index")) is not None
+                            and isinstance(block := event.get("content_block"), dict)
+                            and (block_type := block.get("type")) == "tool_use"
+                            and (current_stream_tool_name := block.get("name"))
+                            and (current_stream_tool_id := block.get("id"))
+                        ):
+                            current_stream_tool_input_raw = ""
+                            current_stream_tool_input = {}
+                            current_stream_tool_input_cleaned = None
+                            logger.debug(
+                                "[ToolUse block_start index=%s tool=%s id=%s] => START",
+                                block_index, current_stream_tool_name, current_stream_tool_id,
+                            )
+                        case "content_block_delta" if (
+                            current_stream_tool_id
+                            and isinstance(delta := event.get("delta"), dict)
+                            and delta.get("type") == "input_json_delta"
+                            and (chunk := delta.get("partial_json"))
+                        ):
+                            current_stream_tool_input_raw += chunk
+                            try:
+                                parsed_input = json_repair.loads(current_stream_tool_input_raw)
+                            except Exception as exc:
+                                logger.exception(f"Failed to parse tool input: {exc}")
+                            else:
+                                if isinstance(parsed_input, dict):
+                                    current_stream_tool_input = parsed_input
+                                    cleaned = filter_tool_input(current_stream_tool_name, parsed_input)
+                                    if cleaned != current_stream_tool_input_cleaned:
+                                        current_stream_tool_input_cleaned = cleaned
+                                        is_new = current_stream_tool_id not in self._active_tools
+                                        self._active_tools[current_stream_tool_id] = {
+                                            "name": current_stream_tool_name,
+                                            "input": cleaned,
+                                            "streaming": True,
+                                        }
+                                        if is_new:
+                                            self._last_started_tool_id = current_stream_tool_id
+                                        logger.debug(
+                                            "[ToolUse content_block_delta tool=%s id=%s active_tools=%d] => input=%s",
+                                            current_stream_tool_name, current_stream_tool_id,
+                                            len(self._active_tools), cleaned,
+                                        )
+                                        await self._broadcast_process_tools()
+
+                        case "content_block_stop" if current_stream_tool_id:
+                            logger.debug(
+                                "[ToolUse block_stop tool=%s id=%s] => STOP",
+                                current_stream_tool_name, current_stream_tool_id,
+                            )
+                            current_stream_tool_id = None
+                            current_stream_tool_name = None
+                            current_stream_tool_input_raw = ""
+                            current_stream_tool_input = None
+                            current_stream_tool_input_cleaned = None
 
                 elif (
                     isinstance(msg, AssistantMessage)
@@ -1610,7 +1675,12 @@ class ClaudeProcess:
         """Broadcast the current list of in-progress tools for the status display."""
         channel_layer = get_channel_layer()
         tools = [
-            {"id": tool_use_id, "name": entry["name"], "input": entry["input"]}
+            {
+                "id": tool_use_id,
+                "name": entry["name"],
+                "input": entry["input"],
+                "streaming": entry.get("streaming", False),
+            }
             for tool_use_id, entry in self._active_tools.items()
         ]
         await channel_layer.group_send(

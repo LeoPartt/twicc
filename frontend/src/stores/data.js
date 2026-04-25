@@ -2125,7 +2125,6 @@ export const useDataStore = defineStore('data', {
                     project_name: extra.project_name || null,
                     tools: [],
                     lastStartedToolId: null,
-                    _toolsClearTimer: null,
                 }
 
                 // Auto-unarchive: running and archived are mutually exclusive
@@ -2171,7 +2170,6 @@ export const useDataStore = defineStore('data', {
                         project_name: p.project_name || null,
                         tools: [],
                         lastStartedToolId: null,
-                        _toolsClearTimer: null,
                     }
 
                     // Auto-unarchive: running and archived are mutually exclusive
