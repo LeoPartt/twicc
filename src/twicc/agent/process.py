@@ -826,7 +826,7 @@ class ClaudeProcess:
             # Build thinking config from boolean flag
             thinking_config = None
             if self.thinking_enabled is True:
-                thinking_config = ThinkingConfigAdaptive(type="adaptive")
+                thinking_config = ThinkingConfigAdaptive(type="adaptive", display="summarized")
             elif self.thinking_enabled is False:
                 thinking_config = ThinkingConfigDisabled(type="disabled")
 
@@ -870,8 +870,6 @@ class ClaudeProcess:
                 "allow-dangerously-skip-permissions": None,
                 ("chrome" if self.claude_in_chrome else "no-chrome"): None
             }
-            if self.thinking_enabled:
-                extra_args["thinking-display"] = "summarized"
 
             options = ClaudeAgentOptions(
                 system_prompt={
