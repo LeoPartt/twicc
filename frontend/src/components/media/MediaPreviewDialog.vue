@@ -3,8 +3,8 @@
 // Supports prev/next navigation via arrow keys and buttons.
 // Accepts a normalized MediaItem[] format shared by both draft attachments and conversation messages.
 import { ref, computed, watch, onBeforeUnmount, useId } from 'vue'
-import AppTooltip from './AppTooltip.vue'
-import { usePanZoom } from '../composables/usePanZoom'
+import AppTooltip from '../AppTooltip.vue'
+import { usePanZoom } from '../../composables/usePanZoom'
 
 const props = defineProps({
     items: {

@@ -25,7 +25,7 @@ import MarkdownContent from './MarkdownContent.vue'
 import CodeEditor from './CodeEditor.vue'
 import DiffEditor from './DiffEditor.vue'
 import JhvEditorToolbar from './JhvEditorToolbar.vue'
-import MediaPreviewDialog from './MediaPreviewDialog.vue'
+import MediaPreviewDialog from './media/MediaPreviewDialog.vue'
 import { getIconUrl, getFileIconId } from '../utils/fileIcons'
 import { getLanguageFromPath } from '../utils/languages'
 
