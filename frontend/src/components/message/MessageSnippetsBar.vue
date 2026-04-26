@@ -1,10 +1,10 @@
 <script setup>
 // MessageSnippetsBar.vue - Displays message snippets as compact buttons below the textarea
 // Visual style mirrors the snippets tab in TerminalExtraKeysBar.vue
-import { useMessageSnippetsStore } from '../stores/messageSnippets'
-import { useDataStore } from '../stores/data'
-import { useWorkspacesStore } from '../stores/workspaces'
-import AppTooltip from './AppTooltip.vue'
+import { useMessageSnippetsStore } from '../../stores/messageSnippets'
+import { useDataStore } from '../../stores/data'
+import { useWorkspacesStore } from '../../stores/workspaces'
+import AppTooltip from '../AppTooltip.vue'
 
 defineProps({
     /** Pre-enriched snippets (with _disabled / _disabledReason from parent). */

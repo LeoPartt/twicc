@@ -19,7 +19,7 @@
  */
 
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
-import { apiFetch } from '../utils/api'
+import { apiFetch } from '../../utils/api'
 
 const props = defineProps({
     projectId: {

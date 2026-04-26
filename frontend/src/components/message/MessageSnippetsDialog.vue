@@ -2,13 +2,13 @@
 // MessageSnippetsDialog.vue - Dialog for managing message input snippets with scope grouping
 import { ref, computed, nextTick, useId } from 'vue'
 import { useRoute } from 'vue-router'
-import { useMessageSnippetsStore } from '../stores/messageSnippets'
-import { useDataStore } from '../stores/data'
-import { useWorkspacesStore } from '../stores/workspaces'
-import ProjectBadge from './ProjectBadge.vue'
-import { buildProjectTree, flattenProjectTree } from '../utils/projectTree'
-import { splitProjectsByPriority } from '../utils/projectSort'
-import { PLACEHOLDERS, extractPlaceholders } from '../utils/snippetPlaceholders'
+import { useMessageSnippetsStore } from '../../stores/messageSnippets'
+import { useDataStore } from '../../stores/data'
+import { useWorkspacesStore } from '../../stores/workspaces'
+import ProjectBadge from '../ProjectBadge.vue'
+import { buildProjectTree, flattenProjectTree } from '../../utils/projectTree'
+import { splitProjectsByPriority } from '../../utils/projectSort'
+import { PLACEHOLDERS, extractPlaceholders } from '../../utils/snippetPlaceholders'
 
 const props = defineProps({
     currentProjectId: {

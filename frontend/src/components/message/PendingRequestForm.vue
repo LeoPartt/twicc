@@ -6,10 +6,10 @@
 // - ask_user_question: Shows questions with selectable options and an "Other" free-text input
 
 import { ref, computed, reactive, watch, nextTick, useId } from 'vue'
-import { useDataStore } from '../stores/data'
-import JsonHumanView from './json/JsonHumanView.vue'
-import AppTooltip from './AppTooltip.vue'
-import { getLanguageFromPath } from '../utils/languages'
+import { useDataStore } from '../../stores/data'
+import JsonHumanView from '../json/JsonHumanView.vue'
+import AppTooltip from '../AppTooltip.vue'
+import { getLanguageFromPath } from '../../utils/languages'
 
 // Per-tool overrides for JsonHumanView display types.
 // Only keys that need an override (not auto-detected) are listed.
