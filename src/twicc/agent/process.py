@@ -857,8 +857,10 @@ class ClaudeProcess:
             async def _post_tool_use(input_data: dict, tool_use_id: str | None, context: Any) -> dict:
                 if tool_use_id and tool_use_id in self._active_tools:
                     entry = self._active_tools.pop(tool_use_id, None)
+                    event = input_data.get("hook_event_name", "PostToolUse")
                     logger.debug(
-                        "PostToolUse session=%s tool=%s active_tools=%d",
+                        "%s session=%s tool=%s active_tools=%d",
+                        event,
                         self.session_id,
                         entry["name"] if entry else "?",
                         len(self._active_tools),
@@ -890,6 +892,11 @@ class ClaudeProcess:
                         HookMatcher(matcher=None, hooks=[_post_tool_use]),
                         HookMatcher(matcher="CronCreate|CronDelete", hooks=[_on_cron_tool]),
                     ],
+                    # PostToolUseFailure fires instead of PostToolUse when a tool
+                    # errors out (or is interrupted) — without it, the entry would
+                    # stay in _active_tools and the working-status line would keep
+                    # showing the dead tool indefinitely.
+                    "PostToolUseFailure": [HookMatcher(matcher=None, hooks=[_post_tool_use])],
                 },
                 stderr=self._log_stderr,
                 max_buffer_size=10 * 1024 * 1024,  # 10 MB — prevent crashes on large tool outputs
