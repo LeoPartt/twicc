@@ -1503,8 +1503,8 @@ defineExpose({
             :items="visualItems"
             :item-key="item => item.lineNum"
             :min-item-height="MIN_ITEM_SIZE"
-            :buffer="1000"
-            :unload-buffer="1500"
+            :buffer="5000"
+            :unload-buffer="10000"
             :prevent-auto-scroll-to-bottom="!!parentSessionId"
             class="session-items"
             :class="{ 'initial-scrolling': isInitialScrolling }"
@@ -1514,11 +1514,16 @@ defineExpose({
         >
             <template #default="{ item, index }">
                 <!-- Placeholder (no content loaded yet) -->
-                <div v-if="!hasContent(item)" :style="{ minHeight: MIN_ITEM_SIZE + 'px' }"></div>
+                <div
+                    v-if="!hasContent(item)"
+                    :class="{ 'is-block-start': item.isBlockStart, 'is-block-end': item.isBlockEnd }"
+                    :style="{ minHeight: MIN_ITEM_SIZE + 'px' }"
+                ></div>
 
                 <!-- Group head: show toggle (+ item content if expanded) -->
                 <template v-else-if="item.isGroupHead">
                     <GroupToggle
+                        :class="{ 'is-block-start': item.isBlockStart, 'is-block-end': item.isBlockEnd && !item.isExpanded }"
                         :expanded="item.isExpanded"
                         :item-count="item.groupSize"
                         :comments-count="groupCommentsCount(item.lineNum, item.groupTail)"
@@ -1526,6 +1531,7 @@ defineExpose({
                     />
                     <SessionItem
                         v-if="item.isExpanded"
+                        :class="{ 'is-block-end': item.isBlockEnd }"
                         :content="getParsedContent(item)"
                         :kind="item.kind"
                         :synthetic-kind="item.syntheticKind || null"
@@ -1539,6 +1545,7 @@ defineExpose({
                 <!-- Regular item (including ALWAYS with prefix/suffix): show item content -->
                 <SessionItem
                     v-else
+                    :class="{ 'is-block-start': item.isBlockStart, 'is-block-end': item.isBlockEnd }"
                     :content="getParsedContent(item)"
                     :kind="item.kind"
                     :synthetic-kind="item.syntheticKind || null"

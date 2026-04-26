@@ -470,7 +470,7 @@ body:not([data-display-mode="debug"]) .json-toggle {
     .virtual-scroller-item:has(.session-item[data-kind="user_message"]) {
         + .virtual-scroller-item:not(:has(.session-item[data-kind="user_message"])) {
             /* First non-user after a user message */
-            .session-item:first-child, .group-toggle:first-child {
+            .session-item.is-block-start, .group-toggle.is-block-start {
                 --content-card-start-item: 1;
                 --content-card-inner-item: 0;
                 --content-card-not-start-item: 0;
@@ -490,7 +490,7 @@ body:not([data-display-mode="debug"]) .json-toggle {
         /* Last non-user before a user message */
         &:has(+ .virtual-scroller-item .session-item[data-kind="user_message"])
         {
-            .session-item:last-child, .group-toggle:last-child {
+            .session-item.is-block-end, .group-toggle.is-block-end {
                 --content-card-end-item: 1;
                 --content-card-inner-item: 0;
                 --content-card-not-end-item: 0;
@@ -501,7 +501,7 @@ body:not([data-display-mode="debug"]) .json-toggle {
                 --assistant-card-border-bottom-width: var(--assistant-card-border-width);
                 --assistant-card-bottom-spacing: var(--assistant-card-spacing);
                 --assistant-card-shadow: var(--assistant-card-default-shadow);
-                margin-bottom: 5px; /* For the shadow to appear on the last element with virtual scroller "cropping" if we don't have this */;
+                margin-bottom: calc(var(--main-shadow-size) + 1px); /* For the shadow to appear on the last element with virtual scroller "cropping" if we don't have this */;
             }
         }
     }
@@ -535,12 +535,15 @@ wa-details {
     .virtual-scroller-item:has(wa-details.item-details:last-child) {
         &:has(
             + .virtual-scroller-item wa-details.item-details:nth-child(2)  /* 1 is json toggle and its tooltip */
-        ) wa-details.item-details:last-child {
-            padding-bottom: 0;
-            &::part(base) {
-                border-bottom-left-radius: 0;
-                border-bottom-right-radius: 0;
-                border-bottom-width: 0;
+        ),
+        &:not(:has(+ .virtual-scroller-item)):not(:has(.session-item.is-block-end)) {
+            wa-details.item-details:last-child {
+                padding-bottom: 0;
+                &::part(base) {
+                    border-bottom-left-radius: 0;
+                    border-bottom-right-radius: 0;
+                    border-bottom-width: 0;
+                }
             }
         }
         & + .virtual-scroller-item
@@ -552,6 +555,10 @@ wa-details {
             }
         }
     }
+    .virtual-scroller-spacer-before + .virtual-scroller-item > .session-item:not(.is-block-start) > wa-details.item-details:nth-child(2) {
+        padding-top: var(--spacing-top);
+    }
+
 }
 
 /* Common style for wa-detail and wa-detail.items-details */

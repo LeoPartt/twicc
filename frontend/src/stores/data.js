@@ -1481,6 +1481,21 @@ export const useDataStore = defineStore('data', {
                 if (vi.lineNum >= 0) break
             }
 
+            // Mark each visual item as start/end of its run (block of consecutive
+            // user_message items vs block of consecutive non-user items). The CSS
+            // uses these flags (.is-block-start / .is-block-end) to render the
+            // top/bottom borders of the visual card without depending on
+            // adjacent-sibling selectors over `.virtual-scroller-item`. Stable
+            // class assignment avoids layout shifts when the scroller loads/unloads
+            // items at the rendered range edges.
+            for (let i = 0; i < visualItems.length; i++) {
+                const isUser = visualItems[i].kind === 'user_message'
+                const prevIsUser = i > 0 ? visualItems[i - 1].kind === 'user_message' : null
+                const nextIsUser = i < visualItems.length - 1 ? visualItems[i + 1].kind === 'user_message' : null
+                visualItems[i].isBlockStart = i === 0 || isUser !== prevIsUser
+                visualItems[i].isBlockEnd = i === visualItems.length - 1 || isUser !== nextIsUser
+            }
+
             // Stabilize visual item references: reuse cached objects when properties
             // haven't changed, so Vue sees the same reference and skips re-render.
             const cache = this.localState.visualItemCache[sessionId] || new Map()
