@@ -5,14 +5,14 @@ import { useDataStore } from '../stores/data'
 import { useWorkspacesStore } from '../stores/workspaces'
 import { useStartupPolling } from '../composables/useStartupPolling'
 import ProjectList from '../components/ProjectList.vue'
-import WorkspaceList from '../components/WorkspaceList.vue'
+import WorkspaceList from '../components/workspace/WorkspaceList.vue'
 import FetchErrorPanel from '../components/FetchErrorPanel.vue'
 import SettingsPopover from '../components/SettingsPopover.vue'
 import ActivitySparkline from '../components/activity/ActivitySparkline.vue'
 import AppTooltip from '../components/AppTooltip.vue'
 import StartupProgressCallout from '../components/StartupProgressCallout.vue'
 import ProjectEditDialog from '../components/ProjectEditDialog.vue'
-import WorkspaceManageDialog from '../components/WorkspaceManageDialog.vue'
+import WorkspaceManageDialog from '../components/workspace/WorkspaceManageDialog.vue'
 
 const router = useRouter()
 const store = useDataStore()

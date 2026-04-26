@@ -1,10 +1,10 @@
 <script setup>
 // WorkspaceList.vue - Displays workspace cards on the Home page with archived toggle
 import { computed } from 'vue'
-import { useSettingsStore } from '../stores/settings'
-import { useWorkspacesStore } from '../stores/workspaces'
+import { useSettingsStore } from '../../stores/settings'
+import { useWorkspacesStore } from '../../stores/workspaces'
 import WorkspaceCard from './WorkspaceCard.vue'
-import AppTooltip from './AppTooltip.vue'
+import AppTooltip from '../AppTooltip.vue'
 
 const settingsStore = useSettingsStore()
 const workspacesStore = useWorkspacesStore()

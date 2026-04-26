@@ -9,18 +9,18 @@
  * shown in a disabled state with reduced opacity and no interaction.
  */
 import { computed } from 'vue'
-import { useDataStore } from '../stores/data'
-import { useSettingsStore } from '../stores/settings'
-import { useWorkspacesStore } from '../stores/workspaces'
-import { formatDate } from '../utils/date'
-import { SESSION_TIME_FORMAT } from '../constants'
-import { aggregateWeeklyActivity } from '../utils/activityAggregation'
-import ProjectBadge from './ProjectBadge.vue'
-import AggregatedProcessIndicator from './AggregatedProcessIndicator.vue'
-import CodeCommentsIndicator from './CodeCommentsIndicator.vue'
-import CostDisplay from './CostDisplay.vue'
-import ActivitySparkline from './activity/ActivitySparkline.vue'
-import AppTooltip from './AppTooltip.vue'
+import { useDataStore } from '../../stores/data'
+import { useSettingsStore } from '../../stores/settings'
+import { useWorkspacesStore } from '../../stores/workspaces'
+import { formatDate } from '../../utils/date'
+import { SESSION_TIME_FORMAT } from '../../constants'
+import { aggregateWeeklyActivity } from '../../utils/activityAggregation'
+import ProjectBadge from '../ProjectBadge.vue'
+import AggregatedProcessIndicator from '../AggregatedProcessIndicator.vue'
+import CodeCommentsIndicator from '../CodeCommentsIndicator.vue'
+import CostDisplay from '../CostDisplay.vue'
+import ActivitySparkline from '../activity/ActivitySparkline.vue'
+import AppTooltip from '../AppTooltip.vue'
 
 const props = defineProps({
     workspace: {

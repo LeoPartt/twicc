@@ -1,12 +1,12 @@
 <script setup>
 // WorkspaceManageDialog.vue - Dialog for managing workspaces (list + create/edit form)
 import { ref, computed, nextTick, useId } from 'vue'
-import { useWorkspacesStore } from '../stores/workspaces'
-import { useSettingsStore } from '../stores/settings'
-import { useDataStore } from '../stores/data'
-import ProjectBadge from './ProjectBadge.vue'
-import ProjectSelectOptions from './ProjectSelectOptions.vue'
-import DirectoryPickerPopup from './DirectoryPickerPopup.vue'
+import { useWorkspacesStore } from '../../stores/workspaces'
+import { useSettingsStore } from '../../stores/settings'
+import { useDataStore } from '../../stores/data'
+import ProjectBadge from '../ProjectBadge.vue'
+import ProjectSelectOptions from '../ProjectSelectOptions.vue'
+import DirectoryPickerPopup from '../DirectoryPickerPopup.vue'
 
 const workspacesStore = useWorkspacesStore()
 const settingsStore = useSettingsStore()
