@@ -9,10 +9,10 @@ import { ref, shallowRef, toRefs, nextTick, watch, inject, onMounted, onBeforeUn
 import { EditorView, keymap } from '@codemirror/view'
 import { EditorSelection, Transaction, Compartment } from '@codemirror/state'
 import { undoDepth } from '@codemirror/commands'
-import { resolveLanguage, detectIndent, useCodeMirrorExtensions, useSettingsWatcher, toggleSearchPanel } from '../composables/useCodeMirror'
-import { createCodeCommentsExtension, syncCommentsEffect } from '../extensions/codeComments'
-import { useSettingsStore } from '../stores/settings'
-import { useCodeCommentsStore, formatComment, formatAllComments } from '../stores/codeComments'
+import { resolveLanguage, detectIndent, useCodeMirrorExtensions, useSettingsWatcher, toggleSearchPanel } from '../../composables/useCodeMirror'
+import { createCodeCommentsExtension, syncCommentsEffect } from '../../extensions/codeComments'
+import { useSettingsStore } from '../../stores/settings'
+import { useCodeCommentsStore, formatComment, formatAllComments } from '../../stores/codeComments'
 
 // ─── View state cache (module-level, shared across instances) ────────────────
 

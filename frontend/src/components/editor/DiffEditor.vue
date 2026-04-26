@@ -14,12 +14,12 @@ import { EditorView, keymap, lineNumbers, panels } from '@codemirror/view'
 import { EditorSelection } from '@codemirror/state'
 import { MergeView, unifiedMergeView, goToNextChunk, goToPreviousChunk } from '@codemirror/merge'
 import { openSearchPanel, getSearchQuery, setSearchQuery, searchPanelOpen, SearchQuery } from '@codemirror/search'
-import { resolveLanguage, useCodeMirrorExtensions, useSettingsWatcher, toggleSearchPanel } from '../composables/useCodeMirror'
-import { createCodeCommentsExtension, syncCommentsEffect } from '../extensions/codeComments'
-import { smartCollapseUnchanged } from '../extensions/smartCollapseUnchanged'
-import { patchEllipsis } from '../extensions/patchEllipsis'
-import { useSettingsStore } from '../stores/settings'
-import { useCodeCommentsStore, formatComment, formatAllComments } from '../stores/codeComments'
+import { resolveLanguage, useCodeMirrorExtensions, useSettingsWatcher, toggleSearchPanel } from '../../composables/useCodeMirror'
+import { createCodeCommentsExtension, syncCommentsEffect } from '../../extensions/codeComments'
+import { smartCollapseUnchanged } from '../../extensions/smartCollapseUnchanged'
+import { patchEllipsis } from '../../extensions/patchEllipsis'
+import { useSettingsStore } from '../../stores/settings'
+import { useCodeCommentsStore, formatComment, formatAllComments } from '../../stores/codeComments'
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 

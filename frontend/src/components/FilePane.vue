@@ -5,8 +5,8 @@ import { useSettingsStore } from '../stores/settings'
 import { usePanZoom } from '../composables/usePanZoom'
 import MarkdownContent from './MarkdownContent.vue'
 import AppTooltip from './AppTooltip.vue'
-import CodeEditor from './CodeEditor.vue'
-import DiffEditor from './DiffEditor.vue'
+import CodeEditor from './editor/CodeEditor.vue'
+import DiffEditor from './editor/DiffEditor.vue'
 
 const props = defineProps({
     projectId: String,

@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, useId, inject } from 'vue'
-import DiffEditor from '../../DiffEditor.vue'
-import CodeEditor from '../../CodeEditor.vue'
+import DiffEditor from '../../editor/DiffEditor.vue'
+import CodeEditor from '../../editor/CodeEditor.vue'
 import AppTooltip from '../../AppTooltip.vue'
 import { useSettingsStore } from '../../../stores/settings'
 
