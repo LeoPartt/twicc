@@ -15,7 +15,7 @@
  * to quickly identify which projects/workspaces require attention.
  */
 import { computed, useId } from 'vue'
-import { useDataStore } from '../stores/data'
+import { useDataStore } from '../../stores/data'
 import AppTooltip from './AppTooltip.vue'
 import ProcessIndicator from './ProcessIndicator.vue'
 

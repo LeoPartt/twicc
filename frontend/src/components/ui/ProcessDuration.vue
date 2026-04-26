@@ -13,7 +13,7 @@
  * naturally by the parent.
  */
 import { ref, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
-import { formatDuration } from '../utils/date'
+import { formatDuration } from '../../utils/date'
 
 const props = defineProps({
     /**

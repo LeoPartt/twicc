@@ -18,7 +18,7 @@
 import { ref, computed, watch, nextTick, shallowRef } from 'vue'
 import { useCommandRegistry } from '../composables/useCommandRegistry'
 import { fuzzyMatch } from '../utils/fuzzyMatch'
-import ProcessIndicator from './ProcessIndicator.vue'
+import ProcessIndicator from './ui/ProcessIndicator.vue'
 
 const { isOpen, availableCommands, commandsByCategory, openPalette, closePalette } = useCommandRegistry()
 

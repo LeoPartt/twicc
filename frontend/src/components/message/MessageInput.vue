@@ -12,7 +12,7 @@ import { PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, 
 import { useCodeCommentsStore, formatAllComments } from '../../stores/codeComments'
 import { getParsedContent } from '../../utils/parsedContent'
 import MediaThumbnailGroup from '../media/MediaThumbnailGroup.vue'
-import AppTooltip from '../AppTooltip.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
 import FilePickerPopup from '../files/FilePickerPopup.vue'
 import SlashCommandPickerPopup from './SlashCommandPickerPopup.vue'
 import MessageHistoryPickerPopup from './MessageHistoryPickerPopup.vue'

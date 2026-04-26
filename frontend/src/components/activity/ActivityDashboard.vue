@@ -9,8 +9,8 @@
 
 import { computed } from 'vue'
 import { useSettingsStore } from '../../stores/settings'
-import AppTooltip from '../AppTooltip.vue'
-import CostDisplay from '../CostDisplay.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
+import CostDisplay from '../ui/CostDisplay.vue'
 
 const settingsStore = useSettingsStore()
 const showCosts = computed(() => settingsStore.areCostsShown)

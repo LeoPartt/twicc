@@ -38,7 +38,7 @@
 import { ref, computed, watch } from 'vue'
 import { apiFetch } from '../../utils/api'
 import { getIconUrl, getFileIconId, getFolderIconId } from '../../utils/fileIcons'
-import CodeCommentsIndicator from '../CodeCommentsIndicator.vue'
+import CodeCommentsIndicator from '../ui/CodeCommentsIndicator.vue'
 
 const props = defineProps({
     node: {

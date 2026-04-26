@@ -23,7 +23,7 @@ import { pendingSessionSearch } from '../utils/pendingSearch'
 import { SESSION_TIME_FORMAT } from '../constants'
 import ProjectBadge from './project/ProjectBadge.vue'
 import ProjectSelectOptions from './project/ProjectSelectOptions.vue'
-import AppTooltip from './AppTooltip.vue'
+import AppTooltip from './ui/AppTooltip.vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -21,7 +21,7 @@
 
 import { computed, reactive, ref } from 'vue'
 import { EditorView } from '@codemirror/view'
-import MarkdownContent from '../MarkdownContent.vue'
+import MarkdownContent from '../ui/MarkdownContent.vue'
 import CodeEditor from '../editor/CodeEditor.vue'
 import DiffEditor from '../editor/DiffEditor.vue'
 import JhvEditorToolbar from './JhvEditorToolbar.vue'

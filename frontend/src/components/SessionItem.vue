@@ -7,8 +7,8 @@ import ApiError from './items/ApiError.vue'
 import CompactSummary from './items/content/CompactSummary.vue'
 import CustomTitle from './items/CustomTitle.vue'
 import UnknownEntry from './items/UnknownEntry.vue'
-import AppTooltip from './AppTooltip.vue'
-import CodeCommentsIndicator from './CodeCommentsIndicator.vue'
+import AppTooltip from './ui/AppTooltip.vue'
+import CodeCommentsIndicator from './ui/CodeCommentsIndicator.vue'
 
 const dataStore = useDataStore()
 

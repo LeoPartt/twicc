@@ -6,7 +6,7 @@ import { buildProjectTree } from '../../utils/projectTree'
 import ProjectEditDialog from './ProjectEditDialog.vue'
 import ProjectCard from './ProjectCard.vue'
 import ProjectTreeNode from './ProjectTreeNode.vue'
-import AppTooltip from '../AppTooltip.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
 
 const store = useDataStore()
 const settingsStore = useSettingsStore()

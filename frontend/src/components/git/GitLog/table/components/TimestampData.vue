@@ -4,7 +4,7 @@ import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import { useTableContext } from '../../composables/useTableContext'
-import AppTooltip from '../../../../AppTooltip.vue'
+import AppTooltip from '../../../../ui/AppTooltip.vue'
 
 
 // ---------------------------------------------------------------------------

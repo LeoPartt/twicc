@@ -10,7 +10,7 @@
  * (e.g. slot="end" on wa-button).
  */
 import { computed, useId } from 'vue'
-import { useCodeCommentsStore } from '../stores/codeComments'
+import { useCodeCommentsStore } from '../../stores/codeComments'
 import AppTooltip from './AppTooltip.vue'
 
 const props = defineProps({

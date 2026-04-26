@@ -8,7 +8,7 @@
 import { ref, computed, reactive, watch, nextTick, useId } from 'vue'
 import { useDataStore } from '../../stores/data'
 import JsonHumanView from '../json/JsonHumanView.vue'
-import AppTooltip from '../AppTooltip.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
 import { getLanguageFromPath } from '../../utils/languages'
 
 // Per-tool overrides for JsonHumanView display types.

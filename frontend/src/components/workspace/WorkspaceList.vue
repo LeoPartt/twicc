@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import { useSettingsStore } from '../../stores/settings'
 import { useWorkspacesStore } from '../../stores/workspaces'
 import WorkspaceCard from './WorkspaceCard.vue'
-import AppTooltip from '../AppTooltip.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
 
 const settingsStore = useSettingsStore()
 const workspacesStore = useWorkspacesStore()

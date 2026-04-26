@@ -4,7 +4,7 @@
 // Accepts normalized MediaItem[] format.
 import { ref, computed } from 'vue'
 import MediaPreviewDialog from './MediaPreviewDialog.vue'
-import AppTooltip from '../AppTooltip.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
 
 const props = defineProps({
     items: {

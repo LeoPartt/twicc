@@ -14,7 +14,7 @@
  * The `animateStates` prop controls which states have a pulse animation.
  */
 import { computed } from 'vue'
-import { PROCESS_STATE, PROCESS_STATE_COLORS } from '../constants'
+import { PROCESS_STATE, PROCESS_STATE_COLORS } from '../../constants'
 
 const props = defineProps({
     /**

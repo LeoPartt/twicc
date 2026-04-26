@@ -16,8 +16,8 @@ import { useSettingsStore } from '../../stores/settings'
 import { useWorkspacesStore } from '../../stores/workspaces'
 import { isWorkspaceProjectId, extractWorkspaceId } from '../../utils/workspaceIds'
 import ProjectBadge from './ProjectBadge.vue'
-import AggregatedProcessIndicator from '../AggregatedProcessIndicator.vue'
-import CodeCommentsIndicator from '../CodeCommentsIndicator.vue'
+import AggregatedProcessIndicator from '../ui/AggregatedProcessIndicator.vue'
+import CodeCommentsIndicator from '../ui/CodeCommentsIndicator.vue'
 
 const props = defineProps({
     projectId: {

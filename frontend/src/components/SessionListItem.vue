@@ -18,10 +18,10 @@ import { markSessionReadState, cancelSessionViewedThrottle } from '../composable
 import { stopSessionProcess } from '../composables/useStopSessionProcess'
 import { useDragHover } from '../composables/useDragHover'
 import ProjectBadge from './project/ProjectBadge.vue'
-import ProcessIndicator from './ProcessIndicator.vue'
-import ProcessDuration from './ProcessDuration.vue'
-import CostDisplay from './CostDisplay.vue'
-import AppTooltip from './AppTooltip.vue'
+import ProcessIndicator from './ui/ProcessIndicator.vue'
+import ProcessDuration from './ui/ProcessDuration.vue'
+import CostDisplay from './ui/CostDisplay.vue'
+import AppTooltip from './ui/AppTooltip.vue'
 
 const props = defineProps({
     session: {

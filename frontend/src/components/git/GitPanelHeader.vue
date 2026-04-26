@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, useId } from 'vue'
-import AppTooltip from '../AppTooltip.vue'
-import MarkdownContent from '../MarkdownContent.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
+import MarkdownContent from '../ui/MarkdownContent.vue'
 import { vPopoverFocusFix } from '../../directives/vPopoverFocusFix'
 import { toast } from '../../composables/useToast'
 import pencilIcon from './GitLog/assets/pencil.svg'

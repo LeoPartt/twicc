@@ -27,9 +27,9 @@ import SessionContent from '../components/SessionContent.vue'
 import FilesPanel from '../components/files/FilesPanel.vue'
 import GitPanel from '../components/git/GitPanel.vue'
 import TerminalPanel from '../components/terminal/TerminalPanel.vue'
-import AppTooltip from '../components/AppTooltip.vue'
-import ProcessIndicator from '../components/ProcessIndicator.vue'
-import CodeCommentsIndicator from '../components/CodeCommentsIndicator.vue'
+import AppTooltip from '../components/ui/AppTooltip.vue'
+import ProcessIndicator from '../components/ui/ProcessIndicator.vue'
+import CodeCommentsIndicator from '../components/ui/CodeCommentsIndicator.vue'
 import { useCodeCommentsStore } from '../stores/codeComments'
 import {
     buildFilesRouteParams,

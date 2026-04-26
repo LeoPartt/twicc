@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import AppTooltip from './AppTooltip.vue'
+import AppTooltip from './ui/AppTooltip.vue'
 
 const props = defineProps({
     status: {

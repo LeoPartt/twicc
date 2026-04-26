@@ -10,7 +10,7 @@ import {
     GitLogTags,
 } from './GitLog'
 import GitPanelHeader from './GitPanelHeader.vue'
-import AppTooltip from '../AppTooltip.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
 import FileTreePanel from '../files/FileTreePanel.vue'
 import FilePane from '../files/FilePane.vue'
 import { searchTreeFiles } from '../../utils/treeSearch'

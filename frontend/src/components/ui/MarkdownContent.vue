@@ -1,13 +1,13 @@
 <script setup>
 import { ref, inject, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { renderMarkdown } from '../utils/markdown.js'
-import { vHighlight } from '../directives/vHighlight.js'
-import { toast } from '../composables/useToast'
+import { renderMarkdown } from '../../utils/markdown.js'
+import { vHighlight } from '../../directives/vHighlight.js'
+import { toast } from '../../composables/useToast'
 // Uses the combined version that includes both light and dark
 // Then override with our theme file that uses [data-color-scheme] without media queries
 import 'github-markdown-css/github-markdown.css'
-import '../styles/github-markdown-themes.css'
+import '../../styles/github-markdown-themes.css'
 
 const props = defineProps({
     source: {

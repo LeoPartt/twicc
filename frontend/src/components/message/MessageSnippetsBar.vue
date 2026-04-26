@@ -4,7 +4,7 @@
 import { useMessageSnippetsStore } from '../../stores/messageSnippets'
 import { useDataStore } from '../../stores/data'
 import { useWorkspacesStore } from '../../stores/workspaces'
-import AppTooltip from '../AppTooltip.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
 
 defineProps({
     /** Pre-enriched snippets (with _disabled / _disabledReason from parent). */

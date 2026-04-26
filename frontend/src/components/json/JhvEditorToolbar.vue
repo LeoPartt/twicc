@@ -21,7 +21,7 @@
  *   </JhvEditorToolbar>
  */
 import { ref, computed, watch, useId } from 'vue'
-import AppTooltip from '../AppTooltip.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
 import { useSettingsStore } from '../../stores/settings'
 
 const SIDE_BY_SIDE_MIN_WIDTH = 900

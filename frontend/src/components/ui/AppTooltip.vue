@@ -16,7 +16,7 @@
  * All extra attributes are forwarded to the underlying <wa-tooltip>.
  */
 import { computed } from 'vue'
-import { useSettingsStore } from '../stores/settings'
+import { useSettingsStore } from '../../stores/settings'
 
 const props = defineProps({
     force: {

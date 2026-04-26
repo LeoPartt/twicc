@@ -15,11 +15,11 @@ import { useSettingsStore } from '../../stores/settings'
 import { formatDate } from '../../utils/date'
 import { SESSION_TIME_FORMAT } from '../../constants'
 import ProjectBadge from './ProjectBadge.vue'
-import AggregatedProcessIndicator from '../AggregatedProcessIndicator.vue'
-import CodeCommentsIndicator from '../CodeCommentsIndicator.vue'
+import AggregatedProcessIndicator from '../ui/AggregatedProcessIndicator.vue'
+import CodeCommentsIndicator from '../ui/CodeCommentsIndicator.vue'
 import ActivitySparkline from '../activity/ActivitySparkline.vue'
-import CostDisplay from '../CostDisplay.vue'
-import AppTooltip from '../AppTooltip.vue'
+import CostDisplay from '../ui/CostDisplay.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
 
 const props = defineProps({
     project: {

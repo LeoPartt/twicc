@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useId, inject, type CSSProperties } from 'vue'
 import IndexStatus from './IndexStatus.vue'
-import AppTooltip from '../../../../AppTooltip.vue'
+import AppTooltip from '../../../../ui/AppTooltip.vue'
 
 
 // ---------------------------------------------------------------------------

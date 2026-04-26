@@ -2,7 +2,7 @@
 import { ref, computed, watch, useId, inject } from 'vue'
 import DiffEditor from '../../editor/DiffEditor.vue'
 import CodeEditor from '../../editor/CodeEditor.vue'
-import AppTooltip from '../../AppTooltip.vue'
+import AppTooltip from '../../ui/AppTooltip.vue'
 import { useSettingsStore } from '../../../stores/settings'
 
 const SIDE_BY_SIDE_MIN_WIDTH = 900

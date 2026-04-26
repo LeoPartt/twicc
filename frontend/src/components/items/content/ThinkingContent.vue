@@ -1,7 +1,7 @@
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
 import { useDataStore } from '../../../stores/data'
-import MarkdownContent from '../../MarkdownContent.vue'
+import MarkdownContent from '../../ui/MarkdownContent.vue'
 
 const dataStore = useDataStore()
 
