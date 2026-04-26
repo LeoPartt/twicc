@@ -95,7 +95,18 @@ async function fetchMessages() {
             return
         }
         const data = await res.json()
-        allMessages.value = data.messages || []
+        // Backend returns messages in chronological order (oldest first).
+        // Reverse to put the most recent first, then deduplicate by exact text,
+        // keeping the first occurrence (i.e. the most recent occurrence of each message).
+        const reversed = (data.messages || []).slice().reverse()
+        const seen = new Set()
+        const deduped = []
+        for (const msg of reversed) {
+            if (seen.has(msg.text)) continue
+            seen.add(msg.text)
+            deduped.push(msg)
+        }
+        allMessages.value = deduped
     } catch (err) {
         error.value = err.message
         allMessages.value = []

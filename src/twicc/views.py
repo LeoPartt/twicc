@@ -374,7 +374,7 @@ def slash_commands(request, project_id):
 def user_messages(request, project_id, session_id):
     """GET /api/projects/<id>/sessions/<session_id>/user-messages/ - User messages of a session.
 
-    Returns all user messages for the given session, most recent first.
+    Returns all user messages for the given session, in chronological order (oldest first).
     Each entry includes line_num, timestamp, and the extracted text content.
     """
     try:
@@ -385,7 +385,7 @@ def user_messages(request, project_id, session_id):
     items = (
         SessionItem.objects
         .filter(session=session, kind=ItemKind.USER_MESSAGE)
-        .order_by("-line_num")
+        .order_by("line_num")
         .values("line_num", "timestamp", "content")
     )
 
