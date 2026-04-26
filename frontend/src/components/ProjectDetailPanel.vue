@@ -11,7 +11,7 @@ import ProjectDetailHeader from './ProjectDetailHeader.vue'
 import { apiFetch } from '../utils/api'
 import ProjectDetailNavList from './ProjectDetailNavList.vue'
 import ContributionGraphs from './activity/ContributionGraphs.vue'
-import FilesPanel from './FilesPanel.vue'
+import FilesPanel from './files/FilesPanel.vue'
 import GitPanel from './git/GitPanel.vue'
 import TerminalPanel from './terminal/TerminalPanel.vue'
 import {

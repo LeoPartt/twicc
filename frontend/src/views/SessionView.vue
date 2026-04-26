@@ -24,7 +24,7 @@ import {
 import SessionHeader from '../components/SessionHeader.vue'
 import SessionItemsList from '../components/SessionItemsList.vue'
 import SessionContent from '../components/SessionContent.vue'
-import FilesPanel from '../components/FilesPanel.vue'
+import FilesPanel from '../components/files/FilesPanel.vue'
 import GitPanel from '../components/git/GitPanel.vue'
 import TerminalPanel from '../components/terminal/TerminalPanel.vue'
 import AppTooltip from '../components/AppTooltip.vue'

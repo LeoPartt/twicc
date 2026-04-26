@@ -1,12 +1,12 @@
 <script setup>
 import { ref, watch, computed, nextTick, useId, inject, onBeforeUnmount } from 'vue'
-import { apiFetch } from '../utils/api'
-import { useSettingsStore } from '../stores/settings'
-import { usePanZoom } from '../composables/usePanZoom'
-import MarkdownContent from './MarkdownContent.vue'
-import AppTooltip from './AppTooltip.vue'
-import CodeEditor from './editor/CodeEditor.vue'
-import DiffEditor from './editor/DiffEditor.vue'
+import { apiFetch } from '../../utils/api'
+import { useSettingsStore } from '../../stores/settings'
+import { usePanZoom } from '../../composables/usePanZoom'
+import MarkdownContent from '../MarkdownContent.vue'
+import AppTooltip from '../AppTooltip.vue'
+import CodeEditor from '../editor/CodeEditor.vue'
+import DiffEditor from '../editor/DiffEditor.vue'
 
 const props = defineProps({
     projectId: String,

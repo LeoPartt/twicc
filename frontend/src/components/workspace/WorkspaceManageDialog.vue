@@ -6,7 +6,7 @@ import { useSettingsStore } from '../../stores/settings'
 import { useDataStore } from '../../stores/data'
 import ProjectBadge from '../ProjectBadge.vue'
 import ProjectSelectOptions from '../ProjectSelectOptions.vue'
-import DirectoryPickerPopup from '../DirectoryPickerPopup.vue'
+import DirectoryPickerPopup from '../files/DirectoryPickerPopup.vue'
 
 const workspacesStore = useWorkspacesStore()
 const settingsStore = useSettingsStore()

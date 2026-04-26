@@ -19,8 +19,8 @@
  */
 
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
-import { useDataStore } from '../stores/data'
-import { apiFetch } from '../utils/api'
+import { useDataStore } from '../../stores/data'
+import { apiFetch } from '../../utils/api'
 import FileTreePanel from './FileTreePanel.vue'
 
 const props = defineProps({

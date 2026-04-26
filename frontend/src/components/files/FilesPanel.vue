@@ -1,10 +1,10 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onActivated, onDeactivated } from 'vue'
-import { apiFetch } from '../utils/api'
-import { useContainerBreakpoint } from '../composables/useContainerBreakpoint'
+import { apiFetch } from '../../utils/api'
+import { useContainerBreakpoint } from '../../composables/useContainerBreakpoint'
 import FileTreePanel from './FileTreePanel.vue'
 import FilePane from './FilePane.vue'
-import { useCodeCommentsStore, buildCommentedPathsSet } from '../stores/codeComments'
+import { useCodeCommentsStore, buildCommentedPathsSet } from '../../stores/codeComments'
 
 const emit = defineEmits(['navigate'])
 

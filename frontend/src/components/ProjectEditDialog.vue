@@ -3,7 +3,7 @@
 import { ref, computed, watch, nextTick, useId } from 'vue'
 import { useDataStore } from '../stores/data'
 import { apiFetch } from '../utils/api'
-import DirectoryPickerPopup from './DirectoryPickerPopup.vue'
+import DirectoryPickerPopup from './files/DirectoryPickerPopup.vue'
 
 const props = defineProps({
     project: {

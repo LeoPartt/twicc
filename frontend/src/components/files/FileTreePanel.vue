@@ -32,14 +32,14 @@
  */
 
 import { ref, computed, watch, nextTick, shallowRef, useId } from 'vue'
-import { apiFetch } from '../utils/api'
+import { apiFetch } from '../../utils/api'
 import FileTree from './FileTree.vue'
 import FileTreeContextMenu from './FileTreeContextMenu.vue'
 import FileRenameDialog from './FileRenameDialog.vue'
 import FileDeleteDialog from './FileDeleteDialog.vue'
 import FileCreateDialog from './FileCreateDialog.vue'
 import FileMoveDialog from './FileMoveDialog.vue'
-import AppTooltip from './AppTooltip.vue'
+import AppTooltip from '../AppTooltip.vue'
 
 const props = defineProps({
     tree: {

@@ -19,7 +19,7 @@
  */
 
 import { ref, watch, nextTick, useId, onBeforeUnmount } from 'vue'
-import { apiFetch } from '../utils/api'
+import { apiFetch } from '../../utils/api'
 import FileTreePanel from './FileTreePanel.vue'
 
 const props = defineProps({

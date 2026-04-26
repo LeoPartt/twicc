@@ -1,6 +1,6 @@
 <script setup>
 import { ref, useId, nextTick } from 'vue'
-import { apiFetch } from '../utils/api'
+import { apiFetch } from '../../utils/api'
 
 const props = defineProps({
     apiPrefix: { type: String, required: true },
