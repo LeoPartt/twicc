@@ -1931,6 +1931,7 @@ defineExpose({ insertTextAtCursor, getSessionSetting, setSessionSetting, getSess
     flex-direction: column;
     gap: var(--wa-space-2xs);
     padding: var(--wa-space-s);
+    padding-top: 0;
     background: var(--main-header-footer-bg-color);
     container: message-input / inline-size;
 }
