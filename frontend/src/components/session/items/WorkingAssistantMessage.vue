@@ -1,8 +1,8 @@
 <script setup>
 import { computed } from 'vue'
-import { useDataStore } from '../../stores/data'
-import { computeToolSummary, getVerb } from '../../utils/toolSummary'
-import ProcessIndicator from '../ui/ProcessIndicator.vue'
+import { useDataStore } from '../../../stores/data'
+import { computeToolSummary, getVerb } from '../../../utils/toolSummary'
+import ProcessIndicator from '../../ui/ProcessIndicator.vue'
 
 const props = defineProps({
     label: { type: String, default: null },

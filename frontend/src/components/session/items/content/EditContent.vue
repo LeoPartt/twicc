@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { applyStructuredPatch, reconstructFromHunks } from '../../../utils/patchUtils'
+import { applyStructuredPatch, reconstructFromHunks } from '../../../../utils/patchUtils'
 import ToolDiffViewer from './ToolDiffViewer.vue'
 
 /**

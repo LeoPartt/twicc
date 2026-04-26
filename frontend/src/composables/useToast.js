@@ -37,7 +37,7 @@ import { push } from 'notivue'
 
 // Lazy import to avoid circular dependency
 // (useToast → SessionToastContent → data.js → useWebSocket → useToast)
-const SessionToastContent = defineAsyncComponent(() => import('../components/SessionToastContent.vue'))
+const SessionToastContent = defineAsyncComponent(() => import('../components/session/SessionToastContent.vue'))
 
 /**
  * Show a success toast
