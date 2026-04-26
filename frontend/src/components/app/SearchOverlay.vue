@@ -13,17 +13,17 @@
 
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useDataStore } from '../stores/data'
-import { useSettingsStore } from '../stores/settings'
-import { useWorkspacesStore } from '../stores/workspaces'
-import { apiFetch } from '../utils/api'
-import { debounce } from '../utils/debounce'
-import { formatDate } from '../utils/date'
-import { pendingSessionSearch } from '../utils/pendingSearch'
-import { SESSION_TIME_FORMAT } from '../constants'
-import ProjectBadge from './project/ProjectBadge.vue'
-import ProjectSelectOptions from './project/ProjectSelectOptions.vue'
-import AppTooltip from './ui/AppTooltip.vue'
+import { useDataStore } from '../../stores/data'
+import { useSettingsStore } from '../../stores/settings'
+import { useWorkspacesStore } from '../../stores/workspaces'
+import { apiFetch } from '../../utils/api'
+import { debounce } from '../../utils/debounce'
+import { formatDate } from '../../utils/date'
+import { pendingSessionSearch } from '../../utils/pendingSearch'
+import { SESSION_TIME_FORMAT } from '../../constants'
+import ProjectBadge from '../project/ProjectBadge.vue'
+import ProjectSelectOptions from '../project/ProjectSelectOptions.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
 
 const route = useRoute()
 const router = useRouter()

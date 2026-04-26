@@ -5,7 +5,7 @@
 // Includes a period slider (1w → 1y) with automatic data granularity.
 
 import { ref, computed, watch } from 'vue'
-import { useSettingsStore } from '../stores/settings'
+import { useSettingsStore } from '../../stores/settings'
 
 const settingsStore = useSettingsStore()
 const isTouchDevice = computed(() => settingsStore.isTouchDevice)

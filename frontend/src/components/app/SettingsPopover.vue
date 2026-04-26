@@ -2,16 +2,16 @@
 // SettingsPopover.vue - Settings button with popover panel
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useSettingsStore, SETTINGS_SCHEMA, getModelRegistry, modelSupports1m, modelSupportsEffortXhigh, modelSupportsEffortMax } from '../stores/settings'
-import { useDataStore } from '../stores/data'
-import { useAuthStore } from '../stores/auth'
-import { DISPLAY_MODE, COLOR_SCHEME, SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SESSIONS, PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, getModelLabel, EFFORT, EFFORT_LABELS, THINKING, THINKING_LABELS, CLAUDE_IN_CHROME, CLAUDE_IN_CHROME_LABELS, CONTEXT_MAX, CONTEXT_MAX_LABELS, WA_THEME, WA_THEME_LABELS, WA_BRAND, WA_BRAND_LABELS } from '../constants'
+import { useSettingsStore, SETTINGS_SCHEMA, getModelRegistry, modelSupports1m, modelSupportsEffortXhigh, modelSupportsEffortMax } from '../../stores/settings'
+import { useDataStore } from '../../stores/data'
+import { useAuthStore } from '../../stores/auth'
+import { DISPLAY_MODE, COLOR_SCHEME, SESSION_TIME_FORMAT, DEFAULT_MAX_CACHED_SESSIONS, PERMISSION_MODE, PERMISSION_MODE_LABELS, PERMISSION_MODE_DESCRIPTIONS, getModelLabel, EFFORT, EFFORT_LABELS, THINKING, THINKING_LABELS, CLAUDE_IN_CHROME, CLAUDE_IN_CHROME_LABELS, CONTEXT_MAX, CONTEXT_MAX_LABELS, WA_THEME, WA_THEME_LABELS, WA_BRAND, WA_BRAND_LABELS } from '../../constants'
 import NotificationSettings from './NotificationSettings.vue'
-import AppTooltip from './ui/AppTooltip.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
 import ChangelogDialog from './ChangelogDialog.vue'
 import ClaudePresetsDialog from './ClaudePresetsDialog.vue'
-import { sendChangelogSeen, sendValidateUsageFile, sendValidateUsageDumpPath, sendValidateTmuxConfigPath } from '../composables/useWebSocket'
-import { vPopoverFocusFix } from '../directives/vPopoverFocusFix'
+import { sendChangelogSeen, sendValidateUsageFile, sendValidateUsageDumpPath, sendValidateTmuxConfigPath } from '../../composables/useWebSocket'
+import { vPopoverFocusFix } from '../../directives/vPopoverFocusFix'
 
 const router = useRouter()
 const store = useSettingsStore()

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import { useClaudeSettingsPresetsStore } from '../stores/claudeSettingsPresets'
+import { useClaudeSettingsPresetsStore } from '../../stores/claudeSettingsPresets'
 import {
     PERMISSION_MODE,
     PERMISSION_MODE_LABELS,
@@ -11,9 +11,9 @@ import {
     CONTEXT_MAX,
     CONTEXT_MAX_LABELS,
     getModelLabel,
-} from '../constants'
-import { getModelRegistry } from '../stores/settings'
-import { formatPresetSummary } from '../utils/presetFormat'
+} from '../../constants'
+import { getModelRegistry } from '../../stores/settings'
+import { formatPresetSummary } from '../../utils/presetFormat'
 
 const DEFAULT_SENTINEL = '__default__'
 

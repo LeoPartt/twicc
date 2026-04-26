@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { useDataStore } from '../stores/data'
+import { useDataStore } from '../../stores/data'
 
 const store = useDataStore()
 

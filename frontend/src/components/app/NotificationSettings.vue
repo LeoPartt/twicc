@@ -4,8 +4,8 @@
 // Each has a sound selector (with test button) and a browser notification toggle
 
 import { computed, ref } from 'vue'
-import { useSettingsStore } from '../stores/settings'
-import { playNotificationSound, getAvailableSoundOptions, NOTIFICATION_SOUNDS } from '../utils/notificationSounds'
+import { useSettingsStore } from '../../stores/settings'
+import { playNotificationSound, getAvailableSoundOptions, NOTIFICATION_SOUNDS } from '../../utils/notificationSounds'
 
 const store = useSettingsStore()
 

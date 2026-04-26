@@ -1,9 +1,9 @@
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
-import { useDataStore } from '../stores/data.js'
-import { useSettingsStore } from '../stores/settings.js'
-import { fetchChangelog, resolveImageLocalUrl, resolveImageGitHubUrl } from '../utils/changelog.js'
-import { renderMarkdown } from '../utils/markdown.js'
+import { useDataStore } from '../../stores/data.js'
+import { useSettingsStore } from '../../stores/settings.js'
+import { fetchChangelog, resolveImageLocalUrl, resolveImageGitHubUrl } from '../../utils/changelog.js'
+import { renderMarkdown } from '../../utils/markdown.js'
 
 const emit = defineEmits(['close'])
 

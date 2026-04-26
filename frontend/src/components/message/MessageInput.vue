@@ -22,7 +22,7 @@ import { useMessageSnippetsStore } from '../../stores/messageSnippets'
 import { useWorkspacesStore } from '../../stores/workspaces'
 import { useClaudeSettingsPresetsStore } from '../../stores/claudeSettingsPresets'
 import { formatPresetSummary } from '../../utils/presetFormat'
-import ClaudePresetsDialog from '../ClaudePresetsDialog.vue'
+import ClaudePresetsDialog from '../app/ClaudePresetsDialog.vue'
 import { getUnavailablePlaceholders, resolveSnippetText } from '../../utils/snippetPlaceholders'
 
 const props = defineProps({
