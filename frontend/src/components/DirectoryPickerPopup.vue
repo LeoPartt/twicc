@@ -279,6 +279,7 @@ onBeforeUnmount(() => {
             flip
             shift
             shift-padding="8"
+            class="picker-popup"
         >
             <div class="picker-panel" @keydown.capture="onPickerKeydown">
                 <!-- Header: current path + navigate up -->
@@ -325,8 +326,8 @@ onBeforeUnmount(() => {
 }
 
 .picker-panel {
-    width: 450px;
-    height: 350px;
+    width: min(30rem, calc(100vw - 1rem));
+    max-height: min(25rem, 60dvh);
     display: flex;
     flex-direction: column;
     background: var(--wa-color-surface-default);
@@ -334,6 +335,11 @@ onBeforeUnmount(() => {
     border-radius: var(--wa-border-radius-m);
     box-shadow: var(--wa-shadow-l);
     overflow: hidden;
+}
+@media (max-height: 640px) {
+    .picker-popup::part(popup) {
+        top: 0 !important;
+    }
 }
 
 .picker-header {

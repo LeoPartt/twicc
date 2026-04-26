@@ -358,6 +358,7 @@ defineExpose({ open, close, isOpen })
         flip
         shift
         shift-padding="8"
+        class="picker-popup"
     >
         <div class="picker-panel" @keydown.capture="onPickerKeydown">
             <!-- Header: current root path -->
@@ -428,7 +429,7 @@ defineExpose({ open, close, isOpen })
 <style scoped>
 .picker-panel {
     width: min(40rem, calc(100vw - 1rem));
-    max-height: min(25rem, 80dvh);
+    max-height: min(25rem, 60dvh);
     display: flex;
     flex-direction: column;
     background: var(--wa-color-surface-default);
@@ -436,6 +437,11 @@ defineExpose({ open, close, isOpen })
     border-radius: var(--wa-border-radius-m);
     box-shadow: var(--wa-shadow-l);
     overflow: hidden;
+}
+@media (max-height: 640px) {
+    .picker-popup::part(popup) {
+        top: 0 !important;
+    }
 }
 
 .picker-header {
