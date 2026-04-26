@@ -9,7 +9,7 @@ import { ref, computed } from 'vue'
 import { useElementSize } from '@vueuse/core'
 import { CalendarHeatmap } from 'vue3-calendar-heatmap'
 import 'vue3-calendar-heatmap/dist/style.css'
-import { useSettingsStore } from '../stores/settings'
+import { useSettingsStore } from '../../stores/settings'
 
 const props = defineProps({
     /** Daily activity data: array of { date, user_message_count, session_count, cost } */

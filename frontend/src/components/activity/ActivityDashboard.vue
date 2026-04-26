@@ -8,9 +8,9 @@
 // Pure presentation component: receives pre-fetched daily activity data via props.
 
 import { computed } from 'vue'
-import { useSettingsStore } from '../stores/settings'
-import AppTooltip from './AppTooltip.vue'
-import CostDisplay from './CostDisplay.vue'
+import { useSettingsStore } from '../../stores/settings'
+import AppTooltip from '../AppTooltip.vue'
+import CostDisplay from '../CostDisplay.vue'
 
 const settingsStore = useSettingsStore()
 const showCosts = computed(() => settingsStore.areCostsShown)

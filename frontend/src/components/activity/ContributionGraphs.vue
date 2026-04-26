@@ -4,10 +4,10 @@
 // Supports toggling between heatmap view and sparkline view.
 
 import { ref, computed, watch, onMounted } from 'vue'
-import { apiFetch } from '../utils/api'
-import { ALL_PROJECTS_ID } from '../stores/data'
-import { useSettingsStore } from '../stores/settings'
-import { useStartupPolling } from '../composables/useStartupPolling'
+import { apiFetch } from '../../utils/api'
+import { ALL_PROJECTS_ID } from '../../stores/data'
+import { useSettingsStore } from '../../stores/settings'
+import { useStartupPolling } from '../../composables/useStartupPolling'
 import ActivityDashboard from './ActivityDashboard.vue'
 import ContributionGraph from './ContributionGraph.vue'
 import ContributionSparklines from './ContributionSparklines.vue'

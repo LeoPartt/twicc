@@ -7,7 +7,7 @@
 // with distinct colors (green for messages, blue for sessions, red for cost).
 
 import { ref, computed, watch } from 'vue'
-import { useSettingsStore } from '../stores/settings'
+import { useSettingsStore } from '../../stores/settings'
 
 const settingsStore = useSettingsStore()
 const isTouchDevice = computed(() => settingsStore.isTouchDevice)

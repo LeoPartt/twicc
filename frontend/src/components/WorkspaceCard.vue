@@ -19,7 +19,7 @@ import ProjectBadge from './ProjectBadge.vue'
 import AggregatedProcessIndicator from './AggregatedProcessIndicator.vue'
 import CodeCommentsIndicator from './CodeCommentsIndicator.vue'
 import CostDisplay from './CostDisplay.vue'
-import ActivitySparkline from './ActivitySparkline.vue'
+import ActivitySparkline from './activity/ActivitySparkline.vue'
 import AppTooltip from './AppTooltip.vue'
 
 const props = defineProps({
