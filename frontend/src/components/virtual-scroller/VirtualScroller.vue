@@ -22,7 +22,7 @@
  * ResizeObserver and DOM measurement requirements).
  */
 import { ref, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated, toRef, nextTick, provide } from 'vue'
-import { useVirtualScroll } from '../composables/useVirtualScroll'
+import { useVirtualScroll } from '../../composables/useVirtualScroll'
 import VirtualScrollerItem from './VirtualScrollerItem.vue'
 import { RESIZE_OBSERVER_KEY } from './virtualScrollerKeys.js'
 
