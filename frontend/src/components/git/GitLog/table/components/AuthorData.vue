@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, useId, type CSSProperties } from 'vue'
 import type { CommitAuthor } from '../../types'
-import AppTooltip from '../../../AppTooltip.vue'
+import AppTooltip from '../../../../AppTooltip.vue'
 
 
 // ---------------------------------------------------------------------------

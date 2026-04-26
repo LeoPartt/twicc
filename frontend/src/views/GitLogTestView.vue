@@ -5,9 +5,9 @@ import {
     GitLogGraphHTMLGrid,
     GitLogTable,
     GitLogTags,
-} from '../components/GitLog'
-import { DEFAULT_NODE_SIZE, DEFAULT_ROW_HEIGHT, NODE_BORDER_WIDTH } from '../components/GitLog/constants'
-import { fakeEntries, fakeIndexStatus } from '../components/GitLog/__tests__/fakeData'
+} from '../components/git/GitLog'
+import { DEFAULT_NODE_SIZE, DEFAULT_ROW_HEIGHT, NODE_BORDER_WIDTH } from '../components/git/GitLog/constants'
+import { fakeEntries, fakeIndexStatus } from '../components/git/GitLog/__tests__/fakeData'
 
 // ---------------------------------------------------------------------------
 // Theme

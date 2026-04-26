@@ -1,8 +1,8 @@
 <script setup>
 import { ref, computed, watch, nextTick, provide, onMounted, onActivated, onDeactivated, useId } from 'vue'
-import { apiFetch } from '../utils/api'
-import { useSettingsStore } from '../stores/settings'
-import { useContainerBreakpoint } from '../composables/useContainerBreakpoint'
+import { apiFetch } from '../../utils/api'
+import { useSettingsStore } from '../../stores/settings'
+import { useContainerBreakpoint } from '../../composables/useContainerBreakpoint'
 import {
     GitLog,
     GitLogGraphHTMLGrid,
@@ -10,12 +10,12 @@ import {
     GitLogTags,
 } from './GitLog'
 import GitPanelHeader from './GitPanelHeader.vue'
-import AppTooltip from './AppTooltip.vue'
-import FileTreePanel from './FileTreePanel.vue'
-import FilePane from './FilePane.vue'
-import { searchTreeFiles } from '../utils/treeSearch'
-import { useCodeCommentsStore, buildCommentedPathsSet } from '../stores/codeComments'
-import { usePanZoom, useSyncedPanZoom } from '../composables/usePanZoom'
+import AppTooltip from '../AppTooltip.vue'
+import FileTreePanel from '../FileTreePanel.vue'
+import FilePane from '../FilePane.vue'
+import { searchTreeFiles } from '../../utils/treeSearch'
+import { useCodeCommentsStore, buildCommentedPathsSet } from '../../stores/codeComments'
+import { usePanZoom, useSyncedPanZoom } from '../../composables/usePanZoom'
 
 const emit = defineEmits(['navigate'])
 

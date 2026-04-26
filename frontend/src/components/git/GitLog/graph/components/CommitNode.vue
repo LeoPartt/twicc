@@ -8,7 +8,7 @@ import { useGitContext } from '../../composables/useGitContext'
 import { getMergeNodeInnerSize } from '../utils/getMergeNodeInnerSize'
 import type { Commit, CustomCommitNodeProps, CustomTooltipProps } from '../../types'
 import CommitNodeTooltip from './CommitNodeTooltip.vue'
-import AppTooltip from '../../../AppTooltip.vue'
+import AppTooltip from '../../../../AppTooltip.vue'
 
 // ---------------------------------------------------------------------------
 // Props
