@@ -394,6 +394,28 @@ class ClaudeProcess:
             last_started_tool_id=self._last_started_tool_id,
         )
 
+    async def discard_active_tool(self, tool_use_id: str) -> bool:
+        """Remove an active-tool entry by id and broadcast if it existed.
+
+        Used by the JSONL watcher as a safety net: PostToolUse/PostToolUseFailure
+        do not fire when the CLI rejects a tool call before execution (e.g.
+        Edit/Write on a not-yet-read file — the CLI synthesises an is_error
+        tool_result without ever invoking the tool). Without this hook, those
+        entries would leak into _active_tools and persist in the working
+        status line.
+        """
+        if tool_use_id not in self._active_tools:
+            return False
+        entry = self._active_tools.pop(tool_use_id, None)
+        logger.debug(
+            "discard_active_tool session=%s tool=%s active_tools=%d",
+            self.session_id,
+            entry["name"] if entry else "?",
+            len(self._active_tools),
+        )
+        await self._broadcast_process_tools()
+        return True
+
     def get_permission_suggestions(
         self, tool_name: str, input_data: dict, context: ToolPermissionContext
     ) -> list[dict] | None:

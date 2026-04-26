@@ -18,6 +18,7 @@ from django.conf import settings
 from watchfiles import Change, awatch
 
 import twicc.search as search
+from twicc.agent.manager import get_process_manager
 from twicc.agent.original_file_cache import pop_original_file as _pop_cached_original_file
 from twicc.compute import AgentLinkUpdate, AgentStoppedUpdate, ToolResultUpdate, cache_agent_prompt, \
     check_agent_naturally_stopped, compute_item_cost_and_usage, \
@@ -481,6 +482,7 @@ async def sync_and_broadcast(
                 })
 
             # Broadcast tool result state changes
+            process_manager = get_process_manager()
             for update in tool_result_updates:
                 await broadcast_message(channel_layer, {
                     "type": "tool_state",
@@ -492,6 +494,12 @@ async def sync_and_broadcast(
                     "error": update.error,
                     "tool_result_line_num": update.tool_result_line_num,
                 })
+                # Safety net: clean up _active_tools for tools whose tool_result
+                # appeared in JSONL but never triggered PostToolUse (e.g. CLI
+                # validation rejections that synthesise an is_error result without
+                # invoking the tool). Hooks fire faster when they do fire; this
+                # catches the gaps.
+                await process_manager.discard_active_tool(update.session_id, update.tool_use_id)
 
             # Broadcast session_updated for subagents that naturally finished
             for stopped in agent_stopped_updates:

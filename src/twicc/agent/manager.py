@@ -408,6 +408,17 @@ class ProcessManager:
             return None
         return process.get_info()
 
+    async def discard_active_tool(self, session_id: str, tool_use_id: str) -> bool:
+        """Discard an active-tool entry on the matching process. Returns True
+        when an entry was actually removed. Used by the JSONL watcher to clean
+        up tools that never produced a PostToolUse/PostToolUseFailure (CLI-side
+        validation rejections).
+        """
+        process = self._processes.get(session_id)
+        if process is None:
+            return False
+        return await process.discard_active_tool(tool_use_id)
+
     async def kill_process(self, session_id: str, reason: str = "manual") -> bool:
         """Stop a specific process by session ID.
 
