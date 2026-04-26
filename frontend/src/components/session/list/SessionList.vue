@@ -8,11 +8,11 @@
  */
 import { ref, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { useDataStore, ALL_PROJECTS_ID } from '../../stores/data'
-import { useWorkspacesStore } from '../../stores/workspaces'
-import { isWorkspaceProjectId, extractWorkspaceId } from '../../utils/workspaceIds'
-import { computeSidebarSessionBlocks } from '../../utils/sidebarSessions'
-import VirtualScroller from '../virtual-scroller/VirtualScroller.vue'
+import { useDataStore, ALL_PROJECTS_ID } from '../../../stores/data'
+import { useWorkspacesStore } from '../../../stores/workspaces'
+import { isWorkspaceProjectId, extractWorkspaceId } from '../../../utils/workspaceIds'
+import { computeSidebarSessionBlocks } from '../../../utils/sidebarSessions'
+import VirtualScroller from '../../virtual-scroller/VirtualScroller.vue'
 import SessionListItem from './SessionListItem.vue'
 
 const props = defineProps({

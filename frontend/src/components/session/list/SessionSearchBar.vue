@@ -1,8 +1,8 @@
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import { apiFetch } from '../../utils/api'
-import AppTooltip from '../ui/AppTooltip.vue'
+import { apiFetch } from '../../../utils/api'
+import AppTooltip from '../../ui/AppTooltip.vue'
 
 const props = defineProps({
     sessionId: {
