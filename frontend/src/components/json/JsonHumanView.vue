@@ -21,13 +21,13 @@
 
 import { computed, reactive, ref } from 'vue'
 import { EditorView } from '@codemirror/view'
-import MarkdownContent from './MarkdownContent.vue'
-import CodeEditor from './CodeEditor.vue'
-import DiffEditor from './DiffEditor.vue'
+import MarkdownContent from '../MarkdownContent.vue'
+import CodeEditor from '../CodeEditor.vue'
+import DiffEditor from '../DiffEditor.vue'
 import JhvEditorToolbar from './JhvEditorToolbar.vue'
-import MediaPreviewDialog from './media/MediaPreviewDialog.vue'
-import { getIconUrl, getFileIconId } from '../utils/fileIcons'
-import { getLanguageFromPath } from '../utils/languages'
+import MediaPreviewDialog from '../media/MediaPreviewDialog.vue'
+import { getIconUrl, getFileIconId } from '../../utils/fileIcons'
+import { getLanguageFromPath } from '../../utils/languages'
 
 defineOptions({ name: 'JsonHumanView' })
 

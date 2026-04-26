@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useDataStore } from '../stores/data'
-import JsonViewer from './JsonViewer.vue'
+import JsonViewer from './json/JsonViewer.vue'
 import Message from './items/Message.vue'
 import ApiError from './items/ApiError.vue'
 import CompactSummary from './items/content/CompactSummary.vue'

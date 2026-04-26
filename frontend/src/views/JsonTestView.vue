@@ -3,7 +3,7 @@
 // Access at /json-test
 
 import { reactive, ref } from 'vue'
-import JsonHumanView from '../components/JsonHumanView.vue'
+import JsonHumanView from '../components/json/JsonHumanView.vue'
 
 // Track which test cases are in edit mode (by index)
 const editingStates = reactive({})

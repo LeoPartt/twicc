@@ -1,6 +1,6 @@
 <script setup>
 import { ref, useId } from 'vue'
-import AppTooltip from './AppTooltip.vue'
+import AppTooltip from '../AppTooltip.vue'
 import JsonNode from './JsonNode.vue'
 
 defineProps({

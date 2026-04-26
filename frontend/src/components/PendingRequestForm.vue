@@ -7,7 +7,7 @@
 
 import { ref, computed, reactive, watch, nextTick, useId } from 'vue'
 import { useDataStore } from '../stores/data'
-import JsonHumanView from './JsonHumanView.vue'
+import JsonHumanView from './json/JsonHumanView.vue'
 import AppTooltip from './AppTooltip.vue'
 import { getLanguageFromPath } from '../utils/languages'
 
