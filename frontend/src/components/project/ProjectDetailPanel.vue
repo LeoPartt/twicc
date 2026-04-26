@@ -4,16 +4,16 @@
 
 import { ref, computed, watch, watchEffect, onMounted, onBeforeUnmount, onActivated, onDeactivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ALL_PROJECTS_ID, useDataStore } from '../stores/data'
-import { useWorkspacesStore } from '../stores/workspaces'
-import { isWorkspaceProjectId, extractWorkspaceId } from '../utils/workspaceIds'
+import { ALL_PROJECTS_ID, useDataStore } from '../../stores/data'
+import { useWorkspacesStore } from '../../stores/workspaces'
+import { isWorkspaceProjectId, extractWorkspaceId } from '../../utils/workspaceIds'
 import ProjectDetailHeader from './ProjectDetailHeader.vue'
-import { apiFetch } from '../utils/api'
+import { apiFetch } from '../../utils/api'
 import ProjectDetailNavList from './ProjectDetailNavList.vue'
-import ContributionGraphs from './activity/ContributionGraphs.vue'
-import FilesPanel from './files/FilesPanel.vue'
-import GitPanel from './git/GitPanel.vue'
-import TerminalPanel from './terminal/TerminalPanel.vue'
+import ContributionGraphs from '../activity/ContributionGraphs.vue'
+import FilesPanel from '../files/FilesPanel.vue'
+import GitPanel from '../git/GitPanel.vue'
+import TerminalPanel from '../terminal/TerminalPanel.vue'
 import {
     buildFilesRouteParams,
     buildGitRouteParams,
@@ -24,7 +24,7 @@ import {
     decodePath,
     parseRouteString,
     parseRouteTermIndex,
-} from '../utils/granularRoutes'
+} from '../../utils/granularRoutes'
 
 const props = defineProps({
     /** Project ID or ALL_PROJECTS_ID for aggregate view */

@@ -4,8 +4,8 @@ import { ref, computed, nextTick, useId } from 'vue'
 import { useWorkspacesStore } from '../../stores/workspaces'
 import { useSettingsStore } from '../../stores/settings'
 import { useDataStore } from '../../stores/data'
-import ProjectBadge from '../ProjectBadge.vue'
-import ProjectSelectOptions from '../ProjectSelectOptions.vue'
+import ProjectBadge from '../project/ProjectBadge.vue'
+import ProjectSelectOptions from '../project/ProjectSelectOptions.vue'
 import DirectoryPickerPopup from '../files/DirectoryPickerPopup.vue'
 
 const workspacesStore = useWorkspacesStore()

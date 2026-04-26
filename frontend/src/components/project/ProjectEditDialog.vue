@@ -1,9 +1,9 @@
 <script setup>
 // ProjectEditDialog.vue - Dialog for editing/creating projects
 import { ref, computed, watch, nextTick, useId } from 'vue'
-import { useDataStore } from '../stores/data'
-import { apiFetch } from '../utils/api'
-import DirectoryPickerPopup from './files/DirectoryPickerPopup.vue'
+import { useDataStore } from '../../stores/data'
+import { apiFetch } from '../../utils/api'
+import DirectoryPickerPopup from '../files/DirectoryPickerPopup.vue'
 
 const props = defineProps({
     project: {

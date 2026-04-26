@@ -12,12 +12,12 @@
  */
 
 import { computed } from 'vue'
-import { useDataStore } from '../stores/data'
-import { splitProjectsByPriority } from '../utils/projectSort'
-import { buildProjectTree, flattenProjectTree } from '../utils/projectTree'
+import { useDataStore } from '../../stores/data'
+import { splitProjectsByPriority } from '../../utils/projectSort'
+import { buildProjectTree, flattenProjectTree } from '../../utils/projectTree'
 import ProjectBadge from './ProjectBadge.vue'
-import AggregatedProcessIndicator from './AggregatedProcessIndicator.vue'
-import CodeCommentsIndicator from './CodeCommentsIndicator.vue'
+import AggregatedProcessIndicator from '../AggregatedProcessIndicator.vue'
+import CodeCommentsIndicator from '../CodeCommentsIndicator.vue'
 
 const props = defineProps({
     /** Array of project objects to display as options */

@@ -1,12 +1,12 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { useDataStore } from '../stores/data'
-import { useSettingsStore } from '../stores/settings'
-import { buildProjectTree } from '../utils/projectTree'
+import { useDataStore } from '../../stores/data'
+import { useSettingsStore } from '../../stores/settings'
+import { buildProjectTree } from '../../utils/projectTree'
 import ProjectEditDialog from './ProjectEditDialog.vue'
 import ProjectCard from './ProjectCard.vue'
 import ProjectTreeNode from './ProjectTreeNode.vue'
-import AppTooltip from './AppTooltip.vue'
+import AppTooltip from '../AppTooltip.vue'
 
 const store = useDataStore()
 const settingsStore = useSettingsStore()

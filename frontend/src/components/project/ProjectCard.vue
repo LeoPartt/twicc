@@ -10,16 +10,16 @@
  * project badge (used by ProjectTreeNode for the tree chevron).
  */
 import { computed } from 'vue'
-import { useDataStore } from '../stores/data'
-import { useSettingsStore } from '../stores/settings'
-import { formatDate } from '../utils/date'
-import { SESSION_TIME_FORMAT } from '../constants'
+import { useDataStore } from '../../stores/data'
+import { useSettingsStore } from '../../stores/settings'
+import { formatDate } from '../../utils/date'
+import { SESSION_TIME_FORMAT } from '../../constants'
 import ProjectBadge from './ProjectBadge.vue'
-import AggregatedProcessIndicator from './AggregatedProcessIndicator.vue'
-import CodeCommentsIndicator from './CodeCommentsIndicator.vue'
-import ActivitySparkline from './activity/ActivitySparkline.vue'
-import CostDisplay from './CostDisplay.vue'
-import AppTooltip from './AppTooltip.vue'
+import AggregatedProcessIndicator from '../AggregatedProcessIndicator.vue'
+import CodeCommentsIndicator from '../CodeCommentsIndicator.vue'
+import ActivitySparkline from '../activity/ActivitySparkline.vue'
+import CostDisplay from '../CostDisplay.vue'
+import AppTooltip from '../AppTooltip.vue'
 
 const props = defineProps({
     project: {

@@ -21,8 +21,8 @@ import { debounce } from '../utils/debounce'
 import { formatDate } from '../utils/date'
 import { pendingSessionSearch } from '../utils/pendingSearch'
 import { SESSION_TIME_FORMAT } from '../constants'
-import ProjectBadge from './ProjectBadge.vue'
-import ProjectSelectOptions from './ProjectSelectOptions.vue'
+import ProjectBadge from './project/ProjectBadge.vue'
+import ProjectSelectOptions from './project/ProjectSelectOptions.vue'
 import AppTooltip from './AppTooltip.vue'
 
 const route = useRoute()

@@ -17,7 +17,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDataStore } from '../stores/data'
 import { clearUserTurnToast, markSessionReadState } from '../composables/useWebSocket'
 import { parseProcessError } from '../utils/errorParsing'
-import ProjectBadge from './ProjectBadge.vue'
+import ProjectBadge from './project/ProjectBadge.vue'
 
 const props = defineProps({
     sessionId: {

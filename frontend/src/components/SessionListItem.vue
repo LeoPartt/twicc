@@ -17,7 +17,7 @@ import { PROCESS_STATE, PROCESS_STATE_COLORS, PROCESS_STATE_NAMES, SESSION_TIME_
 import { markSessionReadState, cancelSessionViewedThrottle } from '../composables/useWebSocket'
 import { stopSessionProcess } from '../composables/useStopSessionProcess'
 import { useDragHover } from '../composables/useDragHover'
-import ProjectBadge from './ProjectBadge.vue'
+import ProjectBadge from './project/ProjectBadge.vue'
 import ProcessIndicator from './ProcessIndicator.vue'
 import ProcessDuration from './ProcessDuration.vue'
 import CostDisplay from './CostDisplay.vue'
