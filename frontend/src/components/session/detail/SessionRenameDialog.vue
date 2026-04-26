@@ -1,8 +1,8 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
-import { useDataStore } from '../../stores/data'
-import { useSettingsStore } from '../../stores/settings'
-import { requestTitleSuggestion } from '../../composables/useWebSocket'
+import { useDataStore } from '../../../stores/data'
+import { useSettingsStore } from '../../../stores/settings'
+import { requestTitleSuggestion } from '../../../composables/useWebSocket'
 
 const props = defineProps({
     session: {

@@ -21,9 +21,9 @@ import {
     CONTEXT_MAX_LABELS,
     getModelLabel,
 } from '../constants'
-import SessionHeader from '../components/session/SessionHeader.vue'
-import SessionItemsList from '../components/session/SessionItemsList.vue'
-import SessionContent from '../components/session/SessionContent.vue'
+import SessionHeader from '../components/session/detail/SessionHeader.vue'
+import SessionItemsList from '../components/session/detail/SessionItemsList.vue'
+import SessionContent from '../components/session/detail/SessionContent.vue'
 import FilesPanel from '../components/files/FilesPanel.vue'
 import GitPanel from '../components/git/GitPanel.vue'
 import TerminalPanel from '../components/terminal/TerminalPanel.vue'

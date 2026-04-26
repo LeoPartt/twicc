@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { SYNTHETIC_ITEM } from '../../../constants'
+import { SYNTHETIC_ITEM } from '../../../../constants'
 import ContentList from './content/ContentList.vue'
 import WorkingAssistantMessage from './WorkingAssistantMessage.vue'
 

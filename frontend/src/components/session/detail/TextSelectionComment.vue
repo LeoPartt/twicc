@@ -5,8 +5,8 @@
 // to IndexedDB — the user must send the message right away.
 
 import { ref, inject, nextTick, computed, onMounted, onBeforeUnmount } from 'vue'
-import { formatComment } from '../../stores/codeComments'
-import { useSettingsStore } from '../../stores/settings'
+import { formatComment } from '../../../stores/codeComments'
+import { useSettingsStore } from '../../../stores/settings'
 
 const props = defineProps({
     /** The text the user selected in the session view. */

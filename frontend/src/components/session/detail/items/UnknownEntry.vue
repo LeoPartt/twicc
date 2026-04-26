@@ -1,7 +1,7 @@
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
-import { useDataStore } from '../../../stores/data'
-import JsonHumanView from '../../json/JsonHumanView.vue'
+import { useDataStore } from '../../../../stores/data'
+import JsonHumanView from '../../../json/JsonHumanView.vue'
 
 const dataStore = useDataStore()
 

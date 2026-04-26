@@ -1,5 +1,5 @@
 <script setup>
-import { getDetail } from '../../../../utils/todoList'
+import { getDetail } from '../../../../../utils/todoList'
 
 defineProps({
     todos: {

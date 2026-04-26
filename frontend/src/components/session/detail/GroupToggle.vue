@@ -5,7 +5,7 @@
  * Shows "..." when collapsed, with visual feedback on hover.
  * In simplified mode, this replaces collapsed group content.
  */
-import CodeCommentsIndicator from '../ui/CodeCommentsIndicator.vue'
+import CodeCommentsIndicator from '../../ui/CodeCommentsIndicator.vue'
 
 defineProps({
     /**

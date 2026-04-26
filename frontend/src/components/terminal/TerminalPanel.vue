@@ -16,7 +16,7 @@ import TerminalExtraKeysBar from './TerminalExtraKeysBar.vue'
 import TerminalCombosDialog from './TerminalCombosDialog.vue'
 import TerminalSnippetsDialog from './TerminalSnippetsDialog.vue'
 import TerminalSnippetSendDialog from './TerminalSnippetSendDialog.vue'
-import TextSelectionComment from '../session/TextSelectionComment.vue'
+import TextSelectionComment from '../session/detail/TextSelectionComment.vue'
 
 const props = defineProps({
     contextKey: {
