@@ -1,8 +1,8 @@
 <script setup>
 // TerminalCombosDialog.vue - Dialog for managing custom key combos
 import { ref, computed, nextTick, useId } from 'vue'
-import { useTerminalConfigStore } from '../stores/terminalConfig'
-import { formatCombo, formatComboNotation } from '../utils/terminalComboNotation'
+import { useTerminalConfigStore } from '../../stores/terminalConfig'
+import { formatCombo, formatComboNotation } from '../../utils/terminalComboNotation'
 
 const terminalConfigStore = useTerminalConfigStore()
 

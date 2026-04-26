@@ -1,6 +1,6 @@
 <script setup>
 import { inject, onUnmounted, watch } from 'vue'
-import { useTerminal } from '../composables/useTerminal'
+import { useTerminal } from '../../composables/useTerminal'
 
 const emit = defineEmits(['disconnected'])
 

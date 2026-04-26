@@ -1,9 +1,9 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { formatCombo } from '../utils/terminalComboNotation'
-import { useDataStore } from '../stores/data'
-import { useWorkspacesStore } from '../stores/workspaces'
-import AppTooltip from './AppTooltip.vue'
+import { formatCombo } from '../../utils/terminalComboNotation'
+import { useDataStore } from '../../stores/data'
+import { useWorkspacesStore } from '../../stores/workspaces'
+import AppTooltip from '../AppTooltip.vue'
 
 const props = defineProps({
     activeModifiers: { type: Object, required: true },

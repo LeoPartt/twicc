@@ -3,7 +3,7 @@
 // Nothing is persisted — the edited text is used for this single send only.
 import { ref, computed, nextTick } from 'vue'
 import TerminalSnippetTextEditor from './TerminalSnippetTextEditor.vue'
-import { extractPlaceholders, getUnavailablePlaceholders } from '../utils/snippetPlaceholders'
+import { extractPlaceholders, getUnavailablePlaceholders } from '../../utils/snippetPlaceholders'
 
 const props = defineProps({
     terminals: {

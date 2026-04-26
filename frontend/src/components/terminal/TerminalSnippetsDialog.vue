@@ -2,14 +2,14 @@
 // TerminalSnippetsDialog.vue - Dialog for managing text snippets with scope grouping
 import { ref, computed, nextTick, useId } from 'vue'
 import { useRoute } from 'vue-router'
-import { useTerminalConfigStore } from '../stores/terminalConfig'
-import { useDataStore } from '../stores/data'
-import { useWorkspacesStore } from '../stores/workspaces'
-import ProjectBadge from './ProjectBadge.vue'
+import { useTerminalConfigStore } from '../../stores/terminalConfig'
+import { useDataStore } from '../../stores/data'
+import { useWorkspacesStore } from '../../stores/workspaces'
+import ProjectBadge from '../ProjectBadge.vue'
 import TerminalSnippetTextEditor from './TerminalSnippetTextEditor.vue'
-import { buildProjectTree, flattenProjectTree } from '../utils/projectTree'
-import { splitProjectsByPriority } from '../utils/projectSort'
-import { extractPlaceholders } from '../utils/snippetPlaceholders'
+import { buildProjectTree, flattenProjectTree } from '../../utils/projectTree'
+import { splitProjectsByPriority } from '../../utils/projectSort'
+import { extractPlaceholders } from '../../utils/snippetPlaceholders'
 
 const props = defineProps({
     currentProjectId: {
