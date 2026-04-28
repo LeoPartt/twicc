@@ -310,18 +310,26 @@ const isDisabled = computed(() => {
 // All dropdowns disabled only during starting
 const isStarting = computed(() => processState.value?.state === 'starting')
 
-// Force 1M context when session usage exceeds 85% of the 200K window.
-// Only applies when no process is active.
+// Whether the auto-force-to-1M rule is currently active for this session.
+// The rule itself lives in the data store getter `getEffectiveContextMax` —
+// here we just detect that the effective value diverges from what the user
+// actually picked (or defaulted to).
 const isContextMaxForced = computed(() => {
-    if (processIsActive.value) return false
-    const sess = store.getSession(props.sessionId)
-    if (!sess?.context_usage) return false
-    return sess.context_usage > CONTEXT_MAX.DEFAULT * 0.85
+    const baseValue = selectedContextMax.value ?? settingsStore.getDefaultContextMax
+    return store.getEffectiveContextMax(props.sessionId) !== baseValue
 })
 
 const isContextMaxForcedByModel = computed(() => {
     const effectiveModel = selectedModel.value ?? settingsStore.getDefaultModel
     return !modelSupports1m(effectiveModel)
+})
+
+// Value to display in the context select. When forced (by usage) we surface
+// 1M even though `selectedContextMax` may still be null/200K — the actual
+// stored value is preserved so we don't pollute the user's saved setting.
+const contextMaxSelectValue = computed(() => {
+    if (isContextMaxForced.value) return String(CONTEXT_MAX.EXTENDED)
+    return selectedContextMax.value === null ? DEFAULT_SENTINEL : String(selectedContextMax.value)
 })
 
 const isEffortXhighAvailable = computed(() => {
@@ -541,14 +549,6 @@ for (const field of SESSION_SETTING_FIELDS) {
         }
     )
 }
-
-// Force 1M context when context_usage crosses the 85% threshold of 200K.
-watch(isContextMaxForced, (forced) => {
-    if (forced) {
-        selectedContextMax.value = CONTEXT_MAX.EXTENDED
-        activeContextMax.value = CONTEXT_MAX.EXTENDED
-    }
-})
 
 // Restore draft message when session changes
 watch(() => props.sessionId, async (newId) => {
@@ -1787,7 +1787,7 @@ defineExpose({ insertTextAtCursor, getSessionSetting, setSessionSetting, getSess
                         <div class="setting-row">
                             <label class="setting-label">Context</label>
                             <wa-select
-                                :value.prop="selectedContextMax === null ? DEFAULT_SENTINEL : String(selectedContextMax)"
+                                :value.prop="contextMaxSelectValue"
                                 @change="selectedContextMax = $event.target.value === DEFAULT_SENTINEL ? null : Number($event.target.value)"
                                 size="small"
                                 :disabled="isStarting || isContextMaxForced || isContextMaxForcedByModel"

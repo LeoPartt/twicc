@@ -4,7 +4,7 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import { toRaw } from 'vue'
 import { getPrefixSuffixBoundaries } from '../utils/contentVisibility'
 import { computeVisualItems, visualItemEqual } from '../utils/visualItems'
-import { DISPLAY_LEVEL, DISPLAY_MODE, PROCESS_STATE, SYNTHETIC_ITEM } from '../constants'
+import { CONTEXT_MAX, DISPLAY_LEVEL, DISPLAY_MODE, PROCESS_STATE, SYNTHETIC_ITEM } from '../constants'
 import { getSessionCutoffMs } from '../utils/sessions'
 import { useSettingsStore } from './settings'
 import {
@@ -292,6 +292,22 @@ export const useDataStore = defineStore('data', {
 
         // Process state getter - returns { state, error?, pending_requests? } or null if no active process
         getProcessState: (state) => (sessionId) => state.processStates[sessionId] || null,
+
+        // Effective context max for a session, accounting for the auto-force-to-1M
+        // rule that kicks in when usage exceeds 85% of the 200K window with no
+        // active process. Used by both the session settings selector and the
+        // header progress ring so they stay in sync.
+        getEffectiveContextMax: (state) => (sessionId) => {
+            const session = state.sessions[sessionId]
+            const settingsStore = useSettingsStore()
+            const baseValue = session?.context_max ?? settingsStore.getDefaultContextMax
+            const processState = state.processStates[sessionId]
+            const isProcessActive = processState?.state === PROCESS_STATE.ASSISTANT_TURN || processState?.state === PROCESS_STATE.USER_TURN
+            if (isProcessActive) return baseValue
+            if (baseValue !== CONTEXT_MAX.DEFAULT) return baseValue
+            if ((session?.context_usage ?? 0) > CONTEXT_MAX.DEFAULT * 0.85) return CONTEXT_MAX.EXTENDED
+            return baseValue
+        },
 
         /**
          * Whether a stop request has been sent for this session and we're

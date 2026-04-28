@@ -86,8 +86,10 @@ const costBreakdown = computed(() => {
     }
 })
 
-// Calculate context usage percentage based on session's context_max
-const contextMax = computed(() => session.value?.context_max ?? settingsStore.getDefaultContextMax)
+// Calculate context usage percentage based on session's effective context_max
+// (the store getter applies the auto-force-to-1M rule when usage exceeds 85%
+// of the 200K window with no active process).
+const contextMax = computed(() => store.getEffectiveContextMax(props.sessionId))
 
 const contextUsagePercentage = computed(() => {
     const usage = session.value?.context_usage

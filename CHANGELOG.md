@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - "Show hidden files" and "Show git ignored files" toggles in the file picker and Files tab now persist across sessions and are shared between both places
 
+### Fixed
+
+- Session context selector and usage ring now correctly show 1M when a session is auto-switched to the 1M window (after passing 85% of the 200K default)
+
 ## [1.5.4] - 2026-04-26
 
 ### Fixed
