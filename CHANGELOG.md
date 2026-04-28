@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Better handling when you are not authenticated on Claude: TwiCC now starts anyway and tells you the command to run to log in, with the option to run it directly in an integrated terminal
+
 ### Changed
 
 - "Show hidden files" and "Show git ignored files" toggles in the file picker and Files tab now persist across sessions and are shared between both places
@@ -14,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Session context selector and usage ring now correctly show 1M when a session is auto-switched to the 1M window (after passing 85% of the 200K default)
+- Should be fewer macOS Keychain prompts
 
 ## [1.5.4] - 2026-04-26
 
