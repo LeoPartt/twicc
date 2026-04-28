@@ -140,6 +140,47 @@ function getStreamingItemMetadata(block, lastRealItem, streamingLineNum) {
     }
 }
 
+/**
+ * Whether the tool card the working-message would point to is actually visible
+ * on screen, given the current display mode and expansion state.
+ *
+ * The working-message component drops the parenthesised target (e.g. the file
+ * path) when there's a single active tool and its card sits right above. That
+ * shortcut assumes the card is visible; in simplified mode the tool may live
+ * inside a collapsed group, and in conversation mode the whole non-user block
+ * is hidden unless "show details" is open.
+ *
+ * @param {Array} items - real session items (no synthetic).
+ * @param {string|null} lastStartedToolId - id of the most recently started tool.
+ * @param {string} mode - effective DISPLAY_MODE.
+ * @param {Array<number>} expandedGroups - line_nums of expanded group heads.
+ * @param {boolean} isCurrentBlockDetailed - conversation mode: whether the
+ *   current user block has its detail toggle open.
+ * @returns {boolean}
+ */
+function computeLastToolVisible(items, lastStartedToolId, mode, expandedGroups, isCurrentBlockDetailed) {
+    if (mode === DISPLAY_MODE.NORMAL || mode === DISPLAY_MODE.DEBUG) return true
+    if (!lastStartedToolId) return false
+    for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i]
+        if (it.kind !== 'assistant_message') continue
+        const parsed = getParsedContent(it)
+        const blocks = parsed?.message?.content
+        if (!Array.isArray(blocks)) continue
+        const hasTool = blocks.some(b => b?.type === 'tool_use' && b?.id === lastStartedToolId)
+        if (!hasTool) continue
+        if (it.display_level === DISPLAY_LEVEL.DEBUG_ONLY) return false
+        if (mode === DISPLAY_MODE.CONVERSATION) return isCurrentBlockDetailed
+        if (mode === DISPLAY_MODE.SIMPLIFIED) {
+            if (it.display_level === DISPLAY_LEVEL.ALWAYS) return true
+            const head = it.group_head ?? it.line_num
+            return expandedGroups.includes(head)
+        }
+        return true
+    }
+    return false
+}
+
 export const useDataStore = defineStore('data', {
     state: () => ({
         // Server data
@@ -1550,12 +1591,26 @@ export const useDataStore = defineStore('data', {
                     group_head: null,
                     group_tail: null,
                 }
+                // Whether the tool card the working-message refers to is actually
+                // visible on screen. The component drops the parenthesised target
+                // when the user can already see the card right above; in modes
+                // where tools are hidden by default (simplified groups, conversation
+                // blocks), keep the target unless the user has opened the relevant
+                // group/block.
+                const lastToolVisible = computeLastToolVisible(
+                    items,
+                    processState?.lastStartedToolId,
+                    mode,
+                    expandedGroups,
+                    isCurrentBlockDetailed,
+                )
                 setParsedContent(workingMessage, {
                     type: 'assistant',
                     syntheticKind,
                     label: processState?.label || null,
                     tools: processState?.tools || [],
                     lastStartedToolId: processState?.lastStartedToolId || null,
+                    lastToolVisible,
                     message: {
                         role: 'assistant',
                         content: []

@@ -9,6 +9,7 @@ const props = defineProps({
     processState: { type: String, default: 'assistant_turn' },
     tools: { type: Array, default: () => [] },
     lastStartedToolId: { type: String, default: null },
+    lastToolVisible: { type: Boolean, default: true },
     sessionId: { type: String, default: null },
 })
 
@@ -29,10 +30,10 @@ const plainPhrase = computed(() => {
 
 const phraseGroups = computed(() => {
     if (plainPhrase.value !== null) return null
-    return buildPhraseGroups(props.tools, sessionBaseDir.value, props.lastStartedToolId)
+    return buildPhraseGroups(props.tools, sessionBaseDir.value, props.lastStartedToolId, props.lastToolVisible)
 })
 
-function buildPhraseGroups(tools, baseDir, lastStartedToolId) {
+function buildPhraseGroups(tools, baseDir, lastStartedToolId, lastToolVisible) {
     // Group tools by verb, preserving first-occurrence order from the current frame.
     const map = new Map()
     for (const t of tools) {
@@ -47,12 +48,15 @@ function buildPhraseGroups(tools, baseDir, lastStartedToolId) {
     // started one — its tool card sits right above, so the parenthesised target
     // would be redundant. Otherwise (multiple tools, or a single survivor that
     // isn't the latest), parens disambiguate which tool we're talking about.
-    // Exception: while the latest tool is still streaming its input, no real
+    // Exception 1: while the latest tool is still streaming its input, no real
     // tool card exists yet, so we always show the summary to give the user
     // visible feedback as the input fills in.
+    // Exception 2: in display modes where the tool card is hidden by default
+    // (collapsed group in simplified, hidden block in conversation), keep the
+    // summary so the user still has context on what's running.
     const latest = tools.length === 1 ? tools[0] : null
     const isLoneLatest = latest && latest.id === lastStartedToolId && !latest.streaming
-    const showSummaries = !isLoneLatest
+    const showSummaries = !isLoneLatest || !lastToolVisible
 
     return Array.from(map, ([verb, summaries]) => {
         if (!showSummaries) return { verb, targets: null }
