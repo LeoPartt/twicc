@@ -53,7 +53,7 @@ function launchInTerminal() {
         <p class="claude-auth-toast-message">
             Run <code>{{ loginCommand }}</code> to enable sending messages.
         </p>
-        <div class="claude-auth-toast-actions">
+        <div class="claude-auth-toast-actions wa-light">
             <wa-button size="small" variant="brand" appearance="outlined" @click="launchInTerminal">
                 <wa-icon slot="start" name="terminal"></wa-icon>
                 Launch in terminal
