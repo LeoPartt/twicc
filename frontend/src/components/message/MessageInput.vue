@@ -313,10 +313,12 @@ const isStarting = computed(() => processState.value?.state === 'starting')
 // Whether the auto-force-to-1M rule is currently active for this session.
 // The rule itself lives in the data store getter `getEffectiveContextMax` —
 // here we just detect that the effective value diverges from what the user
-// actually picked (or defaulted to).
+// actually picked (or defaulted to). We feed the currently-selected model
+// to the getter so the rule respects the live UI choice, not just the DB.
 const isContextMaxForced = computed(() => {
     const baseValue = selectedContextMax.value ?? settingsStore.getDefaultContextMax
-    return store.getEffectiveContextMax(props.sessionId) !== baseValue
+    const effectiveModel = selectedModel.value ?? settingsStore.getDefaultModel
+    return store.getEffectiveContextMax(props.sessionId, effectiveModel) !== baseValue
 })
 
 const isContextMaxForcedByModel = computed(() => {
@@ -1256,6 +1258,9 @@ async function handleSend() {
     if ((!text && !isSettingsOnlyUpdate) || isDisabled.value) return
 
     // Build the message payload
+    // For context_max: when the auto-force-to-1M rule is active we send 1M
+    // explicitly instead of the user's null/200K choice — the UI shows
+    // "Forced to 1M" so it would be inconsistent to start the process at 200K.
     const payload = {
         type: 'send_message',
         session_id: props.sessionId,
@@ -1267,7 +1272,7 @@ async function handleSend() {
         effort: selectedEffort.value,
         thinking_enabled: selectedThinking.value,
         claude_in_chrome: selectedClaudeInChrome.value,
-        context_max: selectedContextMax.value,
+        context_max: isContextMaxForced.value ? CONTEXT_MAX.EXTENDED : selectedContextMax.value,
     }
 
     // For draft sessions with a title, include it

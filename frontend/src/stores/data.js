@@ -6,7 +6,7 @@ import { getPrefixSuffixBoundaries } from '../utils/contentVisibility'
 import { computeVisualItems, visualItemEqual } from '../utils/visualItems'
 import { CONTEXT_MAX, DISPLAY_LEVEL, DISPLAY_MODE, PROCESS_STATE, SYNTHETIC_ITEM } from '../constants'
 import { getSessionCutoffMs } from '../utils/sessions'
-import { useSettingsStore } from './settings'
+import { useSettingsStore, modelSupports1m } from './settings'
 import {
     saveDraftMessage,
     getDraftMessage,
@@ -294,17 +294,19 @@ export const useDataStore = defineStore('data', {
         getProcessState: (state) => (sessionId) => state.processStates[sessionId] || null,
 
         // Effective context max for a session, accounting for the auto-force-to-1M
-        // rule that kicks in when usage exceeds 85% of the 200K window with no
-        // active process. Used by both the session settings selector and the
-        // header progress ring so they stay in sync.
-        getEffectiveContextMax: (state) => (sessionId) => {
+        // rule that kicks in when usage exceeds 85% of the 200K window. Single
+        // source of truth: used by the settings selector, the header progress
+        // ring, and when sending the value to the backend so they stay in sync.
+        // `overrideModel` lets callers pass the model currently selected in the
+        // UI (which may differ from the persisted one) so the rule respects the
+        // model's 1M capability.
+        getEffectiveContextMax: (state) => (sessionId, overrideModel = undefined) => {
             const session = state.sessions[sessionId]
             const settingsStore = useSettingsStore()
             const baseValue = session?.context_max ?? settingsStore.getDefaultContextMax
-            const processState = state.processStates[sessionId]
-            const isProcessActive = processState?.state === PROCESS_STATE.ASSISTANT_TURN || processState?.state === PROCESS_STATE.USER_TURN
-            if (isProcessActive) return baseValue
             if (baseValue !== CONTEXT_MAX.DEFAULT) return baseValue
+            const model = overrideModel !== undefined ? overrideModel : (session?.selected_model ?? settingsStore.getDefaultModel)
+            if (!modelSupports1m(model)) return baseValue
             if ((session?.context_usage ?? 0) > CONTEXT_MAX.DEFAULT * 0.85) return CONTEXT_MAX.EXTENDED
             return baseValue
         },
