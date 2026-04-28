@@ -8,6 +8,7 @@ import { COLOR_SCHEME } from '../constants'
 import { useCommandRegistry } from '../composables/useCommandRegistry'
 import { useStartupPolling } from '../composables/useStartupPolling'
 import { sendCheckClaudeAuth } from '../composables/useWebSocket'
+import { useTerminalCommandStore } from '../stores/terminalCommand'
 import { toWorkspaceProjectId } from '../utils/workspaceIds'
 import { splitProjectsByPriority } from '../utils/projectSort'
 import SessionList from '../components/session/list/SessionList.vue'
@@ -51,10 +52,9 @@ const quotaButtonAppearance = computed(() =>
 // ═══════════════════════════════════════════════════════════════════════════
 
 const claudeAuthChecking = ref(false)
+const terminalCommandStore = useTerminalCommandStore()
 
-const claudeLoginCommand = computed(() =>
-    settingsStore.isUvxMode ? 'uvx twicc claude auth login' : 'twicc claude auth login'
-)
+const claudeLoginCommand = computed(() => `${settingsStore.twiccLaunchPrefix} claude auth login`)
 
 function recheckClaudeAuth() {
     if (claudeAuthChecking.value) return
@@ -63,6 +63,11 @@ function recheckClaudeAuth() {
     setTimeout(() => {
         claudeAuthChecking.value = false
     }, 1500)
+}
+
+function launchClaudeAuthInTerminal() {
+    terminalCommandStore.request('global', claudeLoginCommand.value)
+    router.push({ name: 'projects-terminal' })
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1570,14 +1575,23 @@ function updateSidebarClosedClass(closed) {
                             <wa-icon slot="icon" name="triangle-exclamation"></wa-icon>
                             <div class="sidebar-footer-claude-auth-row">
                                 <span class="sidebar-footer-claude-auth-text">Claude CLI not authenticated. Run <code>{{ claudeLoginCommand }}</code>.</span>
-                                <wa-button
-                                    size="small"
-                                    variant="warning"
-                                    appearance="outlined"
-                                    :disabled="claudeAuthChecking"
-                                    class="sidebar-footer-claude-auth-button"
-                                    @click="recheckClaudeAuth"
-                                >Check again</wa-button>
+                                <div class="sidebar-footer-claude-auth-buttons">
+                                    <wa-button
+                                        size="small"
+                                        variant="warning"
+                                        appearance="outlined"
+                                        @click="launchClaudeAuthInTerminal"
+                                    >
+                                        <wa-icon slot="start" name="terminal"></wa-icon>Launch in terminal
+                                    </wa-button>
+                                    <wa-button
+                                        size="small"
+                                        variant="warning"
+                                        appearance="outlined"
+                                        :disabled="claudeAuthChecking"
+                                        @click="recheckClaudeAuth"
+                                    >Check again</wa-button>
+                                </div>
                             </div>
                         </wa-callout>
                     </div>
@@ -2013,8 +2027,12 @@ wa-split-panel::part(divider) {
     border-radius: var(--wa-border-radius-s);
 }
 
-.sidebar-footer-claude-auth-button {
+.sidebar-footer-claude-auth-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--wa-space-xs);
     flex-shrink: 0;
+    max-width: 90%;
 }
 
 .usage-quota {

@@ -66,6 +66,7 @@ export const SETTINGS_SCHEMA = {
     // --- Not persisted - runtime state ---
     _devMode: false,
     _uvxMode: false,
+    _twiccLaunchPrefix: '',
     _effectiveColorScheme: null,
     _isTouchDevice: false,
     _isMac: false,
@@ -317,6 +318,12 @@ export const useSettingsStore = defineStore('settings', {
          * Whether the app was launched via `uvx twicc` (ephemeral) vs installed package.
          */
         isUvxMode: (state) => state._uvxMode,
+        /**
+         * Shell prefix that re-invokes the same TwiCC distribution
+         * (e.g. ``uvx twicc`` or ``<sys.executable> -m twicc``). Append a
+         * subcommand to build a full command for the user to run.
+         */
+        twiccLaunchPrefix: (state) => state._twiccLaunchPrefix,
         /**
          * Effective color scheme: always returns 'light' or 'dark', never 'system'.
          */
@@ -804,8 +811,9 @@ export function classifyClaudeSettingsChanges(current, requested) {
  * @param {Object} claudeSettingsCategories - Claude settings categories from the backend
  * @param {boolean} devMode - Whether the backend is running in dev mode
  * @param {boolean} uvxMode - Whether the app was launched via uvx
+ * @param {string} twiccLaunchPrefix - Shell prefix that re-invokes this TwiCC distribution
  */
-export function applyDefaultSettings(defaultSettings, currentSettings, claudeSettingsCategories, devMode, uvxMode, version) {
+export function applyDefaultSettings(defaultSettings, currentSettings, claudeSettingsCategories, devMode, uvxMode, twiccLaunchPrefix, version) {
     if (defaultSettings && typeof defaultSettings === 'object') {
         Object.assign(SETTINGS_SCHEMA, defaultSettings)
     }
@@ -814,6 +822,7 @@ export function applyDefaultSettings(defaultSettings, currentSettings, claudeSet
     }
     SETTINGS_SCHEMA._devMode = !!devMode
     SETTINGS_SCHEMA._uvxMode = !!uvxMode
+    SETTINGS_SCHEMA._twiccLaunchPrefix = twiccLaunchPrefix || ''
     // Store current settings for applySyncedSettings() to use after store init
     _pendingSyncedSettings = currentSettings
     _pendingSettingsVersion = version

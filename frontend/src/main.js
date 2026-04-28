@@ -114,8 +114,8 @@ if (!authStore.needsLogin) {
         const resp = await fetch('/api/bootstrap/')
         if (resp.ok) {
             bootstrapData = await resp.json()
-            const { settings, settings_version, default_settings, claude_settings_categories, dev_mode, uvx_mode } = bootstrapData
-            applyDefaultSettings(default_settings, settings, claude_settings_categories, dev_mode, uvx_mode, settings_version)
+            const { settings, settings_version, default_settings, claude_settings_categories, dev_mode, uvx_mode, twicc_launch_prefix } = bootstrapData
+            applyDefaultSettings(default_settings, settings, claude_settings_categories, dev_mode, uvx_mode, twicc_launch_prefix, settings_version)
             setModelRegistry(bootstrapData.model_registry || [])
         } else {
             bootstrapFailed = true

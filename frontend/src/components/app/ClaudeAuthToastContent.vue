@@ -3,12 +3,17 @@
  * ClaudeAuthToastContent — rich content for the persistent "Claude CLI not
  * authenticated" toast.
  *
- * Includes a "Check again" button that asks the backend to re-check the
- * auth state right now (instead of waiting for the next periodic tick).
+ * Includes:
+ * - "Launch in terminal" — queues the login command for the global ("all
+ *   projects") terminal view and navigates there.
+ * - "Check again" — asks the backend to re-check the auth state right now
+ *   (instead of waiting for the next periodic tick).
  */
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { sendCheckClaudeAuth } from '../../composables/useWebSocket'
 import { useSettingsStore } from '../../stores/settings'
+import { useTerminalCommandStore } from '../../stores/terminalCommand'
 
 defineProps({
     /** Notivue item reference — passed by CustomNotification (unused here, but standard signature) */
@@ -19,10 +24,10 @@ defineProps({
 })
 
 const settings = useSettingsStore()
+const terminalCommandStore = useTerminalCommandStore()
+const router = useRouter()
 
-const loginCommand = computed(() =>
-    settings.isUvxMode ? 'uvx twicc claude auth login' : 'twicc claude auth login'
-)
+const loginCommand = computed(() => `${settings.twiccLaunchPrefix} claude auth login`)
 
 // Disable the button briefly after a click to avoid spam-clicking while the
 // backend round-trip happens.
@@ -36,6 +41,11 @@ function checkAgain() {
         checking.value = false
     }, 1500)
 }
+
+function launchInTerminal() {
+    terminalCommandStore.request('global', loginCommand.value)
+    router.push({ name: 'projects-terminal' })
+}
 </script>
 
 <template>
@@ -44,6 +54,10 @@ function checkAgain() {
             Run <code>{{ loginCommand }}</code> to enable sending messages.
         </p>
         <div class="claude-auth-toast-actions">
+            <wa-button size="small" variant="brand" appearance="outlined" @click="launchInTerminal">
+                <wa-icon slot="start" name="terminal"></wa-icon>
+                Launch in terminal
+            </wa-button>
             <wa-button size="small" variant="brand" appearance="outlined" :disabled="checking" @click="checkAgain">
                 Check again
             </wa-button>
@@ -74,5 +88,7 @@ function checkAgain() {
 .claude-auth-toast-actions {
     display: flex;
     justify-content: flex-end;
+    gap: var(--wa-space-xs);
+    flex-wrap: wrap;
 }
 </style>

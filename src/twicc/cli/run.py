@@ -365,6 +365,9 @@ def main():
     logger.info("TWICC starting...")
     logger.info("Environment loaded")
 
+    from django.conf import settings as django_settings
+    logger.info("TwiCC launch prefix: %s", django_settings.TWICC_LAUNCH_PREFIX)
+
     # Migrations auto
     call_command("migrate", verbosity=0)
     logger.info("Migrations applied")

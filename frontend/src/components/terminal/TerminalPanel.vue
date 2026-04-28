@@ -6,6 +6,7 @@ import { useDataStore } from '../../stores/data'
 import { useTerminalConfigStore } from '../../stores/terminalConfig'
 import { useWorkspacesStore } from '../../stores/workspaces'
 import { useTerminalTabsStore } from '../../stores/terminalTabs'
+import { useTerminalCommandStore } from '../../stores/terminalCommand'
 import { sendWsMessage } from '../../composables/useWebSocket'
 import { toast } from '../../composables/useToast'
 import { getUnavailablePlaceholders } from '../../utils/snippetPlaceholders'
@@ -381,6 +382,41 @@ function handleSnippetSendTo(snippet, target) {
         }
     }
 }
+
+// --- External "launch a command in this terminal context" requests ---
+//
+// Other components (e.g. the Claude CLI not-authenticated toast) queue a
+// command via the terminalCommand store. We pick it up here, always open
+// a fresh new tab, and send the command once its WebSocket is connected.
+
+const terminalCommandStore = useTerminalCommandStore()
+
+watch(
+    () => terminalCommandStore.pending[props.contextKey],
+    (entry) => {
+        if (!entry) return
+
+        const targetIndex = nextIndex.value
+        createTerminal()
+
+        const stopWatch = watch(
+            () => terminalApis.get(targetIndex)?.isConnected,
+            (connected) => {
+                if (!connected) return
+                stopWatch()
+                terminalApis.get(targetIndex)?.handleSnippetPress?.({
+                    snippet: entry.snippet,
+                    appendEnter: entry.appendEnter,
+                    placeholders: [],
+                })
+                terminalCommandStore.take(props.contextKey)
+            },
+            { immediate: true },
+        )
+        setTimeout(() => stopWatch(), 10000)
+    },
+    { immediate: true },
+)
 
 watch(activeIndex, (newIndex) => {
     if (!props.active) return

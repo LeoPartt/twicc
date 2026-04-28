@@ -1,4 +1,6 @@
 import os
+import shlex
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -11,6 +13,55 @@ PACKAGE_DIR = Path(__file__).resolve().parent  # src/twicc/
 APP_VERSION = get_version()
 DEV_MODE = PACKAGE_DIR.parent.name == "src"
 UVX_MODE = not DEV_MODE and "UV_RUN_RECURSION_DEPTH" in os.environ
+
+
+def _resolve_twicc_launch_prefix() -> str:
+    """
+    Build the shell prefix that re-invokes the same TwiCC distribution as
+    a command, ready to be suffixed with subcommand args (e.g.
+    ``claude auth login``).
+
+    Detection, in order:
+
+    1. ``uvx twicc`` when launched via ``uvx``.
+    2. ``cd <dir> && uv run ./<script>`` when launched via ``uv run`` in
+       dev mode (e.g. ``uv run ./run.py`` via ``devctl``). The ``cd``
+       makes the command work regardless of the terminal's current
+       working directory.
+    3. Quoted absolute path of the ``twicc`` script when ``sys.argv[0]``
+       points at one (typical for an installed package).
+    4. ``<sys.executable> -m twicc`` as a generic fallback (covers
+       ``python -m twicc`` and any other case where the launching
+       interpreter has the ``twicc`` package importable).
+    """
+    if UVX_MODE:
+        return "uvx twicc"
+
+    argv0 = sys.argv[0] if sys.argv else ""
+    try:
+        argv0_path = Path(argv0).resolve() if argv0 else None
+    except OSError:
+        argv0_path = None
+
+    # uv run <script> in dev mode: reproduce the user's launch verbatim.
+    is_uv_run = "UV_RUN_RECURSION_DEPTH" in os.environ
+    if is_uv_run and DEV_MODE and argv0_path and argv0_path.is_file():
+        return (
+            f"cd {shlex.quote(str(argv0_path.parent))} "
+            f"&& uv run ./{argv0_path.name}"
+        )
+
+    # Installed ``twicc`` script.
+    if argv0_path and argv0_path.is_file() and argv0_path.name in ("twicc", "twicc.exe"):
+        return shlex.quote(str(argv0_path))
+
+    # Fallback: same interpreter, twicc as a module.
+    return f"{shlex.quote(sys.executable)} -m twicc"
+
+
+# Shell prefix exposed via the bootstrap API so the frontend can render
+# accurate "run <X> ..." instructions and inject them into the terminal.
+TWICC_LAUNCH_PREFIX = _resolve_twicc_launch_prefix()
 
 # Load .env from the data directory (~/.twicc/.env or $TWICC_DATA_DIR/.env)
 # Idempotent: no-op if already loaded by run.py
