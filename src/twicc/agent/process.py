@@ -1486,9 +1486,8 @@ class ClaudeProcess:
                     self._first_turn_done_event.set()
                     await self._notify_state_change()
                     # Flip the global auth state immediately. The credentials file
-                    # may still exist on disk (so has_oauth_credentials() would
-                    # return True), but the SDK has just told us the token is no
-                    # longer accepted — that's the authoritative signal.
+                    # may still exist on disk, but the SDK has just told us the
+                    # token is no longer accepted — that's the authoritative signal.
                     from twicc.core.auth import mark_unauthenticated_and_broadcast
                     await mark_unauthenticated_and_broadcast()
                     self._client = None

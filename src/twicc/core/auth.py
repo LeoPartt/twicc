@@ -32,6 +32,12 @@ KEYCHAIN_SERVICE = "Claude Code-credentials"
 # (and failed), to avoid retrying the SDK call for the same stale token.
 _failed_refresh_expires: set[int] = set()
 
+# Cached (token, expiresAt) tuple. Populated by get_credentials() on first
+# read, reused on subsequent calls, and invalidated by refresh_token_via_sdk()
+# so we don't hit the macOS Keychain (which can prompt for authorization)
+# on every usage sync.
+_cached_credentials: tuple[str, int] | None = None
+
 # Timeout for the SDK token refresh call
 _TOKEN_REFRESH_TIMEOUT = 30
 
@@ -110,27 +116,23 @@ def _read_credentials_data() -> dict | None:
     return _read_credentials_from_file()
 
 
-def has_oauth_credentials() -> bool:
-    """
-    Check whether OAuth credentials are configured.
-
-    Returns True if the credentials can be read (from Keychain or file)
-    and contain a claudeAiOauth entry (regardless of whether the token is valid).
-    """
-    data = _read_credentials_data()
-    if data is None:
-        return False
-
-    return bool(data.get("claudeAiOauth"))
-
-
 def get_credentials() -> tuple[str, int] | None:
     """
     Read the OAuth access token and expiresAt from credentials storage.
 
+    Returns the cached value if available; otherwise reads from the
+    Keychain (macOS) or file, caches it, and returns. The cache is
+    invalidated by ``refresh_token_via_sdk()`` so a refreshed token
+    is picked up on the next call.
+
     Returns:
         A (token, expires_at_ms) tuple, or None if not found.
     """
+    global _cached_credentials
+
+    if _cached_credentials is not None:
+        return _cached_credentials
+
     data = _read_credentials_data()
     if data is None:
         logger.warning("No credentials found (checked %s)", "Keychain + file" if sys.platform == "darwin" else "file")
@@ -143,15 +145,8 @@ def get_credentials() -> tuple[str, int] | None:
         return None
 
     expires_at = oauth.get("expiresAt", 0)
-    return token, expires_at
-
-
-def _get_expires_at() -> int:
-    """Read the current expiresAt value from credentials. Returns 0 if unavailable."""
-    data = _read_credentials_data()
-    if data is None:
-        return 0
-    return data.get("claudeAiOauth", {}).get("expiresAt", 0)
+    _cached_credentials = (token, expires_at)
+    return _cached_credentials
 
 
 def refresh_token_via_sdk(expires_at: int) -> bool:
@@ -161,8 +156,14 @@ def refresh_token_via_sdk(expires_at: int) -> bool:
     The SDK automatically refreshes the stored credentials when it connects.
     We send a trivial prompt and discard the response.
 
+    Invalidates the credentials cache before the SDK call, then re-reads
+    via ``get_credentials()`` so the cache is repopulated with the
+    refreshed token.
+
     Returns True if the token was refreshed (expiresAt changed), False otherwise.
     """
+    global _cached_credentials
+
     if expires_at in _failed_refresh_expires:
         logger.info("Token refresh already attempted for expiresAt=%d, skipping", expires_at)
         return False
@@ -171,13 +172,16 @@ def refresh_token_via_sdk(expires_at: int) -> bool:
 
     logger.info("Attempting token refresh via SDK (current expiresAt=%d)", expires_at)
 
+    _cached_credentials = None
+
     try:
         asyncio.run(_sdk_throwaway_call())
     except Exception as e:
         logger.warning("SDK token refresh call failed: %s", e)
         return False
 
-    new_expires_at = _get_expires_at()
+    new_creds = get_credentials()
+    new_expires_at = new_creds[1] if new_creds else 0
     if new_expires_at == expires_at:
         logger.warning("Token was not refreshed by SDK (expiresAt unchanged: %d)", expires_at)
         return False

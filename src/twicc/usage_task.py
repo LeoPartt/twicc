@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from asgiref.sync import sync_to_async
 from channels.layers import get_channel_layer
 
-from twicc.core.auth import has_oauth_credentials
+from twicc.core.auth import get_last_known_authenticated
 from twicc.core.models import UsageSnapshot
 from twicc.core.serializers import serialize_usage_snapshot
 from twicc.core.usage import compute_period_costs, fetch_and_save_usage
@@ -246,7 +246,7 @@ def _has_usage_source() -> bool:
     settings = read_synced_settings()
     if settings.get("usageJsonFileEnabled") and settings.get("usageJsonFilePath", ""):
         return True
-    return has_oauth_credentials()
+    return bool(get_last_known_authenticated())
 
 
 async def broadcast_usage_updated(success: bool) -> None:
