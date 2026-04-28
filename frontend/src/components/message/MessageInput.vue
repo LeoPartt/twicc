@@ -301,6 +301,7 @@ const isProcessingFiles = computed(() => store.isProcessingAttachments(props.ses
 // Determine if input/button should be disabled
 const isDisabled = computed(() => {
     if (!store.wsConnected) return true
+    if (store.claudeAuthenticated === false) return true
     if (store.isInitialSyncInProgress) return true
     if (isProcessingFiles.value) return true
     const state = processState.value?.state

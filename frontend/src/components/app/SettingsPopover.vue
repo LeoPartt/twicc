@@ -22,8 +22,8 @@ const authStore = useAuthStore()
 const showLogout = computed(() => authStore.passwordRequired && authStore.authenticated)
 const logoutButtonId = useId()
 
-// Show extra usage setting only when OAuth is configured
-const showExtraUsageSetting = computed(() => dataStore.usage?.hasOauth ?? false)
+// Show extra usage setting only when Claude CLI is authenticated (OAuth)
+const showExtraUsageSetting = computed(() => dataStore.claudeAuthenticated === true)
 
 function handleLogout() {
     router.push({ name: 'logout' })

@@ -30,6 +30,7 @@ from twicc.workspaces import read_workspaces, write_workspaces
 from twicc.message_snippets import read_message_snippets_config, write_message_snippets_config
 from twicc.terminal_config import read_terminal_config, write_terminal_config
 from twicc.claude_settings_presets import read_claude_settings_presets, write_claude_settings_presets
+from twicc.core.auth import check_and_broadcast as check_claude_auth_and_broadcast, get_auth_message_for_connection
 from twicc.usage_task import get_usage_message_for_connection
 from twicc.terminal import terminal_application
 
@@ -596,6 +597,11 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
             usage_message = await get_usage_message_for_connection()
             await self.send_json(usage_message)
 
+        # Send Claude CLI authentication state to the connecting client
+        if self._should_send("claude_auth_updated"):
+            auth_message = await get_auth_message_for_connection()
+            await self.send_json(auth_message)
+
         # Send synced settings to the connecting client
         if self._should_send("synced_settings_updated"):
             raw_settings = await sync_to_async(read_synced_settings)()
@@ -661,6 +667,7 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
         - validate_usage_dump_path: validate a usage dump file path (write mode) and return result
         - validate_tmux_config_path: validate a tmux config file path and return result
         - changelog_seen: acknowledge that the user has seen the changelog for a version
+        - check_claude_auth: force a fresh check of Claude CLI auth state and broadcast
         """
         msg_type = content.get("type")
 
@@ -730,6 +737,11 @@ class UpdatesConsumer(AsyncJsonWebsocketConsumer):
 
         elif msg_type == "changelog_seen":
             await self._handle_changelog_seen(content)
+
+        elif msg_type == "check_claude_auth":
+            # Forced re-check of Claude CLI auth state. The result is broadcast
+            # to the entire "updates" group so every connected client refreshes.
+            await check_claude_auth_and_broadcast(force=True)
 
     async def send_json(self, content, close=False):
         try:

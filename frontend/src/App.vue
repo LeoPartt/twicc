@@ -8,6 +8,8 @@ import { useSettingsStore } from './stores/settings'
 import { useAuthStore } from './stores/auth'
 import { COLOR_SCHEME, PROCESS_STATE } from './constants'
 import { useFavicon } from './composables/useFavicon'
+import { toast } from './composables/useToast'
+import ClaudeAuthToastContent from './components/app/ClaudeAuthToastContent.vue'
 import ConnectionIndicator from './components/app/ConnectionIndicator.vue'
 import CustomNotification from './components/app/CustomNotification.vue'
 import CommandPalette from './components/app/CommandPalette.vue'
@@ -70,6 +72,23 @@ watch(displayMode, (newMode) => {
 watch(versionMismatchDetected, (mismatch) => {
     if (mismatch) {
         setTimeout(() => window.location.reload(), 3000)
+    }
+})
+
+// Persistent toast when Claude CLI is not authenticated.
+// Stays visible until the auth state flips back to true (the watcher dismisses
+// it). Skipped while the state is still null (no backend message received yet).
+let _claudeAuthToastItem = null
+watch(() => dataStore.claudeAuthenticated, (authenticated) => {
+    if (authenticated === false && !_claudeAuthToastItem) {
+        _claudeAuthToastItem = toast.custom(ClaudeAuthToastContent, {
+            type: 'warning',
+            title: 'Claude CLI not authenticated',
+            duration: Infinity,
+        })
+    } else if (authenticated === true && _claudeAuthToastItem) {
+        _claudeAuthToastItem.clear?.()
+        _claudeAuthToastItem = null
     }
 })
 

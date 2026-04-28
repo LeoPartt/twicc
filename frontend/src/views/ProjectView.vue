@@ -7,6 +7,7 @@ import { useWorkspacesStore } from '../stores/workspaces'
 import { COLOR_SCHEME } from '../constants'
 import { useCommandRegistry } from '../composables/useCommandRegistry'
 import { useStartupPolling } from '../composables/useStartupPolling'
+import { sendCheckClaudeAuth } from '../composables/useWebSocket'
 import { toWorkspaceProjectId } from '../utils/workspaceIds'
 import { splitProjectsByPriority } from '../utils/projectSort'
 import SessionList from '../components/session/list/SessionList.vue'
@@ -46,12 +47,34 @@ const quotaButtonAppearance = computed(() =>
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Claude CLI authentication
+// ═══════════════════════════════════════════════════════════════════════════
+
+const claudeAuthChecking = ref(false)
+
+const claudeLoginCommand = computed(() =>
+    settingsStore.isUvxMode ? 'uvx twicc claude auth login' : 'twicc claude auth login'
+)
+
+function recheckClaudeAuth() {
+    if (claudeAuthChecking.value) return
+    claudeAuthChecking.value = true
+    sendCheckClaudeAuth()
+    setTimeout(() => {
+        claudeAuthChecking.value = false
+    }, 1500)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Usage quotas
 // ═══════════════════════════════════════════════════════════════════════════
 
 const quotaData = computed(() => store.usage)
-const quotaHasOauth = computed(() => quotaData.value?.hasOauth ?? false)
 const quotaComputed = computed(() => quotaData.value?.computed ?? null)
+// Show the usage block whenever usage data is available — the source can be
+// OAuth credentials or a local JSON file; either way the backend signals
+// availability by sending usage data (raw=null when no source).
+const quotaHasUsage = computed(() => !!quotaData.value?.raw)
 
 const quotaFiveHour = computed(() => quotaComputed.value?.fiveHour ?? null)
 const quotaSevenDay = computed(() => quotaComputed.value?.sevenDay ?? null)
@@ -1434,7 +1457,7 @@ function updateSidebarClosedClass(closed) {
             <wa-divider></wa-divider>
 
             <div class="sidebar-footer">
-                <div v-if="quotaHasOauth && quotaComputed" class="sidebar-footer-usage">
+                <div v-if="quotaHasUsage && quotaComputed" class="sidebar-footer-usage">
                     <div id="quota-five-hour" class="usage-quota" v-if="quotaFiveHour">
                         <wa-progress-ring
                             class="usage-ring"
@@ -1539,6 +1562,26 @@ function updateSidebarClosedClass(closed) {
                         </div>
                     </AppTooltip>
                 </div>
+
+                <template v-if="store.claudeAuthenticated === false">
+                    <wa-divider v-if="quotaHasUsage && quotaComputed"></wa-divider>
+                    <div class="sidebar-footer-claude-auth">
+                        <wa-callout variant="warning" size="small">
+                            <wa-icon slot="icon" name="triangle-exclamation"></wa-icon>
+                            <div class="sidebar-footer-claude-auth-row">
+                                <span class="sidebar-footer-claude-auth-text">Claude CLI not authenticated. Run <code>{{ claudeLoginCommand }}</code>.</span>
+                                <wa-button
+                                    size="small"
+                                    variant="warning"
+                                    appearance="outlined"
+                                    :disabled="claudeAuthChecking"
+                                    class="sidebar-footer-claude-auth-button"
+                                    @click="recheckClaudeAuth"
+                                >Check again</wa-button>
+                            </div>
+                        </wa-callout>
+                    </div>
+                </template>
 
                 <wa-divider></wa-divider>
 
@@ -1944,6 +1987,34 @@ wa-split-panel::part(divider) {
     column-gap: var(--wa-space-l);
     row-gap: var(--wa-space-xs);
     padding: var(--wa-space-xs) var(--wa-space-s);
+}
+
+.sidebar-footer-claude-auth {
+    padding: var(--wa-space-xs) var(--wa-space-s);
+}
+
+.sidebar-footer-claude-auth-row {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-s);
+    flex-wrap: wrap;
+}
+
+.sidebar-footer-claude-auth-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sidebar-footer-claude-auth-text code {
+    font-family: var(--wa-font-family-code);
+    font-size: 0.95em;
+    padding: 0 var(--wa-space-3xs);
+    background: var(--wa-color-warning-fill-quiet);
+    border-radius: var(--wa-border-radius-s);
+}
+
+.sidebar-footer-claude-auth-button {
+    flex-shrink: 0;
 }
 
 .usage-quota {

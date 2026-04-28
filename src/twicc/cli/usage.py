@@ -11,9 +11,10 @@ def main() -> None:
 
     django.setup()
 
+    from twicc.core.auth import has_oauth_credentials
     from twicc.core.models import UsageSnapshot
     from twicc.core.serializers import serialize_usage_snapshot
-    from twicc.core.usage import compute_period_costs, has_oauth_credentials
+    from twicc.core.usage import compute_period_costs
 
     if not has_oauth_credentials():
         print("Error: no OAuth credentials configured.", file=sys.stderr)

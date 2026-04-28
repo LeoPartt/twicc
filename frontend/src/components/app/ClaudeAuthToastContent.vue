@@ -1,0 +1,78 @@
+<script setup>
+/**
+ * ClaudeAuthToastContent — rich content for the persistent "Claude CLI not
+ * authenticated" toast.
+ *
+ * Includes a "Check again" button that asks the backend to re-check the
+ * auth state right now (instead of waiting for the next periodic tick).
+ */
+import { computed, ref } from 'vue'
+import { sendCheckClaudeAuth } from '../../composables/useWebSocket'
+import { useSettingsStore } from '../../stores/settings'
+
+defineProps({
+    /** Notivue item reference — passed by CustomNotification (unused here, but standard signature) */
+    item: {
+        type: Object,
+        default: null,
+    },
+})
+
+const settings = useSettingsStore()
+
+const loginCommand = computed(() =>
+    settings.isUvxMode ? 'uvx twicc claude auth login' : 'twicc claude auth login'
+)
+
+// Disable the button briefly after a click to avoid spam-clicking while the
+// backend round-trip happens.
+const checking = ref(false)
+
+function checkAgain() {
+    if (checking.value) return
+    checking.value = true
+    sendCheckClaudeAuth()
+    setTimeout(() => {
+        checking.value = false
+    }, 1500)
+}
+</script>
+
+<template>
+    <div class="claude-auth-toast-content">
+        <p class="claude-auth-toast-message">
+            Run <code>{{ loginCommand }}</code> to enable sending messages.
+        </p>
+        <div class="claude-auth-toast-actions">
+            <wa-button size="small" variant="brand" appearance="outlined" :disabled="checking" @click="checkAgain">
+                Check again
+            </wa-button>
+        </div>
+    </div>
+</template>
+
+<style scoped>
+.claude-auth-toast-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--wa-space-s);
+    margin-top: var(--wa-space-xs);
+}
+
+.claude-auth-toast-message {
+    margin: 0;
+}
+
+.claude-auth-toast-message code {
+    font-family: var(--wa-font-family-code);
+    font-size: 0.95em;
+    padding: 0 var(--wa-space-3xs);
+    background: var(--nv-accent, var(--nv-global-accent));
+    border-radius: var(--wa-border-radius-s);
+}
+
+.claude-auth-toast-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+</style>

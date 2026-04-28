@@ -548,6 +548,17 @@ async def sync_and_broadcast(
 # Global stop event for clean shutdown
 _stop_event: asyncio.Event | None = None
 
+# Boost event + deadline used to shorten the projects-dir polling interval
+# while a Claude session is starting (the SDK is about to create the dir).
+_boost_event: asyncio.Event | None = None
+_fast_poll_until: float = 0.0
+
+# Polling intervals (seconds) for the "waiting for projects dir" phase.
+PROJECTS_DIR_POLL_INTERVAL = 30
+PROJECTS_DIR_POLL_INTERVAL_FAST = 5
+# How long fast-polling stays engaged after a request.
+FAST_POLL_DURATION = 30
+
 
 def get_stop_event() -> asyncio.Event:
     """Get or create the global stop event."""
@@ -557,10 +568,77 @@ def get_stop_event() -> asyncio.Event:
     return _stop_event
 
 
+def get_boost_event() -> asyncio.Event:
+    """Get or create the boost event used to wake the projects-dir poll loop."""
+    global _boost_event
+    if _boost_event is None:
+        _boost_event = asyncio.Event()
+    return _boost_event
+
+
+def request_fast_poll(duration: float = FAST_POLL_DURATION) -> None:
+    """
+    Shorten the projects-dir poll interval for ``duration`` seconds.
+
+    Called when something likely to create ``~/.claude/projects/`` is about
+    to happen (e.g. starting a Claude SDK session). Cheap no-op when the
+    watcher is already past the polling phase — the boost event is consumed
+    only by that phase's wait loop.
+    """
+    global _fast_poll_until
+    import time
+
+    deadline = time.monotonic() + duration
+    if deadline > _fast_poll_until:
+        _fast_poll_until = deadline
+    get_boost_event().set()
+
+
 def stop_watcher() -> None:
     """Signal the watcher to stop."""
     if _stop_event is not None:
         _stop_event.set()
+    # Wake the polling loop if it's currently sleeping.
+    if _boost_event is not None:
+        _boost_event.set()
+
+
+async def _wait_for_projects_dir(projects_dir: Path, stop_event: asyncio.Event) -> bool:
+    """
+    Poll until ``projects_dir`` exists or shutdown is requested.
+
+    The interval is normally PROJECTS_DIR_POLL_INTERVAL seconds, but drops
+    to PROJECTS_DIR_POLL_INTERVAL_FAST while a fast-poll request is active
+    (typically right after a Claude session start signal).
+
+    Returns True if the directory appeared, False if shutdown was signaled.
+    """
+    import time
+
+    boost_event = get_boost_event()
+    while not projects_dir.exists():
+        boost_event.clear()
+        fast = time.monotonic() < _fast_poll_until
+        timeout = PROJECTS_DIR_POLL_INTERVAL_FAST if fast else PROJECTS_DIR_POLL_INTERVAL
+
+        waiters = [
+            asyncio.create_task(stop_event.wait()),
+            asyncio.create_task(boost_event.wait()),
+        ]
+        try:
+            await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED, timeout=timeout)
+        finally:
+            for w in waiters:
+                w.cancel()
+            for w in waiters:
+                try:
+                    await w
+                except (asyncio.CancelledError, Exception):
+                    pass
+
+        if stop_event.is_set():
+            return False
+    return True
 
 
 async def start_watcher() -> None:
@@ -568,8 +646,11 @@ async def start_watcher() -> None:
     Start the file watcher for Claude projects directory.
 
     Monitors all changes recursively and dispatches to appropriate handlers.
-    If the projects directory doesn't exist yet, polls every 30 seconds
-    until it appears (e.g. user hasn't used Claude Code yet).
+    If the projects directory doesn't exist yet, polls until it appears
+    (e.g. user hasn't used Claude Code yet). The poll interval drops from
+    30s to 5s after :func:`request_fast_poll` is called — typically right
+    before a Claude SDK session start, since that's about to create the
+    directory.
     """
     channel_layer = get_channel_layer()
     projects_dir = Path(settings.CLAUDE_PROJECTS_DIR)
@@ -577,15 +658,10 @@ async def start_watcher() -> None:
 
     if not projects_dir.exists():
         logger.info("Projects directory does not exist yet: %s — waiting for it to appear", projects_dir)
-        while not projects_dir.exists():
-            try:
-                await asyncio.wait_for(stop_event.wait(), timeout=30)
-            except asyncio.TimeoutError:
-                pass
-            else:
-                # stop_event was set — shutting down
-                logger.info("Watcher stopped while waiting for projects directory")
-                return
+        appeared = await _wait_for_projects_dir(projects_dir, stop_event)
+        if not appeared:
+            logger.info("Watcher stopped while waiting for projects directory")
+            return
         logger.info("Projects directory appeared: %s", projects_dir)
 
     # Load project caches at startup

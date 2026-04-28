@@ -57,7 +57,7 @@ from twicc.initial_sync import scan_projects, scan_sessions, sync_all  # noqa: E
 from twicc.pricing_task import run_initial_price_sync, start_price_sync_task, stop_price_sync_task  # noqa: E402
 from twicc.sessions_watcher import start_watcher, stop_watcher  # noqa: E402
 from twicc.startup_progress import broadcast_startup_progress  # noqa: E402
-from twicc.core.usage import has_oauth_credentials  # noqa: E402
+from twicc.auth_task import start_auth_task, stop_auth_task  # noqa: E402
 from twicc.usage_task import start_usage_sync_task, stop_usage_sync_task
 from twicc.statuspage_task import start_statuspage_task, stop_statuspage_task  # noqa: E402
 from twicc.slash_commands_task import start_slash_commands_task, stop_slash_commands_task  # noqa: E402
@@ -242,6 +242,7 @@ async def run_server(port: int):
     price_init_task = asyncio.create_task(initial_price_sync_task())
     orch_task = asyncio.create_task(orchestrator_task())
     usage_sync_task = asyncio.create_task(start_usage_sync_task())
+    auth_check_task = asyncio.create_task(start_auth_task())
     version_check_task = asyncio.create_task(start_version_check_task())
     statuspage_task = asyncio.create_task(start_statuspage_task())
     slash_commands_task = asyncio.create_task(start_slash_commands_task())
@@ -308,6 +309,11 @@ async def run_server(port: int):
         stop_usage_sync_task()
         await _cancel_task(usage_sync_task, "Usage sync task")
 
+        # Clean shutdown of auth check task
+        logger.info("Stopping auth check task...")
+        stop_auth_task()
+        await _cancel_task(auth_check_task, "Auth check task")
+
         # Clean shutdown of version check task
         logger.info("Stopping version check task...")
         stop_version_check_task()
@@ -363,18 +369,9 @@ def main():
     call_command("migrate", verbosity=0)
     logger.info("Migrations applied")
 
-    # Check Claude CLI credentials before starting
-    if not has_oauth_credentials():
-        from django.conf import settings
-
-        twicc_cmd = "uvx twicc claude /login" if settings.UVX_MODE else "twicc claude /login"
-        logger.error(
-            "Claude CLI is not authenticated. "
-            "Please run 'claude /login' in your terminal to log in, then restart TwiCC. "
-            "If you don't have Claude CLI installed, you can use '%s' instead.",
-            twicc_cmd,
-        )
-        sys.exit(1)
+    # The auth_task handles Claude CLI authentication detection: it logs
+    # the current state and broadcasts it to connected clients. Sending
+    # messages is disabled in the UI when not authenticated.
 
     # Parse port
     port = os.environ.get("TWICC_PORT", "3500")

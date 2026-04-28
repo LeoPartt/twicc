@@ -330,6 +330,14 @@ export function sendChangelogSeen(version) {
     })
 }
 
+/**
+ * Force the backend to re-check Claude CLI auth state and broadcast the result.
+ * @returns {boolean} - True if message was sent
+ */
+export function sendCheckClaudeAuth() {
+    return sendWsMessage({ type: 'check_claude_auth' })
+}
+
 // Pending resolve callbacks for usage file validation request-response
 let _usageFileValidateResolve = null
 let _usageDumpPathValidateResolve = null
@@ -495,13 +503,11 @@ function notifyProcessStateChange(msg, previousState, route) {
                 type: 'warning',
                 title: 'Claude Code stopped: running for over 6 hours',
             })
-        } else if (msg.kill_reason === 'auth_required') {
-            toast.session(sessionId, {
-                type: 'error',
-                title: 'Authentication required',
-                errorMessage: `Claude CLI is not logged in. Please run "claude /login" in your terminal to authenticate, then try again. If you don't have Claude CLI installed, you can use "${settings.isUvxMode ? 'uvx twicc' : 'twicc'} claude /login" instead.`,
-            })
         }
+        // No per-session toast for kill_reason === 'auth_required':
+        // the global "Claude CLI not authenticated" toast and the sidebar
+        // callout (driven by claudeAuthenticated) already surface the state,
+        // and the dead session itself shows an inline error.
     }
 }
 
@@ -861,10 +867,14 @@ export function useWebSocket() {
                 break
             case 'usage_updated': {
                 // Handle usage quota update
-                const computed = msg.has_oauth ? computeUsageData(msg.usage) : null
-                store.setUsage(msg.has_oauth, msg.success, msg.reason, msg.usage, computed)
+                const computed = msg.usage ? computeUsageData(msg.usage) : null
+                store.setUsage(msg.success, msg.reason, msg.usage, computed)
                 break
             }
+            case 'claude_auth_updated':
+                // Claude CLI auth state changed (or initial push on WS connect)
+                store.setClaudeAuthenticated(msg.authenticated)
+                break
             case 'usage_file_validated':
                 if (_usageFileValidateResolve) {
                     _usageFileValidateResolve({ valid: msg.valid, message: msg.message })

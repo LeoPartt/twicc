@@ -14,9 +14,10 @@ from datetime import datetime, timedelta
 from asgiref.sync import sync_to_async
 from channels.layers import get_channel_layer
 
+from twicc.core.auth import has_oauth_credentials
 from twicc.core.models import UsageSnapshot
 from twicc.core.serializers import serialize_usage_snapshot
-from twicc.core.usage import compute_period_costs, fetch_and_save_usage, has_oauth_credentials
+from twicc.core.usage import compute_period_costs, fetch_and_save_usage
 from twicc.synced_settings import read_synced_settings
 
 logger = logging.getLogger(__name__)
@@ -204,18 +205,15 @@ def _build_reference_snapshots(snapshot: UsageSnapshot) -> dict | None:
 
 
 def _build_usage_message(
-    success: bool, reason: str, has_oauth: bool, snapshot: UsageSnapshot | None
+    success: bool, reason: str, snapshot: UsageSnapshot | None
 ) -> dict:
     """
     Build a usage_updated message payload.
 
-    If has_oauth is False, usage data is omitted even if a snapshot exists
-    in the database (the user may have switched from OAuth to API mode).
-
     Includes period cost data (spent, estimated_period, estimated_monthly)
     for the 5-hour and 7-day windows when a snapshot is available.
     """
-    if has_oauth and snapshot:
+    if snapshot:
         period_costs = compute_period_costs(snapshot)
         references = _build_reference_snapshots(snapshot)
         usage = serialize_usage_snapshot(snapshot, period_costs=period_costs, references=references)
@@ -226,14 +224,13 @@ def _build_usage_message(
         "type": "usage_updated",
         "success": success,
         "reason": reason,  # "sync" = after API fetch, "connection" = on WS connect
-        "has_oauth": has_oauth,
         "usage": usage,
     }
 
 
 @sync_to_async
 def _build_usage_message_sync(
-    success: bool, reason: str, has_oauth: bool, snapshot: UsageSnapshot | None
+    success: bool, reason: str, snapshot: UsageSnapshot | None
 ) -> dict:
     """
     sync_to_async wrapper for _build_usage_message.
@@ -241,7 +238,7 @@ def _build_usage_message_sync(
     Required because compute_period_costs() performs database queries
     that cannot run in an async context.
     """
-    return _build_usage_message(success, reason, has_oauth, snapshot)
+    return _build_usage_message(success, reason, snapshot)
 
 
 def _has_usage_source() -> bool:
@@ -259,11 +256,11 @@ async def broadcast_usage_updated(success: bool) -> None:
     Always sends the latest snapshot from the database (not necessarily
     the one just fetched), plus a success flag indicating whether the
     last fetch succeeded. If no usage source is configured (neither OAuth
-    nor JSON file), sends has_oauth=False with no usage data.
+    nor JSON file), sends a message with no usage data.
     """
     has_source = await asyncio.to_thread(_has_usage_source)
     snapshot = await _get_latest_usage_snapshot() if has_source else None
-    data = await _build_usage_message_sync(success, reason="sync", has_oauth=has_source, snapshot=snapshot)
+    data = await _build_usage_message_sync(success, reason="sync", snapshot=snapshot)
     channel_layer = get_channel_layer()
     await channel_layer.group_send(
         "updates",
@@ -279,11 +276,11 @@ async def get_usage_message_for_connection() -> dict:
     Build a usage_updated message to send to a single client on WS connect.
 
     Returns the latest snapshot from the database with reason="connection".
-    If no usage source is configured, returns has_oauth=False with no usage data.
+    If no usage source is configured, returns a message with no usage data.
     """
     has_source = await asyncio.to_thread(_has_usage_source)
     snapshot = await _get_latest_usage_snapshot() if has_source else None
-    return await _build_usage_message_sync(success=True, reason="connection", has_oauth=has_source, snapshot=snapshot)
+    return await _build_usage_message_sync(success=True, reason="connection", snapshot=snapshot)
 
 
 async def start_usage_sync_task() -> None:

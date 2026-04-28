@@ -841,6 +841,13 @@ class ClaudeProcess:
             "Starting process for session %s (resume=%s)", self.session_id, resume
         )
 
+        # If ~/.claude/projects/ doesn't exist yet, the watcher is currently
+        # in slow-poll mode (30s). The SDK is about to create that directory
+        # for this session — boost the watcher to 5s so we pick up the new
+        # JSONL file quickly.
+        from twicc.sessions_watcher import request_fast_poll
+        request_fast_poll()
+
         try:
             self._active_tools = {}
             self._last_started_tool_id = None
@@ -1478,6 +1485,12 @@ class ClaudeProcess:
                     self.last_activity = time.time()
                     self._first_turn_done_event.set()
                     await self._notify_state_change()
+                    # Flip the global auth state immediately. The credentials file
+                    # may still exist on disk (so has_oauth_credentials() would
+                    # return True), but the SDK has just told us the token is no
+                    # longer accepted — that's the authoritative signal.
+                    from twicc.core.auth import mark_unauthenticated_and_broadcast
+                    await mark_unauthenticated_and_broadcast()
                     self._client = None
                     if pid is not None:
                         await self._kill_system_process(pid)

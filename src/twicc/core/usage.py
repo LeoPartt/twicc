@@ -1,19 +1,16 @@
 """
 Usage quota fetching and storage for Claude Code.
 
-Fetches usage data from the Anthropic OAuth usage API endpoint
-using credentials from the system keychain (macOS) or
-~/.claude/.credentials.json (Linux), and stores snapshots in the database.
+Fetches usage data from the Anthropic OAuth usage API endpoint and
+stores snapshots in the database. Credentials access lives in
+``twicc.core.auth``.
 
 Also provides cost estimation for quota periods by summing
 SessionItem costs within the relevant time windows.
 """
 
-import asyncio
-import getpass
 import logging
 import os
-import sys
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -21,6 +18,7 @@ from pathlib import Path
 import httpx
 import orjson
 
+from twicc.core.auth import get_credentials, refresh_token_via_sdk
 from twicc.core.models import SessionItem, UsageSnapshot
 
 logger = logging.getLogger(__name__)
@@ -35,187 +33,6 @@ USAGE_API_HEADERS = {
     "User-Agent": "claude-code/2.1.34",
 }
 
-# Credentials file path (cross-platform)
-CREDENTIALS_PATH = Path.home() / ".claude" / ".credentials.json"
-
-# Track expiresAt values for which a token refresh has already been attempted
-# (and failed), to avoid retrying the SDK call for the same stale token.
-_failed_refresh_expires: set[int] = set()
-
-# Timeout for the SDK token refresh call
-_TOKEN_REFRESH_TIMEOUT = 30
-
-
-KEYCHAIN_SERVICE = "Claude Code-credentials"
-
-
-def _read_credentials_data() -> dict | None:
-    """
-    Read the full credentials dict from the appropriate storage.
-
-    On macOS: tries the system Keychain first (via the ``keyring`` library),
-    then falls back to the JSON file.
-    On other platforms: reads the JSON file directly.
-
-    Returns the parsed dict, or None if credentials cannot be read.
-    """
-    if sys.platform == "darwin":
-        data = _read_credentials_from_keychain()
-        if data is not None:
-            return data
-
-    return _read_credentials_from_file()
-
-
-def _read_credentials_from_keychain() -> dict | None:
-    """Read credentials from the macOS Keychain via the ``keyring`` library."""
-    try:
-        import keyring
-    except ImportError:
-        logger.debug("keyring library not available, skipping Keychain lookup")
-        return None
-
-    try:
-        account = os.environ.get("USER") or getpass.getuser()
-    except Exception:
-        logger.debug("Cannot determine user account for Keychain lookup")
-        return None
-
-    try:
-        raw = keyring.get_password(KEYCHAIN_SERVICE, account)
-    except Exception as e:
-        logger.debug("Keychain read failed: %s", e)
-        return None
-
-    if not raw:
-        return None
-
-    try:
-        data = orjson.loads(raw)
-    except (orjson.JSONDecodeError, ValueError) as e:
-        logger.warning("Failed to parse Keychain credentials JSON: %s", e)
-        return None
-
-    return data if isinstance(data, dict) else None
-
-
-def _read_credentials_from_file() -> dict | None:
-    """Read credentials from ~/.claude/.credentials.json."""
-    if not CREDENTIALS_PATH.is_file():
-        return None
-
-    try:
-        data = orjson.loads(CREDENTIALS_PATH.read_bytes())
-    except (orjson.JSONDecodeError, OSError):
-        return None
-
-    return data if isinstance(data, dict) else None
-
-
-def has_oauth_credentials() -> bool:
-    """
-    Check whether OAuth credentials are configured.
-
-    Returns True if the credentials can be read (from Keychain or file)
-    and contain a claudeAiOauth entry (regardless of whether the token is valid).
-    """
-    data = _read_credentials_data()
-    if data is None:
-        return False
-
-    return bool(data.get("claudeAiOauth"))
-
-
-def _get_credentials() -> tuple[str, int] | None:
-    """
-    Read the OAuth access token and expiresAt from credentials storage.
-
-    Returns:
-        A (token, expires_at_ms) tuple, or None if not found.
-    """
-    data = _read_credentials_data()
-    if data is None:
-        logger.warning("No credentials found (checked %s)", "Keychain + file" if sys.platform == "darwin" else "file")
-        return None
-
-    oauth = data.get("claudeAiOauth", {})
-    token = oauth.get("accessToken")
-    if not token:
-        logger.warning("No OAuth access token found in credentials")
-        return None
-
-    expires_at = oauth.get("expiresAt", 0)
-    return token, expires_at
-
-
-def _get_expires_at() -> int:
-    """Read the current expiresAt value from credentials. Returns 0 if unavailable."""
-    data = _read_credentials_data()
-    if data is None:
-        return 0
-    return data.get("claudeAiOauth", {}).get("expiresAt", 0)
-
-
-def _refresh_token_via_sdk(expires_at: int) -> bool:
-    """
-    Attempt to refresh the OAuth token by making a throwaway SDK call.
-
-    The SDK automatically refreshes the stored credentials when it connects.
-    We send a trivial prompt and discard the response.
-
-    Returns True if the token was refreshed (expiresAt changed), False otherwise.
-    """
-    if expires_at in _failed_refresh_expires:
-        logger.info("Token refresh already attempted for expiresAt=%d, skipping", expires_at)
-        return False
-
-    _failed_refresh_expires.add(expires_at)
-
-    logger.info("Attempting token refresh via SDK (current expiresAt=%d)", expires_at)
-
-    try:
-        asyncio.run(_sdk_throwaway_call())
-    except Exception as e:
-        logger.warning("SDK token refresh call failed: %s", e)
-        return False
-
-    new_expires_at = _get_expires_at()
-    if new_expires_at == expires_at:
-        logger.warning("Token was not refreshed by SDK (expiresAt unchanged: %d)", expires_at)
-        return False
-
-    logger.info("Token refreshed via SDK: expiresAt %d → %d", expires_at, new_expires_at)
-    return True
-
-
-async def _sdk_throwaway_call() -> None:
-    """Make a minimal SDK call to trigger token refresh."""
-    from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ResultMessage
-
-    options = ClaudeAgentOptions(
-        model="haiku",
-        permission_mode="default",
-        extra_args={"no-session-persistence": None},
-        allowed_tools=[],
-        effort='low',
-    )
-    client = ClaudeSDKClient(options=options)
-
-    async def _execute():
-        await client.connect()
-        await client.query("What model are you?")
-        async for msg in client.receive_messages():
-            if isinstance(msg, ResultMessage):
-                break
-
-    try:
-        await asyncio.wait_for(_execute(), timeout=_TOKEN_REFRESH_TIMEOUT)
-    finally:
-        try:
-            await client.disconnect()
-        except Exception:
-            pass
-
 
 def fetch_usage(*, refresh_token_if_needed: bool = True) -> dict | None:
     """
@@ -227,7 +44,7 @@ def fetch_usage(*, refresh_token_if_needed: bool = True) -> dict | None:
     Returns:
         The raw JSON response as a dict, or None on failure.
     """
-    creds = _get_credentials()
+    creds = get_credentials()
     if creds is None:
         return None
 
@@ -244,7 +61,7 @@ def fetch_usage(*, refresh_token_if_needed: bool = True) -> dict | None:
     except httpx.HTTPStatusError as e:
         if e.response.status_code in (401, 403) and refresh_token_if_needed:
             logger.warning("Usage API returned %d, attempting token refresh", e.response.status_code)
-            if _refresh_token_via_sdk(expires_at):
+            if refresh_token_via_sdk(expires_at):
                 return fetch_usage(refresh_token_if_needed=False)
             return None
         logger.warning("Usage API HTTP error: %s", e)
