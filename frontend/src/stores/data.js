@@ -76,6 +76,70 @@ export function sessionSortComparator(processStates) {
     }
 }
 
+/**
+ * Compute display metadata for a streaming synthetic item.
+ *
+ * Decides display_level / group_head / group_tail based on the block's type
+ * and surrounding context, so the synthetic item participates in the existing
+ * grouping/visibility logic in visualItems.js.
+ *
+ * Rules:
+ *   - text block:
+ *       display_level = ALWAYS, no group.
+ *   - thinking block:
+ *       display_level = COLLAPSIBLE.
+ *       group_head:
+ *         - if the last real item is in an open group (COLLAPSIBLE with
+ *           group_head set, OR ALWAYS with group_tail set), join it.
+ *         - otherwise, become own group head (group_head = self.line_num).
+ *       group_tail = null (a streaming thinking is never a suffix anchor).
+ *
+ * Note on conversation mode: streaming items are always hidden in conversation
+ * mode unless the current block is in detailed mode. That filtering happens
+ * in visualItems.js, not here.
+ *
+ * @param {Object} block - a streaming block: { blockIndex, blockType, ... }
+ * @param {Object|null} lastRealItem - last DISPLAYABLE item (display_level
+ *   ALWAYS or COLLAPSIBLE) in sessionItems before streaming was injected.
+ *   Caller must scan past DEBUG_ONLY items and items with null display_level
+ *   so the anchor reflects the last item the user actually sees.
+ * @param {number} streamingLineNum - the synthetic line_num for this block
+ *   (= SYNTHETIC_ITEM.STREAMING_BLOCK.baseLineNum - block.blockIndex).
+ * @returns {{display_level: number, group_head: number|null, group_tail: number|null}}
+ */
+function getStreamingItemMetadata(block, lastRealItem, streamingLineNum) {
+    if (block.blockType === 'text') {
+        return {
+            display_level: DISPLAY_LEVEL.ALWAYS,
+            group_head: null,
+            group_tail: null,
+        }
+    }
+
+    // Thinking block.
+    let groupHead = streamingLineNum  // default: own fake group
+    if (lastRealItem) {
+        if (
+            lastRealItem.display_level === DISPLAY_LEVEL.COLLAPSIBLE &&
+            lastRealItem.group_head != null
+        ) {
+            // Join the existing COLLAPSIBLE group.
+            groupHead = lastRealItem.group_head
+        } else if (
+            lastRealItem.display_level === DISPLAY_LEVEL.ALWAYS &&
+            lastRealItem.group_tail != null
+        ) {
+            // Continue the ALWAYS-suffix group started by lastRealItem.
+            groupHead = lastRealItem.line_num
+        }
+    }
+    return {
+        display_level: DISPLAY_LEVEL.COLLAPSIBLE,
+        group_head: groupHead,
+        group_tail: null,
+    }
+}
+
 export const useDataStore = defineStore('data', {
     state: () => ({
         // Server data
@@ -1404,6 +1468,18 @@ export const useDataStore = defineStore('data', {
             let hasActiveTextStreaming = false
             if (streaming?.blocks.length) {
                 const { baseLineNum, kind: streamingSyntheticKind } = SYNTHETIC_ITEM.STREAMING_BLOCK
+                // Last displayable item before streaming (used for group inheritance
+                // decisions on streaming thinking blocks). Scans backward past
+                // DEBUG_ONLY items and items whose metadata isn't computed yet,
+                // so we anchor on the last item the user actually sees.
+                let lastRealItem = null
+                for (let i = items.length - 1; i >= 0; i--) {
+                    const dl = items[i].display_level
+                    if (dl === DISPLAY_LEVEL.ALWAYS || dl === DISPLAY_LEVEL.COLLAPSIBLE) {
+                        lastRealItem = items[i]
+                        break
+                    }
+                }
                 for (const block of streaming.blocks) {
                     if (!block.stopped && block.blockType === 'text') hasActiveTextStreaming = true
                     const lineNum = baseLineNum - block.blockIndex
@@ -1411,14 +1487,15 @@ export const useDataStore = defineStore('data', {
                     const contentBlock = block.blockType === 'thinking'
                         ? { type: 'thinking', thinking: displayText, streaming: !block.stopped }
                         : { type: 'text', text: displayText }
+                    const meta = getStreamingItemMetadata(block, lastRealItem, lineNum)
                     const streamItem = {
                         line_num: lineNum,
                         content: null,
                         kind: 'assistant_message',
                         syntheticKind: streamingSyntheticKind,
-                        display_level: DISPLAY_LEVEL.ALWAYS,
-                        group_head: null,
-                        group_tail: null,
+                        display_level: meta.display_level,
+                        group_head: meta.group_head,
+                        group_tail: meta.group_tail,
                     }
                     setParsedContent(streamItem, {
                         type: 'assistant',
@@ -1430,14 +1507,38 @@ export const useDataStore = defineStore('data', {
                 }
             }
 
+            // Get detailed blocks for conversation mode (per-block detail toggle).
+            // Computed early because the working-message gating below needs to know
+            // whether streaming text is actually visible (it's hidden in conversation
+            // mode unless the current block is in detailed mode).
+            const detailedBlocksArray = this.localState.sessionDetailedBlocks[sessionId] || []
+            const detailedBlocks = new Set(detailedBlocksArray)
+
+            // In conversation mode, streaming items are hidden unless the current
+            // block (= the latest user_message) is in detailed mode. When streaming
+            // is hidden, we keep the working-message visible so the user has a
+            // status indicator instead of a blank screen.
+            let isCurrentBlockDetailed = false
+            if (mode === DISPLAY_MODE.CONVERSATION && detailedBlocks.size > 0) {
+                for (let i = items.length - 1; i >= 0; i--) {
+                    if (items[i].kind === 'user_message') {
+                        isCurrentBlockDetailed = detailedBlocks.has(items[i].line_num)
+                        break
+                    }
+                }
+            }
+            const streamingTextWillBeVisible = hasActiveTextStreaming && (
+                mode !== DISPLAY_MODE.CONVERSATION || isCurrentBlockDetailed
+            )
+
             // Append a synthetic "working" assistant message when in assistant_turn.
-            // Hidden when streaming blocks are actively receiving deltas (stopped=false),
-            // shown when all blocks are stopped (waiting for real items to arrive).
+            // Hidden when streaming text is actually visible to the user (which
+            // depends on mode and detailed-block state).
             // Injected into allItems so computeVisualItems handles it like any other item.
             // computeVisualItems knows to always let synthetic items (line_num < 0) through,
             // even in conversation mode which normally filters assistant messages.
             let workingMessage = null
-            if (isAssistantTurn && !hasActiveTextStreaming) {
+            if (isAssistantTurn && !streamingTextWillBeVisible) {
                 const { lineNum, kind: syntheticKind } = SYNTHETIC_ITEM.WORKING_ASSISTANT_MESSAGE
 
                 workingMessage = {
@@ -1462,10 +1563,6 @@ export const useDataStore = defineStore('data', {
                 })
                 allItems = allItems === items ? [...items, workingMessage] : [...allItems, workingMessage]
             }
-
-            // Get detailed blocks for conversation mode (per-block detail toggle)
-            const detailedBlocksArray = this.localState.sessionDetailedBlocks[sessionId] || []
-            const detailedBlocks = new Set(detailedBlocksArray)
 
             const visualItems = computeVisualItems(allItems, mode, expandedGroups, isAssistantTurn, detailedBlocks)
 
@@ -2399,6 +2496,26 @@ export const useDataStore = defineStore('data', {
                                 }
                             }
                             this.setDetailOpen(sessionId, streamingDetailKey, false)
+                        }
+                        // Transfer expandedGroups state for fake-group case.
+                        // If this thinking block was its own group_head (fake group)
+                        // and the user expanded it, migrate that entry to the real
+                        // item's group_head so expansion persists across the swap.
+                        const expanded = this.localState.sessionExpandedGroups[sessionId]
+                        if (expanded && expanded.length > 0) {
+                            const streamingLineNum = SYNTHETIC_ITEM.STREAMING_BLOCK.baseLineNum - block.blockIndex
+                            const idxInExpanded = expanded.indexOf(streamingLineNum)
+                            if (idxInExpanded !== -1) {
+                                // Determine the real group_head this thinking block
+                                // belongs to. Look at the real item's group_head; if
+                                // null (no group), drop the entry; else add the real
+                                // group_head if not already there.
+                                const realGroupHead = item.group_head
+                                expanded.splice(idxInExpanded, 1)
+                                if (realGroupHead != null && !expanded.includes(realGroupHead)) {
+                                    expanded.push(realGroupHead)
+                                }
+                            }
                         }
                     }
 

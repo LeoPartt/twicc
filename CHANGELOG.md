@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Session context selector and usage ring now correctly show 1M when a session is auto-switched to the 1M window (after passing 85% of the 200K default)
 - Should be fewer macOS Keychain prompts
+- Fixed streaming messages in simplified and conversation display modes
 
 ## [1.5.4] - 2026-04-26
 

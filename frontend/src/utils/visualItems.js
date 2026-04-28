@@ -1,7 +1,40 @@
 // frontend/src/utils/visualItems.js
 
-import { DISPLAY_LEVEL, DISPLAY_MODE } from '../constants'
+import { DISPLAY_LEVEL, DISPLAY_MODE, SYNTHETIC_ITEM } from '../constants'
 import { getParsedContent, setParsedContent } from './parsedContent'
+
+/**
+ * Decide whether an item is visible in conversation mode (non-detailed branch).
+ *
+ * Visible items:
+ *   - kept assistant_messages (last per non-user block)
+ *   - non-streaming synthetic items (line_num < 0, syntheticKind != streaming-block):
+ *     working-message, optimistic-user-message, starting-assistant-message
+ *
+ * Hidden items:
+ *   - real assistant_messages that aren't the kept one
+ *   - streaming items (text and thinking) — always hidden in conversation mode
+ *     when the block isn't in detailed mode. The user explicitly chose this
+ *     mode to skip the live view; the working-message indicator is shown
+ *     instead while a turn is in progress.
+ *   - everything else
+ *
+ * @param {Object} item - source session item (real or synthetic)
+ * @param {Set<number>} keptAssistantLineNums - line_nums of kept assistant_messages
+ * @returns {boolean}
+ */
+function isVisibleInConversation(item, keptAssistantLineNums) {
+    if (item.kind === 'assistant_message' && item.line_num >= 0 && keptAssistantLineNums.has(item.line_num)) {
+        return true
+    }
+    if (item.line_num >= 0) return false
+    // synthetic item
+    if (item.syntheticKind === SYNTHETIC_ITEM.STREAMING_BLOCK.kind) {
+        return false
+    }
+    // other synthetic items (working, optimistic, starting): always visible
+    return true
+}
 
 /**
  * Compute visual items list from session items based on display mode and expanded groups.
@@ -162,8 +195,11 @@ export function computeVisualItems(items, mode, expandedGroups = [], isAssistant
                     }
                     result.push(visualItem)
                 }
-            } else if (item.line_num < 0 || (item.kind === 'assistant_message' && keptAssistantLineNums.has(item.line_num))) {
-                // Non-detailed mode: show synthetic items and kept assistant_messages
+            } else if (isVisibleInConversation(item, keptAssistantLineNums)) {
+                // Non-detailed mode: show kept assistant_messages, non-streaming synthetic
+                // items (working-message, optimistic, starting), and streaming text blocks
+                // that are currently the "result candidate". Streaming thinking and
+                // non-candidate streaming text are filtered out (only visible in detailed).
                 const visualItem = makeVisualItem(item, { groupHead: null, groupTail: null })
                 // First visible non-user item of this block gets the toggle
                 // (only if the block has 2+ visible items, otherwise toggle is useless)
