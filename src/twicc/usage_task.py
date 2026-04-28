@@ -14,11 +14,9 @@ from datetime import datetime, timedelta
 from asgiref.sync import sync_to_async
 from channels.layers import get_channel_layer
 
-from twicc.core.auth import get_last_known_authenticated
 from twicc.core.models import UsageSnapshot
 from twicc.core.serializers import serialize_usage_snapshot
 from twicc.core.usage import compute_period_costs, fetch_and_save_usage
-from twicc.synced_settings import read_synced_settings
 
 logger = logging.getLogger(__name__)
 
@@ -241,25 +239,16 @@ def _build_usage_message_sync(
     return _build_usage_message(success, reason, snapshot)
 
 
-def _has_usage_source() -> bool:
-    """Check whether usage data is available (OAuth credentials or JSON file enabled)."""
-    settings = read_synced_settings()
-    if settings.get("usageJsonFileEnabled") and settings.get("usageJsonFilePath", ""):
-        return True
-    return bool(get_last_known_authenticated())
-
-
 async def broadcast_usage_updated(success: bool) -> None:
     """
     Broadcast usage_updated message via WebSocket to all connected clients.
 
     Always sends the latest snapshot from the database (not necessarily
-    the one just fetched), plus a success flag indicating whether the
-    last fetch succeeded. If no usage source is configured (neither OAuth
-    nor JSON file), sends a message with no usage data.
+    the one just fetched) when one exists, plus a success flag indicating
+    whether the last fetch succeeded. The frontend uses the snapshot's
+    fetched_at to flag stale data.
     """
-    has_source = await asyncio.to_thread(_has_usage_source)
-    snapshot = await _get_latest_usage_snapshot() if has_source else None
+    snapshot = await _get_latest_usage_snapshot()
     data = await _build_usage_message_sync(success, reason="sync", snapshot=snapshot)
     channel_layer = get_channel_layer()
     await channel_layer.group_send(
@@ -275,11 +264,10 @@ async def get_usage_message_for_connection() -> dict:
     """
     Build a usage_updated message to send to a single client on WS connect.
 
-    Returns the latest snapshot from the database with reason="connection".
-    If no usage source is configured, returns a message with no usage data.
+    Returns the latest snapshot from the database with reason="connection",
+    or a message with no usage data if no snapshot exists yet.
     """
-    has_source = await asyncio.to_thread(_has_usage_source)
-    snapshot = await _get_latest_usage_snapshot() if has_source else None
+    snapshot = await _get_latest_usage_snapshot()
     return await _build_usage_message_sync(success=True, reason="connection", snapshot=snapshot)
 
 
