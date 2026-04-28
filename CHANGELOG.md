@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Some entries include illustrative screenshots in nested sub-lists.
 
-## [Unreleased]
+## [1.5.5] - 2026-04-28
 
 ### Added
 
@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- "Show hidden files" and "Show git ignored files" toggles in the file picker and Files tab now persist across sessions and are shared between both places
+- "Show hidden files" and "Show git ignored files" toggles in the file picker and Files tab now persist across sessions and are shared between both places (proposed by @LeoPartt)
 - Bump `claude-agent-sdk` from 0.1.68 to 0.1.69 (bundled Claude Code CLI: 2.1.119 → 2.1.121)
 
 ### Fixed
@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Session context selector and usage ring now correctly show 1M when a session is auto-switched to the 1M window (after passing 85% of the 200K default)
 - Should be fewer macOS Keychain prompts
 - Fixed streaming messages in simplified and conversation display modes
+- Make buttons in toaster more visible in light mode
 
 ## [1.5.4] - 2026-04-26
 
