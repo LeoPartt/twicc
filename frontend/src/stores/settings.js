@@ -38,6 +38,8 @@ export const SETTINGS_SCHEMA = {
     showArchivedProjects: false,
     showArchivedWorkspaces: false,
     showActiveAcrossFilters: false,
+    showHiddenFiles: false,
+    showGitIgnoredFiles: false,
     notifUserTurnSound: NOTIFICATION_SOUNDS.NONE,
     notifUserTurnBrowser: false,
     notifPendingRequestSound: NOTIFICATION_SOUNDS.NONE,
@@ -99,6 +101,8 @@ const SETTINGS_VALIDATORS = {
     showArchivedProjects: (v) => typeof v === 'boolean',
     showArchivedWorkspaces: (v) => typeof v === 'boolean',
     showActiveAcrossFilters: (v) => typeof v === 'boolean',
+    showHiddenFiles: (v) => typeof v === 'boolean',
+    showGitIgnoredFiles: (v) => typeof v === 'boolean',
     defaultPermissionMode: (v) => Object.values(PERMISSION_MODE).includes(v),
     defaultModel: (v) => typeof v === 'string' && v.length > 0,
     defaultEffort: (v) => Object.values(EFFORT).includes(v),
@@ -287,6 +291,8 @@ export const useSettingsStore = defineStore('settings', {
         isShowArchivedProjects: (state) => state.showArchivedProjects,
         isShowArchivedWorkspaces: (state) => state.showArchivedWorkspaces,
         isShowActiveAcrossFilters: (state) => state.showActiveAcrossFilters,
+        isShowHiddenFiles: (state) => state.showHiddenFiles,
+        isShowGitIgnoredFiles: (state) => state.showGitIgnoredFiles,
         getDefaultPermissionMode: (state) => state.defaultPermissionMode,
         getDefaultModel: (state) => state.defaultModel,
         getDefaultEffort: (state) => state.defaultEffort,
@@ -562,6 +568,30 @@ export const useSettingsStore = defineStore('settings', {
          */
         setShowArchivedWorkspaces(value) {
             this.showArchivedWorkspaces = value
+        },
+
+        /**
+         * Set show hidden files mode.
+         * This setting is not exposed in the settings panel — it is only
+         * toggled from the options dropdown of FilesPanel and FilePickerPopup.
+         * @param {boolean} enabled
+         */
+        setShowHiddenFiles(enabled) {
+            if (SETTINGS_VALIDATORS.showHiddenFiles(enabled)) {
+                this.showHiddenFiles = enabled
+            }
+        },
+
+        /**
+         * Set show git ignored files mode.
+         * This setting is not exposed in the settings panel — it is only
+         * toggled from the options dropdown of FilesPanel and FilePickerPopup.
+         * @param {boolean} enabled
+         */
+        setShowGitIgnoredFiles(enabled) {
+            if (SETTINGS_VALIDATORS.showGitIgnoredFiles(enabled)) {
+                this.showGitIgnoredFiles = enabled
+            }
         },
 
         /**
@@ -849,6 +879,8 @@ export function initSettings() {
             showArchivedProjects: store.showArchivedProjects,
             showArchivedWorkspaces: store.showArchivedWorkspaces,
             showActiveAcrossFilters: store.showActiveAcrossFilters,
+            showHiddenFiles: store.showHiddenFiles,
+            showGitIgnoredFiles: store.showGitIgnoredFiles,
             defaultPermissionMode: store.defaultPermissionMode,
             defaultModel: store.defaultModel,
             defaultEffort: store.defaultEffort,

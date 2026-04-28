@@ -5,6 +5,7 @@ import { useContainerBreakpoint } from '../../composables/useContainerBreakpoint
 import FileTreePanel from './FileTreePanel.vue'
 import FilePane from './FilePane.vue'
 import { useCodeCommentsStore, buildCommentedPathsSet } from '../../stores/codeComments'
+import { useSettingsStore } from '../../stores/settings'
 
 const emit = defineEmits(['navigate'])
 
@@ -255,8 +256,9 @@ function setRootByPath(path) {
 
 // ─── Display options ─────────────────────────────────────────────────────────
 
-const showHidden = ref(false)
-const showIgnored = ref(false)
+const settingsStore = useSettingsStore()
+const showHidden = computed(() => settingsStore.showHiddenFiles)
+const showIgnored = computed(() => settingsStore.showGitIgnoredFiles)
 const isGit = ref(false)
 
 /**
@@ -404,9 +406,9 @@ watch(
 
 function handleOptionsSelect(value) {
     if (value === 'show-hidden') {
-        showHidden.value = !showHidden.value
+        settingsStore.setShowHiddenFiles(!showHidden.value)
     } else if (value === 'show-ignored') {
-        showIgnored.value = !showIgnored.value
+        settingsStore.setShowGitIgnoredFiles(!showIgnored.value)
     } else if (value?.startsWith('root:')) {
         handleRootSelect(value.slice(5))
     }

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Some entries include illustrative screenshots in nested sub-lists.
 
+## [Unreleased]
+
+### Changed
+
+- "Show hidden files" and "Show git ignored files" toggles in the file picker and Files tab now persist across sessions and are shared between both places
+
 ## [1.5.4] - 2026-04-26
 
 ### Fixed

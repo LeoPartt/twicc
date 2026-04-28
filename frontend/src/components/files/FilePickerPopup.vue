@@ -20,6 +20,7 @@
 
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useDataStore } from '../../stores/data'
+import { useSettingsStore } from '../../stores/settings'
 import { apiFetch } from '../../utils/api'
 import FileTreePanel from './FileTreePanel.vue'
 
@@ -41,6 +42,7 @@ const props = defineProps({
 const emit = defineEmits(['select', 'close', 'filter-change'])
 
 const store = useDataStore()
+const settingsStore = useSettingsStore()
 
 // ─── Session & project data from store ────────────────────────────────────
 
@@ -65,8 +67,8 @@ const fileTreePanelRef = ref(null)
 
 // ─── Display options ──────────────────────────────────────────────────────
 
-const showHidden = ref(false)
-const showIgnored = ref(false)
+const showHidden = computed(() => settingsStore.showHiddenFiles)
+const showIgnored = computed(() => settingsStore.showGitIgnoredFiles)
 const isGit = ref(false)
 
 function optionsQuery() {
@@ -283,9 +285,9 @@ function computeRelativePath(from, to) {
 
 function handleOptionsSelect(value) {
     if (value === 'show-hidden') {
-        showHidden.value = !showHidden.value
+        settingsStore.setShowHiddenFiles(!showHidden.value)
     } else if (value === 'show-ignored') {
-        showIgnored.value = !showIgnored.value
+        settingsStore.setShowGitIgnoredFiles(!showIgnored.value)
     } else if (value?.startsWith('root:')) {
         const key = value.slice(5)
         if (key !== selectedRootKey.value) {
