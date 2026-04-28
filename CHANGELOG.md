@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - "Show hidden files" and "Show git ignored files" toggles in the file picker and Files tab now persist across sessions and are shared between both places
+- Bump `claude-agent-sdk` from 0.1.68 to 0.1.69 (bundled Claude Code CLI: 2.1.119 → 2.1.121)
 
 ### Fixed
 
