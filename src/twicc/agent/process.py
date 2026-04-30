@@ -1261,9 +1261,6 @@ class ClaudeProcess:
         # Cancel any pending request Future to avoid asyncio warnings
         self._cancel_pending_request_future()
 
-        # Get PID BEFORE dropping the client reference
-        pid = self.get_pid()
-
         # Cancel message loop first
         if self._message_loop_task is not None:
             self._message_loop_task.cancel()
@@ -1273,13 +1270,7 @@ class ClaudeProcess:
                 pass
             self._message_loop_task = None
 
-        # Don't call disconnect() - the SDK's anyio cancel scopes leak
-        # cancellation to other asyncio tasks. Just drop the reference.
-        self._client = None
-
-        # Kill the system process directly (isolated from anyio context)
-        if pid is not None:
-            await self._kill_system_process(pid)
+        await self._shutdown_sdk_client()
 
         # Update state
         self._set_state(ProcessState.DEAD)
@@ -1479,7 +1470,6 @@ class ClaudeProcess:
                         self.session_id,
                     )
                     self._cancel_pending_request_future()
-                    pid = self.get_pid()
                     self._set_state(ProcessState.DEAD)
                     self.kill_reason = "auth_required"
                     self.last_activity = time.time()
@@ -1490,9 +1480,7 @@ class ClaudeProcess:
                     # token is no longer accepted — that's the authoritative signal.
                     from twicc.core.auth import mark_unauthenticated_and_broadcast
                     await mark_unauthenticated_and_broadcast()
-                    self._client = None
-                    if pid is not None:
-                        await self._kill_system_process(pid)
+                    await self._shutdown_sdk_client()
                     return
 
                 if isinstance(msg, ResultMessage):
@@ -1512,7 +1500,7 @@ class ClaudeProcess:
                             self.last_activity = time.time()
                             self._first_turn_done_event.set()
                             await self._notify_state_change()
-                            self._client = None
+                            await self._shutdown_sdk_client()
                             return
 
                         # Log full ResultMessage details for debugging
@@ -1583,9 +1571,6 @@ class ClaudeProcess:
         # Cancel any pending request Future to avoid asyncio warnings
         self._cancel_pending_request_future()
 
-        # Get PID BEFORE dropping the client reference
-        pid = self.get_pid()
-
         self._set_state(ProcessState.DEAD)
         self.error = error_message
         self.kill_reason = "error"
@@ -1593,12 +1578,44 @@ class ClaudeProcess:
         self._first_turn_done_event.set()  # Unblock any waiters (cron restart)
 
         await self._notify_state_change()
+        await self._shutdown_sdk_client()
 
-        # Don't call disconnect() - the SDK's anyio cancel scopes leak
-        # cancellation to other asyncio tasks. Just drop the reference.
+    async def _shutdown_sdk_client(self) -> None:
+        """Disconnect the SDK client and ensure the CLI subprocess is terminated.
+
+        SDK disconnect() cancels the Query's internal asyncio tasks (message
+        reader, control protocol handlers, in-flight request handlers) and
+        closes the transport, which sends SIGTERM/SIGKILL to the Claude CLI
+        subprocess. The call is isolated in a dedicated task and bounded with
+        a timeout; on timeout or failure, falls back to killing the subprocess
+        directly via psutil.
+        """
+        pid = self.get_pid()
+        client = self._client
         self._client = None
 
-        # Kill the system process directly (isolated from anyio context)
+        if client is not None:
+            disconnect_task = asyncio.create_task(
+                client.disconnect(),
+                name=f"sdk-disconnect-{self.session_id}",
+            )
+            try:
+                await asyncio.wait_for(asyncio.shield(disconnect_task), timeout=5.0)
+                return  # transport.close() already terminated the subprocess
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "SDK disconnect() timed out for session %s; killing subprocess directly",
+                    self.session_id,
+                )
+                disconnect_task.cancel()
+            except Exception as e:
+                logger.warning(
+                    "SDK disconnect() failed for session %s: %s; killing subprocess directly",
+                    self.session_id,
+                    e,
+                    exc_info=True,
+                )
+
         if pid is not None:
             await self._kill_system_process(pid)
 
